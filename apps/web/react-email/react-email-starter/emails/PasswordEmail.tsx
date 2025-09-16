@@ -10,7 +10,6 @@ import {
   Text,
   Hr,
 } from "@react-email/components";
-import * as React from "react";
 
 interface PasswordResetEmailProps {
   userName: string;
@@ -45,7 +44,7 @@ export const PasswordResetEmail = ({
             
             <Text style={text}>
               We received a request to reset your password for your {dealershipName} account. 
-              If you didn't make this request, you can safely ignore this email.
+              If you didn&apos;t make this request, you can safely ignore this email.
             </Text>
 
             <Text style={text}>
@@ -79,7 +78,7 @@ export const PasswordResetEmail = ({
                 • You can only use this link once
               </Text>
               <Text style={securityText}>
-                • If you didn't request this, please contact support
+                • If you didn&apos;t request this, please contact support
               </Text>
             </Section>
 

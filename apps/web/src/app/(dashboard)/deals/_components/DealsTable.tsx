@@ -42,8 +42,8 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { DealStatus } from "@/types/documents";
-import { Client } from "@/types/client";
-import { Vehicle } from "@/types/vehicle";
+import type { Client } from "@/types/client";
+import type { Vehicle } from "@/types/vehicle";
 import { useQuery as useConvexQuery } from "convex/react";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
@@ -238,8 +238,13 @@ export function DealsTable() {
             handleGenerateDeepLink(firstDeal._id);
           }
         }}
+        disabled={generatingLink === dealsData.deals[0]?._id}
       >
-        <Link2 className="mr-2 h-4 w-4" />
+        {generatingLink === dealsData.deals[0]?._id ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <Link2 className="mr-2 h-4 w-4" />
+        )}
         Test with First Deal
       </Button>
 
@@ -323,12 +328,27 @@ export function DealsTable() {
                         {getStatusBadge(mappedDeal.status as DealStatus)}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button asChild variant="outline" size="sm">
-                          <Link href={`/deals/${mappedDeal.id}`}>
-                            <FileText className="mr-2 h-4 w-4" />
-                            View Deal
-                          </Link>
-                        </Button>
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleGenerateDeepLink(deal._id)}
+                            disabled={generatingLink === deal._id}
+                          >
+                            {generatingLink === deal._id ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Link2 className="mr-2 h-4 w-4" />
+                            )}
+                            Deep Link
+                          </Button>
+                          <Button asChild variant="outline" size="sm">
+                            <Link href={`/deals/${mappedDeal.id}`}>
+                              <FileText className="mr-2 h-4 w-4" />
+                              View Deal
+                            </Link>
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

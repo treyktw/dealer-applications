@@ -6,13 +6,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Loader2, ArrowLeft, Car, Check } from "lucide-react";
 import { MultiStepLoader } from "@/components/ui/multi-step-loader";
-import { DocumentType } from "@/types/documents";
+import type { DocumentType } from "@/types/documents";
 import { toast } from "sonner";
-import { DealForm, DealFormValues } from "@/components/forms/deal-form";
+import { DealForm, type DealFormValues } from "@/components/forms/deal-form";
 import { VehicleAssignmentDialog } from "@/app/(dashboard)/clients/_components/vehicle-assignment";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import type { Id } from "@/convex/_generated/dataModel";
+import { nanoid } from "nanoid";
 
 interface DocumentGeneratorProps {
   clientId: Id<"clients">;
@@ -73,6 +74,9 @@ export function DocumentGenerator({ clientId, onBack }: DocumentGeneratorProps) 
         clientEmail: client.email as string,
         clientPhone: client.phone as string,
         stockNumber: vehicle.stock as string,
+        firstName: client.firstName as string,
+        lastName: client.lastName as string,
+        dealsId: nanoid(),
       });
 
       toast.success("Documents have been generated successfully.");

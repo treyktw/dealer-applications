@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { useUser } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { ReactNode } from "react";
 
 // Navigation items without settings
 const baseNavItems = [
@@ -51,7 +52,7 @@ const settingsNavItem = {
 export default function DashboardLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const { isAdmin } = useCurrentUser();
   const createCheckoutSession = useAction(api.subscriptions.createCheckoutSession);

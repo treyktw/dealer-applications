@@ -9,6 +9,7 @@ import ConvexClientProvider from "@/providers/convex-provider";
 // import { QueryProvider } from "@/providers/query-provider";
 import { SubscriptionProvider } from "@/providers/SubscriptionProvider";
 import { dark } from "@clerk/themes";
+import { useId, type ReactNode } from "react";
 
 // Setup fonts
 const fontSans = FontSans({
@@ -29,7 +30,7 @@ export const metadata = {
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <html lang="en" suppressHydrationWarning className="dark">
@@ -69,7 +70,7 @@ export default function RootLayout({
                 <Toaster />
               </SubscriptionProvider>
             {/* </QueryProvider> */}
-            <div id="clerk-captcha" className="hidden"></div>
+            <div id={useId()} className="hidden"></div>
           </ConvexClientProvider>
         </ClerkProvider>
       </body>
