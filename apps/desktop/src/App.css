@@ -1,0 +1,302 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+.logo.vite:hover {
+  filter: drop-shadow(0 0 2em #747bff);
+}
+
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafb);
+}
+
+:root {
+  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+
+  color: #0f0f0f;
+  background-color: #f6f6f6;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+  --radius: 0.625rem;
+  --background: #fafafa;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --primary: #0a0a0a;
+  --primary-foreground: #fafafa;
+  --secondary: #f4f4f4;
+  --secondary-foreground: #0a0a0a;
+  --muted: #f4f4f4;
+  --muted-foreground: #666666;
+  --accent: #f4f4f4;
+  --accent-foreground: #0a0a0a;
+  --destructive: #dc2626;
+  --destructive-foreground: #fafafa;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: #666666;
+  --chart-1: #b3b3b3;
+  --chart-2: #999999;
+  --chart-3: #808080;
+  --chart-4: #666666;
+  --chart-5: #4d4d4d;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #0a0a0a;
+  --sidebar-primary: #0a0a0a;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #f4f4f4;
+  --sidebar-accent-foreground: #0a0a0a;
+  --sidebar-border: #e5e5e5;
+  --sidebar-ring: #666666;
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #f4f4f4;
+  --card: #1a1a1a;
+  --card-foreground: #f4f4f4;
+  --popover: #1a1a1a;
+  --popover-foreground: #f4f4f4;
+  --primary: #f4f4f4;
+  --primary-foreground: #0a0a0a;
+  --secondary: #262626;
+  --secondary-foreground: #f4f4f4;
+  --muted: #262626;
+  --muted-foreground: #999999;
+  --accent: #262626;
+  --accent-foreground: #f4f4f4;
+  --destructive: #b91c1c;
+  --destructive-foreground: #fafafa;
+  --border: #404040;
+  --input: #404040;
+  --ring: #999999;
+  --chart-1: #4d4d4d;
+  --chart-2: #666666;
+  --chart-3: #808080;
+  --chart-4: #999999;
+  --chart-5: #b3b3b3;
+  --sidebar: #1a1a1a;
+  --sidebar-foreground: #f4f4f4;
+  --sidebar-primary: #f4f4f4;
+  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-accent: #262626;
+  --sidebar-accent-foreground: #f4f4f4;
+  --sidebar-border: #404040;
+  --sidebar-ring: #999999;
+}
+
+.container {
+  margin: 0;
+  padding-top: 10vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: 0.75s;
+}
+
+.logo.tauri:hover {
+  filter: drop-shadow(0 0 2em #24c8db);
+}
+
+.row {
+  display: flex;
+  justify-content: center;
+}
+
+h1 {
+  text-align: center;
+}
+
+#greet-input {
+  margin-right: 5px;
+}
+
+/* Base styles for inputs and buttons */
+input,
+button {
+  border-radius: 8px;
+  border: none;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  outline: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* Light mode (default) - no .dark class present */
+html:not(.dark) input,
+html:not(.dark) button,
+body:not(.dark) input,
+body:not(.dark) button {
+  color: #0a0a0a !important;
+  background-color: #f4f4f4 !important;
+}
+
+html:not(.dark) button,
+body:not(.dark) button {
+  background-color: #e5e5e5 !important;
+}
+
+html:not(.dark) button:hover,
+body:not(.dark) button:hover {
+  background-color: #d9d9d9 !important;
+}
+
+html:not(.dark) button:active,
+body:not(.dark) button:active {
+  background-color: #cccccc !important;
+}
+
+html:not(.dark) input:focus,
+body:not(.dark) input:focus {
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1) !important;
+}
+
+html:not(.dark) input::placeholder,
+body:not(.dark) input::placeholder {
+  color: #999999 !important;
+}
+
+html:not(.dark) a,
+body:not(.dark) a {
+  color: #666666;
+}
+
+html:not(.dark) a:hover,
+body:not(.dark) a:hover {
+  color: #333333;
+}
+
+/* Dark mode - when .dark class IS present */
+html.dark input,
+html.dark button,
+body.dark input,
+body.dark button,
+.dark input,
+.dark button {
+  color: #f4f4f4 !important;
+  background-color: #1a1a1a !important;
+}
+
+html.dark input,
+body.dark input,
+.dark input {
+  background-color: #262626 !important;
+}
+
+html.dark button,
+body.dark button,
+.dark button {
+  background-color: #262626 !important;
+}
+
+html.dark button:hover,
+body.dark button:hover,
+.dark button:hover {
+  background-color: #333333 !important;
+}
+
+html.dark button:active,
+body.dark button:active,
+.dark button:active {
+  background-color: #404040 !important;
+
+}
+
+html.dark input:focus,
+body.dark input:focus,
+.dark input:focus {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1) !important;
+}
+
+html.dark input::placeholder,
+body.dark input::placeholder,
+.dark input::placeholder {
+  color: #808080 !important;
+}
+
+html.dark a,
+body.dark a,
+.dark a {
+  color: #b3b3b3;
+}
+
+html.dark a:hover,
+body.dark a:hover,
+.dark a:hover {
+  color: #e5e5e5;
+}
+
+/* Tailwind theme configuration */
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  
+  /* Focus styles */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}

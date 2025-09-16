@@ -1,0 +1,134 @@
+Stock Number,VIN,Make,Model,Year,Trim,Mileage,Price,Exterior Color,Interior Color,Fuel Type,Transmission,Engine,Description,Status,Featured,Features
+A5293,S01LA8H0AT6TATWBP,Nissan,Altima,2018,,69821,8609,White,Black,Plug-in Hybrid,6-Speed Automatic,2.4L 4-Cylinder,This 2018 Nissan Altima is in good condition.,PENDING,false,"Premium Audio
+Cooled Seats
+Android Auto
+Leather Seats
+360-Degree Camera
+Bluetooth
+Heated Seats"
+B4121,GF3ZZCJNCP75RZ51C,Volkswagen,Jetta,2017,Limited,87168,8822,Metallic Silver,Tan,Hybrid,6-Speed Automatic,3.0L Twin-Turbo V6,Great value 2017 Volkswagen Jetta with many features.,PENDING,false,"Adaptive Cruise Control
+Heated Seats
+Third Row Seating
+Remote Start
+Parking Sensors
+Forward Collision Warning"
+C2840,DL53YGN4H7TG6B4RJ,Mercedes-Benz,E-Class,2022,,30596,33328,Gray,Brown,Plug-in Hybrid,Manual,2.0L 4-Cylinder,Great value 2022 Mercedes-Benz E-Class with many features.,PENDING,false,"Premium Audio
+Android Auto
+Sunroof"
+C5709,0XY8X88K4DWEHTT70,Hyundai,Tucson,2015,,125248,4936,Blue,Black,Hybrid,10-Speed Automatic,2.4L 4-Cylinder,Reliable 2015 Hyundai Tucson with excellent history.,AVAILABLE,false,"Android Auto
+Third Row Seating
+Lane Departure Warning"
+D5903,0DT1UP5K488TFGMBC,Nissan,Pathfinder,2015,,110582,5386,Red,Brown,Plug-in Hybrid,8-Speed Automatic,Electric Motor,Clean Nissan Pathfinder perfect for daily driving.,AVAILABLE,false,"Android Auto
+360-Degree Camera
+Forward Collision Warning
+Leather Seats"
+C7733,S347Z2JYCMDNVSJND,Ford,Explorer,2019,,49398,10533,Gray,Black,Hybrid,Manual,6.2L V8,Reliable 2019 Ford Explorer with excellent history.,RESERVED,false,"Premium Audio
+Cruise Control
+Power Windows
+Android Auto
+Leather Seats"
+C7718,V3EKWUAFGG7PDLHMA,BMW,Z4,2019,LX,71872,20334,Brown,Black,Gasoline,10-Speed Automatic,2.0L Turbo,This 2019 BMW Z4 is in excellent condition.,PENDING,false,"Premium Audio
+360-Degree Camera
+All-Wheel Drive"
+C4818,2MXZH1G32DSZ0TLNH,Nissan,Titan,2024,SE,4996,20526,Blue,Tan,Hybrid,6-Speed Automatic,6.2L V8,Great value 2024 Nissan Titan with many features.,PENDING,true,"Android Auto
+Power Locks
+Parking Sensors"
+D1032,XX3JNXKTKPTGS9RKX,Volkswagen,Passat,2024,SL,0,28371,Black,Beige,Gasoline,6-Speed Automatic,Electric Motor,Clean Volkswagen Passat perfect for daily driving.,RESERVED,true,"Cooled Seats
+Navigation System
+Premium Audio
+Dual Zone Climate"
+B3913,Y5VRDJUEGDVCFMCCU,Honda,Pilot,2018,,72089,9457,Gold,Gray,Hybrid,CVT,1.5L Turbo,Reliable 2018 Honda Pilot with excellent history.,SOLD,false,"Sunroof
+Backup Camera
+Parking Sensors"
+C1994,MTXAJUMSYEN6WZ61P,Volkswagen,Golf,2020,,30665,15617,Green,Beige,Plug-in Hybrid,9-Speed Automatic,2.0L Turbo,Great value 2020 Volkswagen Golf with many features.,RESERVED,false,"Cooled Seats
+Automatic Emergency Braking
+Adaptive Cruise Control"
+C8671,Y8N3RSM7GCMCJWCRY,Ford,Escape,2016,Luxury,111267,6124,Forest Green,Black,Plug-in Hybrid,10-Speed Automatic,2.7L EcoBoost,Clean Ford Escape perfect for daily driving.,RESERVED,false,"Power Locks
+Backup Camera
+Leather Seats
+Navigation System
+Android Auto
+Heated Seats
+Parking Sensors"
+B7008,DF11H706ZYJ2B1F12,Nissan,Titan,2018,Luxury,66371,8227,Blue,Gray,Electric,9-Speed Automatic,6.2L V8,This 2018 Nissan Titan is in excellent condition.,PENDING,false,"Dual Zone Climate
+Adaptive Cruise Control
+Lane Departure Warning
+Heated Seats
+All-Wheel Drive
+Wireless Charging"
+D3935,DVKUG11UU98C8R4ZX,Nissan,Murano,2017,LX,96685,7108,Silver,Tan,Plug-in Hybrid,6-Speed Automatic,2.7L EcoBoost,Well-maintained Nissan Murano with low mileage.,SOLD,true,"Third Row Seating
+Android Auto
+Adaptive Cruise Control
+Blind Spot Monitoring
+Sunroof"
+A3889,K34E7ZCT6DFHK6AKV,Audi,R8,2015,SL,94515,8950,Blue,Black,Electric,9-Speed Automatic,6.2L V8,Clean Audi R8 perfect for daily driving.,AVAILABLE,false,"All-Wheel Drive
+Backup Camera
+Cruise Control
+Dual Zone Climate
+Navigation System
+Heated Seats
+Forward Collision Warning
+Adaptive Cruise Control"
+C3201,DKH8JJ5E9EC5YBD8F,Ford,Mustang,2017,,87031,7580,Metallic Silver,Tan,Diesel,CVT,3.0L Twin-Turbo V6,Reliable 2017 Ford Mustang with excellent history.,RESERVED,false,"Parking Sensors
+Cruise Control
+All-Wheel Drive
+Third Row Seating
+Keyless Entry
+Adaptive Cruise Control
+Wireless Charging
+Automatic Emergency Braking"
+C1294,8J0W0HR70TBGZST4A,BMW,5 Series,2023,Sport,7773,39711,Metallic Silver,Beige,Diesel,CVT,6.2L V8,Reliable 2023 BMW 5 Series with excellent history.,PENDING,false,"Cooled Seats
+Third Row Seating
+Power Locks
+Dual Zone Climate
+Bluetooth
+Adaptive Cruise Control
+All-Wheel Drive"
+C2763,DGD24NA87Y3W9E131,Nissan,Sentra,2023,Sport,16456,19112,Cherry Red,Gray,Hybrid,9-Speed Automatic,5.7L V8,Well-maintained Nissan Sentra with low mileage.,PENDING,false,"Forward Collision Warning
+Power Locks
+Bluetooth
+Lane Departure Warning
+Cooled Seats"
+D8556,5K1DLMUTM80PEYKPA,Volkswagen,Arteon,2024,LX,8995,25852,Brown,Black,Plug-in Hybrid,Manual,1.8L Hybrid,Clean Volkswagen Arteon perfect for daily driving.,RESERVED,false,"Leather Seats
+Apple CarPlay
+Bluetooth
+Cooled Seats
+Navigation System
+Lane Departure Warning
+Wireless Charging"
+A9522,BVE4ZXV3KBJ6A0P5A,Audi,Q7,2020,SR,45939,21610,Red,Black,Diesel,10-Speed Automatic,2.0L Turbo,Great value 2020 Audi Q7 with many features.,SOLD,false,"Heated Seats
+Keyless Entry
+Power Locks
+Backup Camera
+Dual Zone Climate
+Sunroof"
+B4817,PA6JLZ1B8ZHF9P8KX,Ford,Fusion,2015,,110608,5781,Metallic Silver,Gray,Diesel,6-Speed Automatic,3.5L V6,Well-maintained Ford Fusion with low mileage.,PENDING,false,"Apple CarPlay
+Bluetooth
+Lane Departure Warning
+Forward Collision Warning
+Backup Camera
+Blind Spot Monitoring
+All-Wheel Drive
+Navigation System"
+C8004,5E6KA857YG587NNUR,Ford,Escape,2024,SEL,2271,22736,Cherry Red,Brown,Electric,8-Speed Automatic,3.0L Twin-Turbo V6,Clean Ford Escape perfect for daily driving.,PENDING,false,"Adaptive Cruise Control
+Sunroof
+Remote Start
+Leather Seats
+Forward Collision Warning
+Third Row Seating
+Parking Sensors
+Cooled Seats"
+A5815,Y9ZGDV9G13YDCZXTP,Mercedes-Benz,GLS,2022,,24784,33688,Pearl White,Brown,Gasoline,CVT,5.7L V8,Well-maintained Mercedes-Benz GLS with low mileage.,AVAILABLE,false,"All-Wheel Drive
+Adaptive Cruise Control
+Leather Seats
+Cruise Control
+Navigation System
+Power Locks"
+D4583,WDU7CNDMRV9PJY83A,Nissan,Rogue,2020,,53949,11557,Deep Blue,Black,Plug-in Hybrid,6-Speed Automatic,2.0L 4-Cylinder,Clean Nissan Rogue perfect for daily driving.,PENDING,false,"Adaptive Cruise Control
+Lane Departure Warning
+Premium Audio
+Cruise Control
+Sunroof"
+A5803,P923408GSCBB0JMFE,Nissan,GT-R,2015,,105389,5425,Gold,Tan,Diesel,9-Speed Automatic,2.0L 4-Cylinder,Well-maintained Nissan GT-R with low mileage.,PENDING,false,"Apple CarPlay
+Remote Start
+Keyless Entry"

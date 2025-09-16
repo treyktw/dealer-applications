@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@dealer/convex": ["convex/index.ts"],
+      "@dealer/convex/*": ["convex/*"]
+    }
+  }
+}

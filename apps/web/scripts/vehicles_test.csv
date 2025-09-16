@@ -1,0 +1,11 @@
+Stock Number,VIN,Make,Model,Year,Trim,Mileage,Price,Exterior Color,Interior Color,Fuel Type,Transmission,Engine,Description,Status,Featured,Features
+A1234,1HGBH41JXMN109186,Honda,Civic,2022,EX,25000,22500,Silver,Black,Gasoline,CVT,2.0L 4-Cylinder,Well-maintained Honda Civic in excellent condition,AVAILABLE,false,"Backup Camera
+Bluetooth
+Apple CarPlay"
+B5678,JM1BK32F981234567,Toyota,Camry,2021,LE,35000,24500,White,Gray,Gasoline,8-Speed Automatic,2.5L 4-Cylinder,Reliable Toyota Camry perfect for daily driving,AVAILABLE,true,"Navigation System
+Heated Seats
+Blind Spot Monitoring"
+C9012,WBAFB9C50BC123456,BMW,3 Series,2020,330i,45000,32000,Black,Black,Gasoline,8-Speed Automatic,2.0L Turbo,Luxury BMW 3 Series with premium features,PENDING,false,"Leather Seats
+Sunroof
+Navigation System
+Premium Audio"

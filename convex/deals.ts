@@ -1,0 +1,258 @@
+import { query, mutation } from "./_generated/server";
+import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
+
+export const getDeals = query({
+  args: {
+    dealershipId: v.string(),
+    status: v.optional(v.string()),
+    search: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    let deals = await ctx.db
+      .query("deals")
+      .filter((q) => q.eq(q.field("dealershipId"), args.dealershipId))
+      .collect();
+    if (args.status && args.status !== "all") {
+      deals = deals.filter((d) => d.status === args.status);
+    }
+    if (args.search) {
+      const search = args.search.toLowerCase();
+      deals = deals.filter((d) =>
+        d._id.toLowerCase().includes(search)
+      );
+    }
+    // Fetch related client and vehicle for each deal
+    const dealsWithRelations = await Promise.all(
+      deals.map(async (deal) => {
+        const client = deal.clientId ? await ctx.db.get(deal.clientId) : null;
+        const vehicle = deal.vehicleId ? await ctx.db.get(deal.vehicleId) : null;
+        return {
+          ...deal,
+          id: deal._id,
+          client,
+          vehicle,
+        };
+      })
+    );
+    return { deals: dealsWithRelations };
+  },
+});
+
+export const getDeal = query({
+  args: {
+    dealId: v.id("deals"),
+  },
+  handler: async (ctx, args) => {
+    const deal = await ctx.db.get(args.dealId);
+    if (!deal) {
+      return null;
+    }
+
+    // Fetch related client and vehicle
+    const client = deal.clientId ? await ctx.db.get(deal.clientId) : null;
+    const vehicle = deal.vehicleId ? await ctx.db.get(deal.vehicleId) : null;
+
+    // Return deal with related data
+    return {
+      ...deal,
+      id: deal._id,
+      clientEmail: client?.email,
+      clientPhone: client?.phone,
+      vin: vehicle?.vin,
+      stockNumber: vehicle?.stock,
+      vehicle: vehicle ? {
+        id: vehicle.id,
+        vin: vehicle.vin,
+        stock: vehicle.stock,
+        make: vehicle.make,
+        model: vehicle.model,
+        year: vehicle.year,
+        mileage: vehicle.mileage,
+        price: vehicle.price,
+        status: vehicle.status,
+        featured: vehicle.featured,
+        trim: vehicle.trim,
+        exteriorColor: vehicle.exteriorColor,
+        interiorColor: vehicle.interiorColor,
+        fuelType: vehicle.fuelType,
+        transmission: vehicle.transmission,
+        engine: vehicle.engine,
+        description: vehicle.description,
+        features: vehicle.features,
+        images: vehicle.images,
+      } : null,
+      documents: await ctx.db
+        .query("documents")
+        .filter((q) => q.eq(q.field("dealId"), deal._id))
+        .collect(),
+    };
+  },
+});
+
+export const updateDealStatus = mutation({
+  args: {
+    dealId: v.id("deals"),
+    status: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.auth.getUserIdentity();
+    if (!user) {
+      throw new Error("Not authenticated");
+    }
+
+    const deal = await ctx.db.get(args.dealId);
+    if (!deal) {
+      throw new Error("Deal not found");
+    }
+
+    await ctx.db.patch(args.dealId, {
+      status: args.status,
+      updatedAt: Date.now(),
+      ...(args.status === "COMPLETED" && { completedAt: Date.now() }),
+      ...(args.status === "CANCELLED" && { cancelledAt: Date.now() }),
+    });
+
+    return { success: true };
+  },
+});
+
+export const markDocumentSigned = mutation({
+  args: {
+    documentId: v.id("documents"),
+    type: v.string(), // "client" | "dealer" | "notary"
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.auth.getUserIdentity();
+    if (!user) {
+      throw new Error("Not authenticated");
+    }
+
+    const document = await ctx.db.get(args.documentId);
+    if (!document) {
+      throw new Error("Document not found");
+    }
+
+    const updates: Record<string, boolean> = {};
+    if (args.type === "client") updates.clientSigned = true;
+    if (args.type === "dealer") updates.dealerSigned = true;
+    if (args.type === "notary") updates.notarized = true;
+
+    await ctx.db.patch(args.documentId, {
+      ...updates,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+}); 
+
+export const createDeal = mutation({
+  args: {
+    type: v.string(),
+    clientFirstName: v.optional(v.string()),
+    clientLastName: v.optional(v.string()),
+    clientEmail: v.optional(v.string()),
+    clientPhone: v.optional(v.string()),
+    vin: v.optional(v.string()),
+    stockNumber: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user || !user.dealershipId) {
+      throw new Error("User not associated with a dealership");
+    }
+
+    // Create or find client
+    let clientId = null;
+    if (args.clientFirstName && args.clientLastName) {
+      // Check if client exists
+      const existingClient = await ctx.db
+        .query("clients")
+        .withIndex("by_dealership", q => q.eq("dealershipId", user.dealershipId as Id<"dealerships">))
+        .filter(q => 
+          q.and(
+            q.eq(q.field("firstName"), args.clientFirstName),
+            q.eq(q.field("lastName"), args.clientLastName)
+          )
+        )
+        .first();
+
+      if (existingClient) {
+        clientId = existingClient._id;
+      } else {
+        // Create new client
+        clientId = await ctx.db.insert("clients", {
+          client_id: `CLIENT-${Date.now()}`,
+          firstName: args.clientFirstName,
+          lastName: args.clientLastName,
+          email: args.clientEmail,
+          phone: args.clientPhone,
+          status: "LEAD",
+          dealershipId: user.dealershipId,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+      }
+    }
+
+    // Create or find vehicle if VIN provided
+    let vehicleId: Id<"vehicles"> | undefined;
+    if (args.vin) {
+      const existingVehicle = await ctx.db
+        .query("vehicles")
+        .withIndex("by_vehicle_id", (q) => q.eq("id", args.vin as string))
+        .filter((q) => q.eq(q.field("dealershipId"), user.dealershipId))
+        .first();
+
+      if (existingVehicle) {
+        vehicleId = existingVehicle._id;
+      } else {
+        vehicleId = await ctx.db.insert("vehicles", {
+          id: args.vin,
+          vin: args.vin,
+          stock: args.stockNumber || "",
+          make: "Unknown",
+          model: "Unknown", 
+          year: new Date().getFullYear(),
+          mileage: 0,
+          price: 0,
+          status: "AVAILABLE",
+          featured: false,
+          dealershipId: user.dealershipId,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+      }
+    }
+
+    // Create the deal
+    const dealId = await ctx.db.insert("deals", {
+      type: args.type,
+      clientId: clientId as Id<"clients">,
+      vehicleId: vehicleId as Id<"vehicles">, // Will be set later if needed
+      generated: false,
+      clientSigned: false,
+      dealerSigned: false,
+      notarized: false,
+      status: "draft",
+      totalAmount: 0,
+      dealershipId: user.dealershipId,
+      clientEmail: args.clientEmail,
+      clientPhone: args.clientPhone,
+      vin: args.vin,
+      stockNumber: args.stockNumber,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    return dealId;
+  },
+});
