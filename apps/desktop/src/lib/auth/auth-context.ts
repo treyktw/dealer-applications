@@ -1,4 +1,5 @@
 // src/lib/auth/auth-context.ts
+
 export interface AuthContext {
   auth?: {
     isLoaded: boolean

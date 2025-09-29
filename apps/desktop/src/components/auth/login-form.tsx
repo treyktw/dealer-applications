@@ -1,12 +1,14 @@
 // src/components/auth/login-form.tsx
-import { useState, useEffect } from "react"
+import { useState, useEffect, useId } from "react"
 import { useSignIn } from "@clerk/clerk-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Eye, EyeOff, Loader2 } from "lucide-react"
 import { toast } from "react-hot-toast"
 import { rateLimiter } from "@/lib/auth/rate-limiter"
+// Removed custom session manager - using Clerk's built-in session management
 import { cn } from "@/lib/utils"
 
 export function LoginForm() {
@@ -16,6 +18,8 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [lockoutTimer, setLockoutTimer] = useState(0)
+  const [rememberMe, setRememberMe] = useState(false)
+  const rememberMeId = useId()
 
   useEffect(() => {
     if (lockoutTimer > 0) {
@@ -38,7 +42,7 @@ export function LoginForm() {
     const rateLimit = rateLimiter.recordAttempt(email)
     
     if (!rateLimit.allowed) {
-      const seconds = Math.ceil((rateLimit.lockedUntil! - Date.now()) / 1000)
+      const seconds = Math.ceil((rateLimit.lockedUntil ?? Date.now()) - Date.now()) / 1000
       setLockoutTimer(seconds)
       toast.error(`Too many attempts. Try again in ${seconds} seconds`)
       return
@@ -55,11 +59,15 @@ export function LoginForm() {
       if (result.status === "complete") {
         rateLimiter.reset(email)
         await setActive({ session: result.createdSessionId })
+        
+        // Clerk handles session management automatically
+        
         toast.success("Welcome back!")
       } else {
         toast.error("Invalid credentials")
       }
-    } catch (err: any) {
+    } catch (error) {
+      console.error('Login error:', error)
       if (rateLimit.remainingAttempts) {
         toast.error(`Invalid credentials. ${rateLimit.remainingAttempts} attempts remaining`)
       } else {
@@ -80,7 +88,8 @@ export function LoginForm() {
         redirectUrl: "/sso-callback",
         redirectUrlComplete: "/",
       })
-    } catch (err) {
+    } catch (error) {
+      console.error('Google sign-in error:', error)
       toast.error("Failed to sign in with Google")
       setIsLoading(false)
     }
@@ -94,7 +103,7 @@ export function LoginForm() {
         variant="secondary"
         className="w-full"
       >
-        <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+        <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
           <path
             fill="#4285F4"
             d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -132,7 +141,7 @@ export function LoginForm() {
             Email
           </Label>
           <Input
-            id="email"
+            id={useId()}
             type="email"
             placeholder="admin@example.com"
             value={email}
@@ -149,7 +158,7 @@ export function LoginForm() {
           </Label>
           <div className="relative">
             <Input
-              id="password"
+              id={useId()}
               type={showPassword ? "text" : "password"}
               value={password}
               placeholder="Enter your password"
@@ -170,9 +179,23 @@ export function LoginForm() {
           </div>
         </div>
 
-        <div className="flex items-center justify-center">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id={rememberMeId}
+              checked={rememberMe}
+              onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+              disabled={isLoading || lockoutTimer > 0}
+            />
+            <Label 
+              htmlFor={rememberMeId} 
+              className="text-sm text-zinc-700 dark:text-zinc-200 cursor-pointer"
+            >
+              Remember me
+            </Label>
+          </div>
           {/* //! This is a placeholder for the forgot password button. It will be implemented later. */}
-          <Button variant="link" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 p-0 h-auto text-sm">
+          <Button variant="link" className="text-sm">
             Forgot Password?
           </Button>
         </div>

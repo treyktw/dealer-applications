@@ -4,7 +4,6 @@ import { useAuth } from "@clerk/clerk-react";
 import { LoginForm } from "@/components/auth/login-form";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { useEffect } from "react";
-import { applyTheme, themeStore } from "@/lib/theme";
 
 export const Route = createFileRoute("/login")({
   beforeLoad: async ({ context }) => {
@@ -23,9 +22,6 @@ function LoginPage() {
   const { isSignedIn } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    applyTheme(themeStore.state.theme);
-  }, []);
 
   useEffect(() => {
     if (isSignedIn) {

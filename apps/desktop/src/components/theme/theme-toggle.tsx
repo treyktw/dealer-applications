@@ -7,19 +7,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { themeStore, setTheme } from "@/lib/theme"
-import { useStore } from "@tanstack/react-store"
+import { useTheme } from "@/theme/ThemeProvider"
 
 export function ThemeToggle() {
-  const theme = useStore(themeStore, (state) => state.theme)
+  const { mode, setTheme } = useTheme()
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="text-white/80 hover:text-white hover:bg-white/10">
-          {theme === 'light' && <Sun className="h-5 w-5" />}
-          {theme === 'dark' && <Moon className="h-5 w-5" />}
-          {theme === 'system' && <Monitor className="h-5 w-5" />}
+          {mode === 'light' && <Sun className="h-5 w-5" />}
+          {mode === 'dark' && <Moon className="h-5 w-5" />}
+          {mode === 'custom' && <Monitor className="h-5 w-5" />}
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
@@ -31,10 +30,6 @@ export function ThemeToggle() {
         <DropdownMenuItem onClick={() => setTheme("dark")}>
           <Moon className="mr-2 h-4 w-4" />
           Dark
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")}>
-          <Monitor className="mr-2 h-4 w-4" />
-          System
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

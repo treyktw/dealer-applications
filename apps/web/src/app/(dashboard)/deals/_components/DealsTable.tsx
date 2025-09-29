@@ -228,26 +228,26 @@ export function DealsTable() {
           View and manage all vehicle sales and documents
         </CardDescription>
       </CardHeader>
-
-      <Button
-        variant="default"
-        size="sm"
-        onClick={() => {
-          const firstDeal = dealsData.deals[0];
-          if (firstDeal) {
-            handleGenerateDeepLink(firstDeal._id);
-          }
-        }}
-        disabled={generatingLink === dealsData.deals[0]?._id}
-      >
-        {generatingLink === dealsData.deals[0]?._id ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        ) : (
-          <Link2 className="mr-2 h-4 w-4" />
-        )}
-        Test with First Deal
-      </Button>
-
+      <CardContent>
+        <Button
+          variant="default"
+          size="sm"
+          onClick={() => {
+            const firstDeal = dealsData.deals[0];
+            if (firstDeal) {
+              handleGenerateDeepLink(firstDeal._id);
+            }
+          }}
+          disabled={generatingLink === dealsData.deals[0]?._id}
+        >
+          {generatingLink === dealsData.deals[0]?._id ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Link2 className="mr-2 h-4 w-4" />
+          )}
+          Test with First Deal
+        </Button>
+      </CardContent>
       <CardContent>
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <div className="relative flex-1">

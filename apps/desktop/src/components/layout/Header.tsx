@@ -15,6 +15,7 @@ import {
 } from '../ui/dialog'
 import { toast } from 'react-hot-toast'
 import { ThemeToggle } from '../theme/theme-toggle'
+import { SessionStatus } from '../auth/session-status'
 
 interface HeaderProps {
   toggleSidebar?: () => void
@@ -61,6 +62,7 @@ export function Header({ toggleSidebar, sidebarOpen = true }: HeaderProps) {
         {/* Left Section: Menu Toggle + Dealership Name */}
         <div className="flex items-center gap-4">
           <button
+            type="button"
             onClick={toggleSidebar}
             className="p-2 hover:bg-accent rounded-md transition-colors"
             title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
@@ -93,6 +95,12 @@ export function Header({ toggleSidebar, sidebarOpen = true }: HeaderProps) {
 
         {/* Right Section: User Profile + Sign Out */}
         <div className="flex items-center gap-3">
+          {/* Session Status */}
+          <SessionStatus showDetails={true} />
+          
+          {/* Divider */}
+          <div className="h-6 w-px bg-border" />
+          
           {/* Theme Toggle */}
           <ThemeToggle />
           

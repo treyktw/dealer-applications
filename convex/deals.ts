@@ -256,3 +256,43 @@ export const createDeal = mutation({
     return dealId;
   },
 });
+
+export const deleteDeal = mutation({
+  args: {
+    dealId: v.id("deals"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user) throw new Error("User not found");
+
+    const deal = await ctx.db.get(args.dealId);
+    if (!deal) throw new Error("Deal not found");
+
+    // Verify user has access to this deal
+    if (deal.dealershipId !== user.dealershipId) {
+      throw new Error("Unauthorized: Deal belongs to different dealership");
+    }
+
+    // Delete related documents first
+    const documents = await ctx.db
+      .query("documents")
+      .filter((q) => q.eq(q.field("dealId"), args.dealId))
+      .collect();
+
+    for (const doc of documents) {
+      await ctx.db.delete(doc._id);
+    }
+
+    // Delete the deal
+    await ctx.db.delete(args.dealId);
+
+    return { success: true, message: "Deal deleted successfully" };
+  },
+});

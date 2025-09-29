@@ -1,7 +1,7 @@
 // app/(onboarding)/onboarding/page.tsx - REVERTED: Create Dealership First
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { toast } from 'sonner';
@@ -28,6 +28,10 @@ export default function OnboardingPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const router = useRouter();
   const { user, isLoaded } = useUser();
+  
+  // Move useId calls to top level
+  const dealershipNameId = useId();
+  const descriptionId = useId();
 
   // Convex mutations and queries
   const createDealership = useMutation(api.dealerships.createDealership);
@@ -225,7 +229,7 @@ export default function OnboardingPage() {
             <div className="space-y-2">
               <Label htmlFor="dealership-name">Dealership Name</Label>
               <Input
-                id="dealership-name"
+                id={`dealership-name-${dealershipNameId}`}
                 placeholder="Enter your dealership name"
                 value={dealershipName}
                 onChange={(e) => setDealershipName(e.target.value)}
@@ -240,7 +244,7 @@ export default function OnboardingPage() {
             <div className="space-y-2">
               <Label htmlFor="description">Description (Optional)</Label>
               <Textarea
-                id="description"
+                id={`description-${descriptionId}`}
                 placeholder="Briefly describe your dealership"
                 className="min-h-24"
                 value={description}

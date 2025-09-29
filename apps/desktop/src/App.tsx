@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConvexReactClient } from "convex/react";
 import { ConvexQueryClient } from "@convex-dev/react-query";
 import { ThemeProvider } from "./theme/ThemeProvider";
+// Removed custom session manager - using Clerk's built-in session management
 import "./App.css";
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -15,7 +16,7 @@ const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const router = createRouter({
   routeTree,
   context: {
-    auth: undefined!,
+    auth: undefined as unknown as { isLoaded: boolean; isSignedIn: boolean; userId: string | null | undefined },
   },
 });
 

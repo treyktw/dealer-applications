@@ -1,5 +1,5 @@
 // src/components/auth/step-up-modal.tsx
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useSignIn, useUser, useAuth } from '@clerk/clerk-react'
 import {
   Dialog,
@@ -53,7 +53,9 @@ export function StepUpModal({ isOpen, onSuccess, onCancel, reason }: StepUpModal
         }
       }
     } catch (error) {
-      toast.error('Authentication failed')
+      toast.error('Authentication failed', {
+        description: error instanceof Error ? error.message : 'Authentication failed',
+      })
     } finally {
       setIsLoading(false)
       setPassword('')
@@ -77,7 +79,7 @@ export function StepUpModal({ isOpen, onSuccess, onCancel, reason }: StepUpModal
           <div className="space-y-2">
             <Label htmlFor="step-up-password">Password</Label>
             <Input
-              id="step-up-password"
+              id={useId()}
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
