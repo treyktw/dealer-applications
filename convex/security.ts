@@ -1,7 +1,7 @@
 // convex/security.ts - Security Framework
-import { mutation, internalMutation, query } from "./_generated/server";
+import { internalMutation, query } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
-import { Id } from "./_generated/dataModel";
+// import { Id } from "./_generated/dataModel";
 
 // Security event logging
 export const logSecurityEvent = internalMutation({
@@ -242,7 +242,7 @@ export const testSecurity = internalMutation({
   args: {
     message: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (_ctx, args) => {
     console.log("Security module test:", args.message);
     return { success: true, message: args.message };
   },

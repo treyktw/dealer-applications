@@ -44,12 +44,15 @@ export function generateDealershipBucketName(dealershipId: string): string {
 export const checkBucketExists = internalAction({
   args: { bucketName: v.string() },
   handler: async (ctx, args) => {
+    console.log(ctx);
+    console.log(`Checking bucket existence: ${args.bucketName}`);
     try {
       await s3Client.send(
         new HeadBucketCommand({
           Bucket: args.bucketName,
         })
       );
+      console.log(`Bucket ${args.bucketName} exists`);
       return true;
     } catch (error: any) {
       if (
@@ -936,7 +939,7 @@ export const updateBucketCors = action({
   args: {
     dealershipId: v.id("dealerships"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, _args) => {
     const dealership = await ctx.runQuery(api.dealerships.getCurrentDealership);
     if (!dealership?.s3BucketName) {
       throw new ConvexError("Dealership S3 bucket not configured");

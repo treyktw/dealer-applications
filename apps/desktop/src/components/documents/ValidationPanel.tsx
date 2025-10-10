@@ -2,11 +2,10 @@
 import { AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export function ValidationPanel({ validation }: { validation: any }) {
+export function ValidationPanel({ validation }: { validation: { valid: boolean; errors: { message: string; severity: string }[] } }) {
   if (!validation) return null;
 
-  const hasErrors = validation.errors?.some((e: any) => e.severity === 'error');
-  const hasWarnings = validation.errors?.some((e: any) => e.severity === 'warning');
+  const hasErrors = validation.errors?.some((e: { severity: string }) => e.severity === 'error');
 
   return (
     <div className={cn(
@@ -37,8 +36,8 @@ export function ValidationPanel({ validation }: { validation: any }) {
           
           {validation.errors && validation.errors.length > 0 && (
             <ul className="mt-2 space-y-1">
-              {validation.errors.map((error: any, index: number) => (
-                <li key={index} className="text-sm flex items-center gap-2">
+              {validation.errors.map((error: { message: string; severity: string }) => (
+                <li key={error.message} className="text-sm flex items-center gap-2">
                   <span className={cn(
                     "w-2 h-2 rounded-full",
                     error.severity === 'error' ? 'bg-red-500' : 'bg-amber-500'

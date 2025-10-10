@@ -1,18 +1,16 @@
 import { mutation, query, action, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
-import { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { SubscriptionPlan, SubscriptionStatus, BillingCycle, SubscriptionFeatures } from "./schema";
 import Stripe from "stripe";
-import { internalAction } from "./_generated/server";
 import { api } from "./_generated/api";
-import { internal } from "./_generated/api";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2025-08-27.basil",
 });
 
 // Helper function to get Stripe price ID
-function getPriceId(plan: string, billingCycle: string): string {
+export function getPriceId(plan: string, billingCycle: string): string {
   const prices = {
     [SubscriptionPlan.BASIC]: {
       monthly: process.env.STRIPE_BASIC_MONTHLY_PRICE_ID,
@@ -204,7 +202,7 @@ export const createInitialSubscription = mutation({
       .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId))
       .first();
 
-    let subscriptionId;
+    let subscriptionId: Id<"subscriptions">;
     const subscriptionStatus = SubscriptionStatus.PENDING; // Always start as pending
 
     if (existingSubscription) {
@@ -367,8 +365,8 @@ export const updateSubscriptionAfterCheckout = internalMutation({
   handler: async (ctx, args) => {
     console.log("Updating subscription after checkout:", args);
 
-    let subscription;
-    let subscriptionId;
+    var subscription: Doc<"subscriptions"> | null = null;
+    var subscriptionId: Id<"subscriptions"> | undefined;
     
     if (args.subscriptionRecordId) {
       // Update specific subscription record
@@ -428,27 +426,31 @@ export const updateSubscriptionAfterCheckout = internalMutation({
     }
 
     // Update dealership with subscription info
-    await ctx.db.patch(args.dealershipId, {
-      stripeCustomerId: args.stripeCustomerId,
-      subscriptionId: subscriptionId,
-      updatedAt: Date.now(),
-    });
-
-    // Update all users in the dealership with the subscription status
-    const users = await ctx.db
-      .query("users")
-      .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId))
-      .collect();
-
-    const ourStatus = mapStripeStatusToOurStatus(args.status);
-
-    for (const user of users) {
-      await ctx.db.patch(user._id, {
-        subscriptionStatus: ourStatus,
+    if (subscriptionId) {
+      await ctx.db.patch(args.dealershipId, {
+        stripeCustomerId: args.stripeCustomerId,
         subscriptionId: subscriptionId,
         updatedAt: Date.now(),
       });
-      console.log(`Updated user ${user._id} subscription status to: ${ourStatus}`);
+    }
+
+    // Update all users in the dealership with the subscription status
+    if (subscriptionId) {
+      const users = await ctx.db
+        .query("users")
+        .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId))
+        .collect();
+
+      const ourStatus = mapStripeStatusToOurStatus(args.status);
+
+      for (const user of users) {
+        await ctx.db.patch(user._id, {
+          subscriptionStatus: ourStatus,
+          subscriptionId: subscriptionId,
+          updatedAt: Date.now(),
+        });
+        console.log(`Updated user ${user._id} subscription status to: ${ourStatus}`);
+      }
     }
 
     console.log("Successfully updated subscription after checkout");

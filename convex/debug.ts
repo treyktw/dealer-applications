@@ -2,8 +2,9 @@
 
 import { query, mutation, action } from "./_generated/server";
 import { v } from "convex/values";
-import { Id } from "./_generated/dataModel";
-import { api } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import type { Doc } from "./_generated/dataModel";
+// import { api } from "./_generated/api";
 
 // Debug query to get all user and subscription data
 export const debugUserSubscription = query({
@@ -95,15 +96,15 @@ export const debugFixUserSubscription = mutation({
       throw new Error("Not authenticated");
     }
 
-    let user;
+    let user: Doc<"users">;
     if (args.userId) {
-      user = await ctx.db.get(args.userId);
+      user = await ctx.db.get(args.userId) as Doc<"users">;
     } else {
       const clerkId = args.clerkId || identity.subject;
       user = await ctx.db
         .query("users")
         .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
-        .first();
+        .first() as Doc<"users">;
     }
 
     if (!user) {
@@ -312,7 +313,7 @@ export const immediateFixCurrentUser = mutation({
 
 export const debugUploadIssue = action({
   args: {},
-  handler: async (ctx) => {
+  handler: async (_ctx) => {
     console.log("=== DEBUGGING UPLOAD ISSUE ===");
     
     // Test S3 client configuration
@@ -409,7 +410,7 @@ export const debugUploadIssue = action({
 
 export const testS3Connection = action({
   args: {},
-  handler: async (ctx) => {
+  handler: async (_ctx) => {
     console.log("=== TESTING S3 CONNECTION ===");
     
     try {

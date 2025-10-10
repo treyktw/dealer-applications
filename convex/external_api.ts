@@ -2,8 +2,8 @@
 import { httpAction } from "./_generated/server";
 import { api } from "./_generated/api";
 import { internal } from "./_generated/api";
-import { ConvexError } from "convex/values";
-import { Id } from "./_generated/dataModel";
+// import { ConvexError } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 
 // Helper to convert string to Convex ID
 function toDealershipId(id: string): Id<"dealerships"> {
@@ -30,12 +30,6 @@ function getClientIP(request: Request): string {
 
 // Helper for CORS headers
 function getCorsHeaders(origin: string | null): Record<string, string> {
-  const allowedOrigins = [
-    'https://localhost:3000',
-    'https://*.vercel.app',
-    'https://*.netlify.app',
-    // Add specific dealer domains as needed
-  ];
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -487,7 +481,7 @@ export const searchVehicles = httpAction(async (ctx, request) => {
 });
 
 // OPTIONS handler for CORS preflight
-export const handleOptions = httpAction(async (ctx, request) => {
+export const handleOptions = httpAction(async (_ctx, request) => {
   const origin = request.headers.get('origin');
   
   return new Response(null, {

@@ -7,7 +7,7 @@ export const deleteUserFromClerk = internalAction({
   args: {
     clerkId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (_ctx, args) => {
     const clerkSecretKey = process.env.CLERK_SECRET_KEY;
     
     if (!clerkSecretKey) {
@@ -62,7 +62,7 @@ export const updateUserInClerk = internalAction({
       employeeId: v.optional(v.string()),
     })),
   },
-  handler: async (ctx, args) => {
+  handler: async (_ctx, args) => {
     const clerkSecretKey = process.env.CLERK_SECRET_KEY;
     
     if (!clerkSecretKey) {

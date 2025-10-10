@@ -1,7 +1,7 @@
 // convex/developer.ts - Safe developer utilities for testing
 import { mutation, query } from "./_generated/server";
-import { ConvexError, v } from "convex/values";
-import { Id } from "./_generated/dataModel";
+import { ConvexError } from "convex/values";
+// import { Id } from "./_generated/dataModel";
 
 // IMPORTANT: This function only deletes data for the current authenticated user
 // It cannot delete other users' data, ensuring safety in multi-user environments
@@ -30,7 +30,7 @@ export const deleteCurrentUserData = mutation({
 
       console.log("Found user:", user._id, "dealership:", user.dealershipId);
 
-      let deletedCounts = {
+      const deletedCounts = {
         users: 0,
         dealerships: 0,
         vehicles: 0,
@@ -287,7 +287,7 @@ export const getCurrentUserDataSummary = query({
       };
     }
 
-    let dataCount = {
+    const dataCount = {
       users: 1,
       dealerships: 0,
       vehicles: 0,

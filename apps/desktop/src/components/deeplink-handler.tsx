@@ -1,5 +1,5 @@
 // src/components/deeplink-handler.tsx
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { deepLinkStore, clearPendingLink, setExchanging, setError } from '@/state/deeplink.slice';
 import { performDeepLinkExchange } from '@/deeplink/exchange';
@@ -13,13 +13,8 @@ export function DeepLinkHandler() {
   const pendingLink = useStore(deepLinkStore, (state) => state.pendingLink);
   const isExchanging = useStore(deepLinkStore, (state) => state.isExchanging);
 
-  useEffect(() => {
-    if (pendingLink && !isExchanging) {
-      handleDeepLink();
-    }
-  }, [pendingLink]);
 
-  const handleDeepLink = async () => {
+  const handleDeepLink = useCallback(async () => {
     if (!pendingLink) return;
 
     setExchanging(true);
@@ -49,8 +44,8 @@ export function DeepLinkHandler() {
         toast.success('Deep-link validated!');
         // Navigate to deal page
         navigate({ 
-          to: '/deals/$dealId', 
-          params: { dealId: pendingLink.dealId } 
+          to: '/deals/$dealsId/documents', 
+          params: { dealsId: pendingLink.dealId } 
         });
         clearPendingLink();
       } else {
@@ -63,7 +58,13 @@ export function DeepLinkHandler() {
     } finally {
       setExchanging(false);
     }
-  };
+  }, [pendingLink, navigate]);
+
+  useEffect(() => {
+    if (pendingLink && !isExchanging) {
+      handleDeepLink();
+    }
+  }, [pendingLink, isExchanging, handleDeepLink]);
 
   return null; // This is a handler component, no UI
 }

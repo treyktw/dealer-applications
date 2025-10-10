@@ -23,9 +23,6 @@ export default function Page() {
           <div>
             {/* Logo at top left */}
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-white/10 backdrop-blur rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-xl">UAB</span>
-              </div>
               <div className="text-white">
                 <h3 className="font-semibold">UniversalAutoBrokers</h3>
                 <p className="text-xs text-white/80">DealerAdmin Platform</p>

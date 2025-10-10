@@ -22,7 +22,7 @@ export const getTemplateManifest = query({
   args: {
     templateId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (_ctx, args) => {
     // Placeholder implementation
     return {
       id: args.templateId,

@@ -142,17 +142,13 @@ export function DealsTable() {
       const result = await generateDeepLink({
         dealId: dealId as Id<"deals">,
       });
-
+  
       if (result?.deepLink) {
-        // Copy to clipboard
-        await navigator.clipboard.writeText(result.deepLink);
-        toast.success("Deep-link copied to clipboard!");
-
-        // Optionally auto-open
-        const shouldOpen = confirm("Open in desktop app?");
-        if (shouldOpen) {
-          window.location.href = result.deepLink;
-        }
+        // Just open the deep link directly - let the OS handle it
+        window.location.href = result.deepLink;
+        
+        // Show a toast to let user know what's happening
+        toast.success("Opening in Dealer Software...");
       }
     } catch (error) {
       console.error("Failed to generate deep-link:", error);

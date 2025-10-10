@@ -3,7 +3,7 @@
 import { v } from "convex/values";
 import { action, mutation, query } from "./_generated/server";
 import { api } from "./_generated/api";
-import { Id } from "./_generated/dataModel";
+// import { Id } from "./_generated/dataModel";
 
 // Analyze PDF and create dynamic field mapping
 export const analyzePDFTemplate = action({
@@ -72,7 +72,7 @@ export const analyzePDFTemplate = action({
 });
 
 // Smart field detection based on common patterns
-function detectFieldMapping(fieldName: string, fieldType: string) {
+function detectFieldMapping(fieldName: string, _fieldType: string) {
   const name = fieldName.toLowerCase();
   
   // Vehicle patterns

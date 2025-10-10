@@ -1,6 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { Id } from "./_generated/dataModel";
+// import { Id } from "./_generated/dataModel";
 
 export const getDealershipSettings = query({
   args: { dealershipId: v.id("dealerships") },

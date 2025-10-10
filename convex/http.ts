@@ -70,7 +70,7 @@ const stripeWebhook = httpAction(async (ctx, request) => {
 });
 
 // Health check endpoint
-const healthCheck = httpAction(async (ctx, request) => {
+const healthCheck = httpAction(async (_ctx, _request) => {
   return new Response(JSON.stringify({
     status: "healthy",
     timestamp: new Date().toISOString(),
@@ -85,7 +85,7 @@ const healthCheck = httpAction(async (ctx, request) => {
 });
 
 // API status endpoint
-const apiStatus = httpAction(async (ctx, request) => {
+const apiStatus = httpAction(async (_ctx, _request) => {
   return new Response(JSON.stringify({
     message: "Dealership API is running",
     endpoints: [
@@ -169,7 +169,7 @@ http.route({
 http.route({
   path: "/api/{path+}",
   method: "GET",
-  handler: httpAction(async (ctx, request) => {
+  handler: httpAction(async (_ctx, _request) => {
     return new Response(JSON.stringify({
       error: "API endpoint not found",
       availableEndpoints: [

@@ -1,8 +1,8 @@
 // convex/pdfTemplates.ts - Simplified and Fixed
 
 import { v } from "convex/values";
-import { mutation, query, action } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+import { mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 
 // Storage mapping for known templates
 const TEMPLATE_STORAGE_MAP = {
@@ -152,7 +152,7 @@ export const ensureDealershipTemplates = mutation({
     const dealershipId = args.dealershipId || user?.dealershipId;
     if (!dealershipId) throw new Error("No dealership");
 
-    const results = [];
+    const results: { templateId: string; created: boolean, exists: boolean }[] = [];
 
     // Register all known templates
     for (const [templateId, storageId] of Object.entries(TEMPLATE_STORAGE_MAP)) {
@@ -186,10 +186,10 @@ export const ensureDealershipTemplates = mutation({
             createdAt: Date.now(),
             updatedAt: Date.now(),
           });
-          results.push({ templateId, created: true });
+          results.push({ templateId: id, created: true, exists: false });
         }
       } else {
-        results.push({ templateId, exists: true });
+        results.push({ templateId, created: false, exists: true });
       }
     }
 

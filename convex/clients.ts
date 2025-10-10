@@ -1,7 +1,7 @@
 import { mutation, query, action } from "./_generated/server";
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
-import { nanoid } from "nanoid";
+// import type { Id } from "./_generated/dataModel";
+// import { nanoid } from "nanoid";
 import { api } from "./_generated/api";
 
 export const createClient = mutation({

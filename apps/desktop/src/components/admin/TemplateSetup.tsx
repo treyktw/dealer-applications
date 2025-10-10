@@ -18,15 +18,17 @@ export function TemplateSetup() {
         throw new Error("No dealership associated");
       }
       
-      return await convexMutation(api.api.pdfTemplates.registerGABillOfSaleTemplate, {
-        dealershipId: currentUser.dealershipId,
+      return await convexMutation(api.api.pdfTemplates.registerTemplateFromStorage, {
+        templateType: "bill_of_sale",
+        jurisdiction: "GA",
+        storageId: "bill-of-sale-ga-v1",
       });
     },
     onSuccess: (result) => {
-      if (result.success) {
+      if (result.created || result.updated) {
         toast.success('GA Bill of Sale template registered!');
       } else {
-        toast.error(result.message || 'Template already exists');
+        toast.error('Template already exists');
       }
     },
     onError: (error) => {

@@ -1,16 +1,11 @@
 // convex/pdfProcessor.ts - Complete implementation
 
 import { v } from "convex/values";
-import { action, internalAction, internalMutation } from "./_generated/server";
+import { action, internalMutation } from "./_generated/server";
 import { api, internal } from "./_generated/api";
-import { Id } from "./_generated/dataModel";
-import {
+import type {
   PDFDocument,
-  PDFTextField,
-  PDFCheckBox,
-  PDFRadioGroup,
-  rgb,
-  StandardFonts,
+  PDFForm,
 } from "pdf-lib";
 
 // Generate prefilled PDF from template
@@ -48,8 +43,8 @@ export const generatePrefillPDF = action({
     // Load PDF with error recovery
     const { PDFDocument } = await import('pdf-lib');
     
-    let pdfDoc;
-    let form;
+    let pdfDoc: PDFDocument;
+    let form: PDFForm | undefined;
     let canUseForm = false;
     
     try {
@@ -343,7 +338,7 @@ function mergeAllData(pack: any, deal: any, dealership: any) {
   };
 }
 
-function getValueFromPath(obj: any, path: string): any {
+export function getValueFromPath(obj: any, path: string): any {
   const parts = path.split(".");
   let current = obj;
 
@@ -363,7 +358,7 @@ function getValueFromPath(obj: any, path: string): any {
   return current;
 }
 
-function applyTransform(value: any, transform?: string): any {
+export function applyTransform(value: any, transform?: string): any {
   if (!transform) return value;
 
   const transforms = transform.split("|");

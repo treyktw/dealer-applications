@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { Id } from "./_generated/dataModel";
+// import { Id } from "./_generated/dataModel";
 
 export const generateDocuments = mutation({
   args: {
@@ -203,7 +203,7 @@ export const getVehicle = query({
 // Helper query to debug user lookup issues
 export const debugUserLookup = query({
   args: {},
-  handler: async (ctx, args) => {
+  handler: async (ctx, _args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       return { error: "Not authenticated" };

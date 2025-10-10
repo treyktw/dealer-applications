@@ -1,8 +1,8 @@
 // convex/documentPacks.ts
 
 import { v } from "convex/values";
-import { mutation, query, action } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+import { mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 
 // Create a new document pack for a deal
 export const createDocumentPack = mutation({
@@ -334,7 +334,7 @@ export const getPackByDealId = query({
 });
 
 // Helper function to define required templates per pack type
-function getRequiredTemplates(packType: string, jurisdiction: string) {
+function getRequiredTemplates(packType: string, _jurisdiction: string) {
   const testingMode = true; // Or use an environment variable
   
   if (testingMode) {

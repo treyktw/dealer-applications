@@ -8,7 +8,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConvexReactClient } from "convex/react";
 import { ConvexQueryClient } from "@convex-dev/react-query";
 import { ThemeProvider } from "./theme/ThemeProvider";
-// Removed custom session manager - using Clerk's built-in session management
+import { DeepLinkListener } from "@/deeplink/listener"; // ADD THIS IMPORT
+import { DeepLinkHandler } from "@/components/deeplink-handler"; // ADD THIS IMPORT
 import "./App.css";
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -41,6 +42,16 @@ declare module "@tanstack/react-router" {
 function InnerApp() {
   const { isLoaded, isSignedIn, userId, getToken } = useAuth();
 
+  // ADD THIS: Initialize deep link listener
+  useEffect(() => {
+    const listener = new DeepLinkListener();
+    listener.start();
+    
+    return () => {
+      listener.stop();
+    };
+  }, []);
+
   useEffect(() => {
     if (isLoaded) {
       if (isSignedIn) {
@@ -54,16 +65,19 @@ function InnerApp() {
   }, [isLoaded, isSignedIn, getToken]);
 
   return (
-    <RouterProvider
-      router={router}
-      context={{
-        auth: {
-          isLoaded,
-          isSignedIn: isSignedIn ?? false,
-          userId,
-        },
-      }}
-    />
+    <>
+      <DeepLinkHandler /> {/* ADD THIS: Handler component */}
+      <RouterProvider
+        router={router}
+        context={{
+          auth: {
+            isLoaded,
+            isSignedIn: isSignedIn ?? false,
+            userId,
+          },
+        }}
+      />
+    </>
   );
 }
 

@@ -1,7 +1,7 @@
 // convex/employees.ts - Updated with React Email Integration
 import { mutation, query, internalAction } from "./_generated/server";
 import { v } from "convex/values";
-import { Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
 import { ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
 
@@ -49,7 +49,7 @@ export const createInvitation = mutation({
       )
       .first();
 
-    let invitationId;
+    let invitationId: Id<"invitations">;
     let isUpdate = false;
 
     if (existingInvitation) {
@@ -142,7 +142,7 @@ export const sendInvitationEmailAction = internalAction({
     role: v.string(),
     companyLogo: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (_ctx, args) => {
     const resendApiKey = process.env.RESEND_API_KEY;
     
     if (!resendApiKey) {
@@ -556,7 +556,7 @@ export const revokeInvitation = mutation({
     }
 
     // Try to find in invitations table first
-    let invitation = await ctx.db
+    const invitation = await ctx.db
       .query("invitations")
       .filter((q) => q.eq(q.field("_id"), args.invitationId))
       .first();
