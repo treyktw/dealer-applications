@@ -39,7 +39,7 @@ const stripeWebhook = httpAction(async (ctx, request) => {
 
   try {
     // Verify the webhook
-    const event = stripe.webhooks.constructEvent(
+    const event = await stripe.webhooks.constructEventAsync(
       body,
       signature,
       process.env.STRIPE_WEBHOOK_SECRET!
@@ -128,7 +128,7 @@ http.route({
 
 // Stripe webhook (existing)
 http.route({
-  path: "/stripe-webhook",
+  path: "/stripe_webhook",
   method: "POST",
   handler: stripeWebhook,
 });

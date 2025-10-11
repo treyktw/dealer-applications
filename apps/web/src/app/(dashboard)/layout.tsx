@@ -209,7 +209,7 @@ export default function DashboardLayout({
                   Processing...
                 </>
               ) : (
-                "Subscribe Now - $29/month"
+                "Subscribe Now - $49/month"
               )}
             </Button>
             <Button 

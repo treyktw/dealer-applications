@@ -324,7 +324,6 @@ export default defineSchema({
     plan: v.string(),
     billingCycle: v.string(),
     currentPeriodStart: v.number(),
-    currentPeriodEnd: v.number(),
     cancelAtPeriodEnd: v.boolean(),
     stripeCustomerId: v.string(),
     stripeSubscriptionId: v.string(),

@@ -15,7 +15,6 @@ interface Subscription {
   plan: string;
   billingCycle: string;
   currentPeriodStart: number;
-  currentPeriodEnd: number;
   cancelAtPeriodEnd: boolean;
   stripeCustomerId: string;
   stripeSubscriptionId: string;

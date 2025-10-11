@@ -123,7 +123,7 @@ export default function SubscriptionPage() {
   const plans = [
     {
       name: "Basic",
-      price: "$29",
+      price: "$49",
       period: "month",
       description: "Perfect for small dealerships",
       priceId: process.env.NEXT_PUBLIC_STRIPE_BASIC_MONTHLY_PRICE_ID || "price_basic_monthly_placeholder",

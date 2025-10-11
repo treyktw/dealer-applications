@@ -225,7 +225,6 @@ export const createInitialSubscription = mutation({
         plan: args.plan,
         billingCycle: args.billingCycle,
         currentPeriodStart: Date.now(),
-        currentPeriodEnd: Date.now() + (args.billingCycle === BillingCycle.MONTHLY ? 30 : 365) * 24 * 60 * 60 * 1000,
         cancelAtPeriodEnd: false,
         stripeCustomerId: args.stripeCustomerId || "",
         stripeSubscriptionId: "",
@@ -359,7 +358,6 @@ export const updateSubscriptionAfterCheckout = internalMutation({
     stripeCustomerId: v.string(),
     status: v.string(),
     currentPeriodStart: v.number(),
-    currentPeriodEnd: v.number(),
     subscriptionRecordId: v.optional(v.id("subscriptions")),
   },
   handler: async (ctx, args) => {
@@ -377,7 +375,6 @@ export const updateSubscriptionAfterCheckout = internalMutation({
           stripeCustomerId: args.stripeCustomerId,
           stripeSubscriptionId: args.stripeSubscriptionId,
           currentPeriodStart: args.currentPeriodStart,
-          currentPeriodEnd: args.currentPeriodEnd,
           updatedAt: Date.now(),
         });
         subscriptionId = args.subscriptionRecordId;
@@ -398,7 +395,6 @@ export const updateSubscriptionAfterCheckout = internalMutation({
           stripeCustomerId: args.stripeCustomerId,
           stripeSubscriptionId: args.stripeSubscriptionId,
           currentPeriodStart: args.currentPeriodStart,
-          currentPeriodEnd: args.currentPeriodEnd,
           updatedAt: Date.now(),
         });
         subscriptionId = subscription._id;
@@ -414,7 +410,6 @@ export const updateSubscriptionAfterCheckout = internalMutation({
         plan: SubscriptionPlan.BASIC, // Default plan
         billingCycle: BillingCycle.MONTHLY, // Default cycle
         currentPeriodStart: args.currentPeriodStart,
-        currentPeriodEnd: args.currentPeriodEnd,
         cancelAtPeriodEnd: false,
         stripeCustomerId: args.stripeCustomerId,
         stripeSubscriptionId: args.stripeSubscriptionId,
@@ -465,7 +460,6 @@ export const updateSubscriptionStatus = internalMutation({
     stripeSubscriptionId: v.string(),
     status: v.string(),
     currentPeriodStart: v.number(),
-    currentPeriodEnd: v.number(),
   },
   handler: async (ctx, args) => {
     console.log("Updating subscription status from webhook:", args);
@@ -488,7 +482,6 @@ export const updateSubscriptionStatus = internalMutation({
       status: ourStatus,
       stripeSubscriptionId: args.stripeSubscriptionId,
       currentPeriodStart: args.currentPeriodStart,
-      currentPeriodEnd: args.currentPeriodEnd,
       updatedAt: Date.now(),
     });
 

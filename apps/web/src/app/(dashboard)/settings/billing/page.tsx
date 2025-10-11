@@ -335,12 +335,6 @@ export default function BillingPage() {
           </div>
           {subscription && (
             <div className="flex items-center justify-between border-t pt-4">
-              <div>
-                <p className="text-sm font-medium">Next billing date</p>
-                <p className="text-sm text-muted-foreground">
-                  {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
-                </p>
-              </div>
               <div className="text-right">
                 <p className="text-sm font-medium">Amount due</p>
                 <p className="text-sm text-muted-foreground">

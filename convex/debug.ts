@@ -214,7 +214,6 @@ export const debugCreateTestSubscription = mutation({
       plan: "basic",
       billingCycle: "monthly",
       currentPeriodStart: Date.now(),
-      currentPeriodEnd: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
       cancelAtPeriodEnd: false,
       stripeCustomerId: "test_customer_" + Date.now(),
       stripeSubscriptionId: "test_sub_" + Date.now(),

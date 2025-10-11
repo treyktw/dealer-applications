@@ -2,18 +2,23 @@ import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import Stripe from "stripe";
 import { internal } from "./_generated/api";
-import { Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error("STRIPE_SECRET_KEY is not set");
+}
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-08-27.basil",
 });
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
-
-interface StripeSubscription extends Stripe.Subscription {
-  current_period_start: number;
-  current_period_end: number;
+if (!process.env.STRIPE_WEBHOOK_SECRET) {
+  throw new Error("STRIPE_WEBHOOK_SECRET is not set");
 }
+
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+
 
 export const handleStripeWebhook = internalAction({
   args: {
@@ -22,7 +27,7 @@ export const handleStripeWebhook = internalAction({
   },
   handler: async (ctx, args) => {
     try {
-      const event = stripe.webhooks.constructEvent(
+      const event = await stripe.webhooks.constructEventAsync(
         args.payload,
         args.signature,
         webhookSecret
@@ -62,15 +67,15 @@ export const handleStripeWebhook = internalAction({
           }
 
           // Get the subscription from Stripe
-          const subscription = (await stripe.subscriptions.retrieve(subscriptionId)) as unknown as StripeSubscription;
+          const subscription = await stripe.subscriptions.retrieve(subscriptionId) as Stripe.Subscription;
 
           console.log("Retrieved Stripe subscription:", {
             id: subscription.id,
             status: subscription.status,
             customer: subscription.customer,
-            currentPeriodStart: subscription.current_period_start,
-            currentPeriodEnd: subscription.current_period_end,
+            currentPeriodStart: subscription.start_date,
           });
+
 
           // Update the subscription record
           await ctx.runMutation(internal.subscriptions.updateSubscriptionAfterCheckout, {
@@ -78,8 +83,7 @@ export const handleStripeWebhook = internalAction({
             stripeSubscriptionId: subscriptionId,
             stripeCustomerId: subscription.customer as string,
             status: subscription.status,
-            currentPeriodStart: subscription.current_period_start * 1000, // Convert to milliseconds
-            currentPeriodEnd: subscription.current_period_end * 1000, // Convert to milliseconds
+            currentPeriodStart: subscription.start_date * 1000, // Convert to milliseconds
             subscriptionRecordId: subscriptionRecordId as Id<"subscriptions">,
           });
 
@@ -103,35 +107,90 @@ export const handleStripeWebhook = internalAction({
           break;
         }
 
+        case "customer.subscription.created": {
+          const subscription = event.data.object as Stripe.Subscription;
+          const dealershipId = subscription.metadata?.dealershipId;
+
+          console.log("Subscription created:", {
+            id: subscription.id,
+            status: subscription.status,
+            dealershipId,
+            currentPeriodStart: subscription.start_date,
+            hasMetadata: !!subscription.metadata,
+          });
+
+          if (!subscription.days_until_due) {
+            console.error("No days until due in subscription");
+
+          }
+
+          if (!dealershipId) {
+            console.log("No dealership ID in subscription metadata, attempting to find by Stripe subscription ID");
+            
+            // Try to find the subscription by Stripe subscription ID
+            const existingSubscription = await ctx.runQuery(internal.subscriptions.findByStripeSubscriptionId, {
+              stripeSubscriptionId: subscription.id,
+            });
+            
+            if (existingSubscription) {
+              await ctx.runMutation(internal.subscriptions.updateSubscriptionStatus, {
+                dealershipId: existingSubscription.dealershipId,
+                stripeSubscriptionId: subscription.id,
+                status: subscription.status,
+                currentPeriodStart: subscription.start_date * 1000,
+              });
+              console.log("Updated existing subscription record after creation");
+            } else {
+              console.log("No existing subscription record found, skipping update");
+            }
+            break;
+          }
+
+          // Update the subscription record
+          await ctx.runMutation(internal.subscriptions.updateSubscriptionStatus, {
+            dealershipId: dealershipId as Id<"dealerships">,
+            stripeSubscriptionId: subscription.id,
+            status: subscription.status,
+            currentPeriodStart: subscription.start_date * 1000,
+          });
+
+          console.log("Subscription creation processing completed successfully");
+          break;
+        }
+
         case "customer.subscription.updated": {
-          const subscription = event.data.object as StripeSubscription;
+          const subscription = event.data.object as Stripe.Subscription;
           const dealershipId = subscription.metadata?.dealershipId;
 
           console.log("Subscription updated:", {
             id: subscription.id,
             status: subscription.status,
             dealershipId,
-            currentPeriodStart: subscription.current_period_start,
-            currentPeriodEnd: subscription.current_period_end,
+            currentPeriodStart: subscription.start_date,
+            hasMetadata: !!subscription.metadata,
           });
+
+          if (!subscription.days_until_due) {
+            console.error("No days until due in subscription");
+
+          }
 
           if (!dealershipId) {
             console.log("No dealership ID in subscription metadata, attempting to find by Stripe subscription ID");
             
             // Try to find the subscription by Stripe subscription ID
-            const allSubscriptions = await ctx.runQuery(internal.subscriptions.findByStripeSubscriptionId, {
+            const existingSubscription = await ctx.runQuery(internal.subscriptions.findByStripeSubscriptionId, {
               stripeSubscriptionId: subscription.id,
             });
             
-            if (allSubscriptions) {
+            if (existingSubscription) {
               await ctx.runMutation(internal.subscriptions.updateSubscriptionStatus, {
-                dealershipId: allSubscriptions.dealershipId,
+                dealershipId: existingSubscription.dealershipId,
                 stripeSubscriptionId: subscription.id,
                 status: subscription.status,
-                currentPeriodStart: subscription.current_period_start * 1000,
-                currentPeriodEnd: subscription.current_period_end * 1000,
+                currentPeriodStart: subscription.start_date * 1000,
               });
-              // console.log("Updated subscription using found dealership ID");
+              console.log("Updated subscription using found dealership ID");
             } else {
               console.log("Could not find subscription record, skipping update");
             }
@@ -143,8 +202,7 @@ export const handleStripeWebhook = internalAction({
             dealershipId: dealershipId as Id<"dealerships">,
             stripeSubscriptionId: subscription.id,
             status: subscription.status,
-            currentPeriodStart: subscription.current_period_start * 1000,
-            currentPeriodEnd: subscription.current_period_end * 1000,
+            currentPeriodStart: subscription.start_date * 1000,
           });
 
           console.log("Subscription update processing completed successfully");
@@ -152,13 +210,18 @@ export const handleStripeWebhook = internalAction({
         }
 
         case "customer.subscription.deleted": {
-          const subscription = event.data.object as StripeSubscription;
+          const subscription = event.data.object as Stripe.Subscription;
           const dealershipId = subscription.metadata?.dealershipId;
 
           console.log("Subscription deleted:", {
             id: subscription.id,
             dealershipId,
           });
+
+          if (!subscription.days_until_due) {
+            console.error("No days until due in subscription");
+
+          }
 
           if (!dealershipId) {
             console.log("No dealership ID in subscription metadata, attempting to find by Stripe subscription ID");
@@ -173,8 +236,7 @@ export const handleStripeWebhook = internalAction({
                 dealershipId: allSubscriptions.dealershipId,
                 stripeSubscriptionId: subscription.id,
                 status: "cancelled",
-                currentPeriodStart: subscription.current_period_start * 1000,
-                currentPeriodEnd: subscription.current_period_end * 1000,
+                currentPeriodStart: subscription.start_date * 1000,
               });
               // console.log("Updated subscription status to cancelled using found dealership ID");
             } else {
@@ -188,8 +250,7 @@ export const handleStripeWebhook = internalAction({
             dealershipId: dealershipId as Id<"dealerships">,
             stripeSubscriptionId: subscription.id,
             status: "cancelled",
-            currentPeriodStart: subscription.current_period_start * 1000,
-            currentPeriodEnd: subscription.current_period_end * 1000,
+            currentPeriodStart: subscription.start_date * 1000,
           });
 
           console.log("Subscription deletion processing completed successfully");
@@ -203,18 +264,48 @@ export const handleStripeWebhook = internalAction({
             
             // Get the subscription to update status
             try {
-              const subscription = await stripe.subscriptions.retrieve(invoice.subscription) as unknown as StripeSubscription;
+              const subscription = await stripe.subscriptions.retrieve(invoice.subscription) as Stripe.Subscription;
               const dealershipId = subscription.metadata?.dealershipId;
               
+              console.log("Invoice payment succeeded - subscription details:", {
+                id: subscription.id,
+                status: subscription.status,
+                dealershipId,
+                hasMetadata: !!subscription.metadata,
+              });
+
+              if (!subscription.days_until_due) {
+                console.error("No days until due in subscription");
+    
+              }
+
               if (dealershipId) {
                 await ctx.runMutation(internal.subscriptions.updateSubscriptionStatus, {
                   dealershipId: dealershipId as Id<"dealerships">,
                   stripeSubscriptionId: subscription.id,
                   status: subscription.status,
-                  currentPeriodStart: subscription.current_period_start * 1000,
-                  currentPeriodEnd: subscription.current_period_end * 1000,
+                  currentPeriodStart: subscription.start_date * 1000,
                 });
                 console.log("Updated subscription after successful payment");
+              } else {
+                console.log("No dealership ID in subscription metadata, attempting to find by Stripe subscription ID");
+                
+                // Try to find the subscription by Stripe subscription ID
+                const existingSubscription = await ctx.runQuery(internal.subscriptions.findByStripeSubscriptionId, {
+                  stripeSubscriptionId: subscription.id,
+                });
+                
+                if (existingSubscription) {
+                  await ctx.runMutation(internal.subscriptions.updateSubscriptionStatus, {
+                    dealershipId: existingSubscription.dealershipId,
+                    stripeSubscriptionId: subscription.id,
+                    status: subscription.status,
+                    currentPeriodStart: subscription.start_date * 1000,
+                  });
+                  console.log("Updated subscription using found dealership ID");
+                } else {
+                  console.log("Could not find subscription record, skipping update");
+                }
               }
             } catch (error) {
               console.error("Error handling payment success:", error);
@@ -230,16 +321,20 @@ export const handleStripeWebhook = internalAction({
             
             // Get the subscription to update status
             try {
-              const subscription = await stripe.subscriptions.retrieve(invoice.subscription) as unknown as StripeSubscription;
+              const subscription = await stripe.subscriptions.retrieve(invoice.subscription) as Stripe.Subscription;
               const dealershipId = subscription.metadata?.dealershipId;
               
+              if (!subscription.days_until_due) {
+                console.error("No days until due in subscription");
+    
+              }
+
               if (dealershipId) {
                 await ctx.runMutation(internal.subscriptions.updateSubscriptionStatus, {
                   dealershipId: dealershipId as Id<"dealerships">,
                   stripeSubscriptionId: subscription.id,
                   status: subscription.status, // This might be 'past_due' or similar
-                  currentPeriodStart: subscription.current_period_start * 1000,
-                  currentPeriodEnd: subscription.current_period_end * 1000,
+                  currentPeriodStart: subscription.start_date * 1000,
                 });
                 console.log("Updated subscription after failed payment");
               }
