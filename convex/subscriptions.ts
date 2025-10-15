@@ -669,3 +669,71 @@ export const updateSubscriptionPlan = mutation({
     return { success: true };
   },
 });
+
+// Check if user has access to a specific feature
+export const checkFeatureAccess = query({
+  args: {
+    feature: v.string(),
+  },
+  handler: async (ctx, args): Promise<{ hasAccess: boolean; reason: string }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return { hasAccess: false, reason: "Not authenticated" };
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user || !user.dealershipId) {
+      return { hasAccess: false, reason: "User not found or no dealership" };
+    }
+
+    const subscription = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_dealership", (q) => q.eq("dealershipId", user.dealershipId as Id<"dealerships">))
+      .first();
+
+    if (!subscription || subscription.status !== SubscriptionStatus.ACTIVE) {
+      return { hasAccess: false, reason: "No active subscription" };
+    }
+
+    const hasFeature = subscription.features.includes(args.feature);
+    return { 
+      hasAccess: hasFeature, 
+      reason: hasFeature ? "Feature available" : "Feature not included in current plan"
+    };
+  },
+});
+
+// Get all available features for current user
+export const getAvailableFeatures = query({
+  args: {},
+  handler: async (ctx): Promise<{ features: string[]; subscriptionStatus: string; hasActiveSubscription: boolean }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return { features: [], subscriptionStatus: "none", hasActiveSubscription: false };
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user || !user.dealershipId) {
+      return { features: [], subscriptionStatus: "no_dealership", hasActiveSubscription: false };
+    }
+
+    const subscription = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_dealership", (q) => q.eq("dealershipId", user.dealershipId as Id<"dealerships">))
+      .first();
+
+    return {
+      features: subscription?.features || [],
+      subscriptionStatus: subscription?.status || "none",
+      hasActiveSubscription: subscription?.status === SubscriptionStatus.ACTIVE,
+    };
+  },
+});

@@ -1,7 +1,14 @@
 // src/routes/__root.tsx
 import { createRootRouteWithContext, Outlet } from '@tanstack/react-router'
 import { Toaster } from 'react-hot-toast'
-import type { AuthContext } from '@/lib/auth/auth-context'
+
+type AuthContext = {
+  auth: {
+    isLoaded: boolean;
+    isSignedIn: boolean;
+    userId: string | null | undefined;
+  };
+};
 
 export const Route = createRootRouteWithContext<AuthContext>()({
   component: RootComponent,

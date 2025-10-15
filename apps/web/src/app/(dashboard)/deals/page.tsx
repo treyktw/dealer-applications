@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { Metadata } from "next";
 import { DealsTable } from "./_components/DealsTable";
 import { DealsSkeleton } from "./_components/DealsSkeleton";
+import { FeatureGate } from "@/components/subscription/FeatureGate";
 
 export const metadata: Metadata = {
   title: "Deals | Dealership CMS",
@@ -19,9 +20,11 @@ export default function DealsPage() {
         </p>
       </div>
       
-      <Suspense fallback={<DealsSkeleton />}>
-        <DealsTable />
-      </Suspense>
+      <FeatureGate requiredPlan="premium">
+        <Suspense fallback={<DealsSkeleton />}>
+          <DealsTable />
+        </Suspense>
+      </FeatureGate>
     </div>
   );
 }

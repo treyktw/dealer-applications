@@ -13,7 +13,6 @@ import { VehicleAssignmentDialog } from "@/app/(dashboard)/clients/_components/v
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { nanoid } from "nanoid";
 
 interface DocumentGeneratorProps {
   clientId: Id<"clients">;
@@ -71,12 +70,8 @@ export function DocumentGenerator({ clientId, onBack }: DocumentGeneratorProps) 
         dealershipId: vehicle.dealershipId as Id<"dealerships">,
         vin: vehicle.vin,
         status: vehicle.status,
-        clientEmail: client.email as string,
-        clientPhone: client.phone as string,
-        stockNumber: vehicle.stock as string,
-        firstName: client.firstName as string,
-        lastName: client.lastName as string,
-        dealsId: nanoid(),
+        jurisdiction: "GA",
+        packType: "finance",
       });
 
       toast.success("Documents have been generated successfully.");
@@ -156,7 +151,7 @@ export function DocumentGenerator({ clientId, onBack }: DocumentGeneratorProps) 
           </Button>
           <div className="flex items-center">
             <Check className="h-5 w-5 text-green-500 mr-2" />
-            <span className="text-sm">Vehicle Selected: {vehicle.year} {vehicle.make} {vehicle.model}</span>
+            <span className="text-sm">Vehicle Selected: {vehicle?.year} {vehicle?.make} {vehicle?.model}</span>
             <Button 
               variant="ghost" 
               size="sm" 
@@ -168,12 +163,14 @@ export function DocumentGenerator({ clientId, onBack }: DocumentGeneratorProps) 
           </div>
         </div>
         
-        <DealForm
-          client={client}
-          vehicle={vehicle}
-          onSubmit={handleSubmit}
-          isLoading={isGenerating}
-        />
+        {client && vehicle && (
+          <DealForm
+            client={client}
+            vehicle={vehicle}
+            onSubmit={handleSubmit}
+            isLoading={isGenerating}
+          />
+        )}
       </div>
     );
   };

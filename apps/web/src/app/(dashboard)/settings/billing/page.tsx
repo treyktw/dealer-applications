@@ -39,10 +39,10 @@ const plans: Plan[] = [
     ],
   },
   {
-    id: "professional",
-    name: "Professional",
+    id: "premium",
+    name: "Premium",
     price: 99,
-    stripePriceId: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID!,
+    stripePriceId: process.env.NEXT_PUBLIC_STRIPE_PREMIUM_PRICE_ID!,
     features: [
       "Up to 500 vehicles",
       "Advanced inventory management",
