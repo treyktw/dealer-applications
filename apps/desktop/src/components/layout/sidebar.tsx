@@ -32,7 +32,15 @@ interface SidebarProps {
   onToggle: () => void;
 }
 
-const NavItem = ({ item, isOpen, isActive }: { item: any; isOpen: boolean; isActive: (path: string) => boolean }) => {
+interface NavItem {
+  name: string;
+  path: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge: string | null;
+  requiresRole?: string[];
+}
+
+const NavItem = ({ item, isOpen, isActive }: { item: NavItem; isOpen: boolean; isActive: (path: string) => boolean }) => {
   const Icon = item.icon;
   const active = isActive(item.path);
 
@@ -43,8 +51,8 @@ const NavItem = ({ item, isOpen, isActive }: { item: any; isOpen: boolean; isAct
         "flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all duration-200",
         "hover:bg-accent/50",
         active
-          ? "bg-primary text-primary-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground"
+          ? "bg-accent text-black shadow-sm"
+          : "text-muted-foreground hover:text-black"
       )}
     >
       <Icon className="h-5 w-5 shrink-0" />

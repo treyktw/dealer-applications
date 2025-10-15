@@ -17,6 +17,7 @@ import { Route as SearchRouteImport } from './routes/search'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HelpRouteImport } from './routes/help'
+import { Route as DealershipRouteImport } from './routes/dealership'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DealsIndexRouteImport } from './routes/deals/index'
@@ -64,6 +65,11 @@ const HelpRoute = HelpRouteImport.update({
   path: '/help',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DealershipRoute = DealershipRouteImport.update({
+  id: '/dealership',
+  path: '/dealership',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AnalyticsRoute = AnalyticsRouteImport.update({
   id: '/analytics',
   path: '/analytics',
@@ -98,6 +104,7 @@ const DealsDealsIdDocumentsRoute = DealsDealsIdDocumentsRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/analytics': typeof AnalyticsRoute
+  '/dealership': typeof DealershipRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
@@ -114,6 +121,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/analytics': typeof AnalyticsRoute
+  '/dealership': typeof DealershipRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
@@ -131,6 +139,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/analytics': typeof AnalyticsRoute
+  '/dealership': typeof DealershipRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
@@ -149,6 +158,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/analytics'
+    | '/dealership'
     | '/help'
     | '/login'
     | '/profile'
@@ -165,6 +175,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/analytics'
+    | '/dealership'
     | '/help'
     | '/login'
     | '/profile'
@@ -181,6 +192,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/analytics'
+    | '/dealership'
     | '/help'
     | '/login'
     | '/profile'
@@ -198,6 +210,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AnalyticsRoute: typeof AnalyticsRoute
+  DealershipRoute: typeof DealershipRoute
   HelpRoute: typeof HelpRoute
   LoginRoute: typeof LoginRoute
   ProfileRoute: typeof ProfileRoute
@@ -270,6 +283,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HelpRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dealership': {
+      id: '/dealership'
+      path: '/dealership'
+      fullPath: '/dealership'
+      preLoaderRoute: typeof DealershipRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/analytics': {
       id: '/analytics'
       path: '/analytics'
@@ -318,6 +338,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AnalyticsRoute: AnalyticsRoute,
+  DealershipRoute: DealershipRoute,
   HelpRoute: HelpRoute,
   LoginRoute: LoginRoute,
   ProfileRoute: ProfileRoute,

@@ -46,6 +46,56 @@ export const createDealership = mutation({
   },
 });
 
+export const updateDealership = mutation({
+  args: {
+    dealershipId: v.id("dealerships"),
+    name: v.optional(v.string()),
+    description: v.optional(v.string()),
+    address: v.optional(v.string()),
+    city: v.optional(v.string()),
+    state: v.optional(v.string()),
+    zipCode: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    email: v.optional(v.string()),
+    website: v.optional(v.string()),
+    logo: v.optional(v.string()),
+    primaryColor: v.optional(v.string()),
+    secondaryColor: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    // Get user's dealership ID
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Verify user has access to the dealership
+    if (user.dealershipId !== args.dealershipId) {
+      throw new Error("Not authorized to update this dealership");
+    }
+
+    // Remove dealershipId from the update data
+    const { dealershipId, ...updateData } = args;
+
+    // Update dealership
+    await ctx.db.patch(dealershipId, {
+      ...updateData,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
 export const updateDealershipSettings = mutation({
   args: {
     dealershipId: v.id("dealerships"),
