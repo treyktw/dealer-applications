@@ -63,7 +63,9 @@ export function LoginForm() {
       setGoogleStatus(`✅ State: ${state.substring(0, 8)}...`)
       
       // HARDCODE the production URL for now
+
       const webUrl = "https://dealer.universalautobrokers.net"
+      // const webUrl = "http://localhost:3000"
       const ssoUrl = `${webUrl}/desktop-sso?state=${state}`
       
       setGoogleStatus(`🌐 Opening: ${ssoUrl}`)
@@ -221,7 +223,7 @@ export function LoginForm() {
 
       {/* Debug Info */}
       <div className="text-center text-xs text-muted-foreground space-y-1">
-        <p>Web URL: {import.meta.env.VITE_WEB_URL_PROD || 'NOT SET'}</p>
+        <p>Web URL: {import.meta.env.VITE_WEB_URL_DEV || 'NOT SET'}</p>
         <p>Clerk Loaded: {isLoaded ? '✅' : '❌'}</p>
       </div>
 
