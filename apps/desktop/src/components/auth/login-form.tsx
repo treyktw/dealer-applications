@@ -52,19 +52,45 @@ export function LoginForm() {
     }
   }
 
+  // Deprecated - Google sign-in is not supported in the desktop app
+  // const handleGoogleSignIn = async () => {
+  //   if (!isLoaded || !signIn) return
+    
+  //   setIsLoading(true)
+  //   try {
+  //     await signIn.authenticateWithRedirect({
+  //       strategy: "oauth_google",
+  //       redirectUrl: "/sso-callback",
+  //       redirectUrlComplete: "/",
+  //     })
+  //   } catch (error) {
+  //     console.error('Google sign-in error:', error)
+  //     toast.error("Failed to sign in with Google")
+  //     setIsLoading(false)
+  //   }
+  // }
+
   const handleGoogleSignIn = async () => {
     if (!isLoaded || !signIn) return
     
     setIsLoading(true)
     try {
-      await signIn.authenticateWithRedirect({
-        strategy: "oauth_google",
-        redirectUrl: "/sso-callback",
-        redirectUrlComplete: "/",
-      })
+      // Generate CSRF state token
+      const state = crypto.randomUUID()
+      sessionStorage.setItem('oauth_state', state)
+      
+      // Build web SSO URL
+      const webUrl = import.meta.env.VITE_WEB_URL || 'https://dealer.universalautobrokers.com'
+      const ssoUrl = `${webUrl}/desktop-sso?state=${state}`
+      
+      // Open in system browser using Tauri
+      const { open } = await import('@tauri-apps/plugin-shell')
+      await open(ssoUrl)
+      
+      // Don't set loading to false - user will complete auth in browser
     } catch (error) {
-      console.error('Google sign-in error:', error)
-      toast.error("Failed to sign in with Google")
+      console.error('Failed to open browser:', error)
+      toast.error('Failed to open sign-in page')
       setIsLoading(false)
     }
   }

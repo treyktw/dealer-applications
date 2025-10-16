@@ -12,6 +12,7 @@ import { AuthGuard } from "@/components/auth/AuthGuard";
 import { Toaster } from "react-hot-toast";
 import "./App.css";
 import { SubscriptionProvider } from "./lib/subscription/SubscriptionProvider";
+import { setupDeepLinkListener } from './lib/deeplink-listener'
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
@@ -61,6 +62,18 @@ function InnerApp() {
       }
     }
   }, [isLoaded, isSignedIn, getToken]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined
+    
+    setupDeepLinkListener().then((unlistenFn) => {
+      unlisten = unlistenFn
+    })
+    
+    return () => {
+      if (unlisten) unlisten()
+    }
+  }, [])
 
   // Simple AuthGuard - only checks auth and dealership
   // No subscription checks - that's handled in web app

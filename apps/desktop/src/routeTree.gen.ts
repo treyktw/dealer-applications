@@ -15,6 +15,7 @@ import { Route as SubscriptionRouteImport } from './routes/subscription'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as OauthCallbackRouteImport } from './routes/oauth-callback'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as DealershipRouteImport } from './routes/dealership'
@@ -53,6 +54,11 @@ const SearchRoute = SearchRouteImport.update({
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthCallbackRoute = OauthCallbackRouteImport.update({
+  id: '/oauth-callback',
+  path: '/oauth-callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -107,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/dealership': typeof DealershipRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
+  '/oauth-callback': typeof OauthCallbackRoute
   '/profile': typeof ProfileRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
@@ -124,6 +131,7 @@ export interface FileRoutesByTo {
   '/dealership': typeof DealershipRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
+  '/oauth-callback': typeof OauthCallbackRoute
   '/profile': typeof ProfileRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
@@ -142,6 +150,7 @@ export interface FileRoutesById {
   '/dealership': typeof DealershipRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
+  '/oauth-callback': typeof OauthCallbackRoute
   '/profile': typeof ProfileRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
@@ -161,6 +170,7 @@ export interface FileRouteTypes {
     | '/dealership'
     | '/help'
     | '/login'
+    | '/oauth-callback'
     | '/profile'
     | '/search'
     | '/settings'
@@ -178,6 +188,7 @@ export interface FileRouteTypes {
     | '/dealership'
     | '/help'
     | '/login'
+    | '/oauth-callback'
     | '/profile'
     | '/search'
     | '/settings'
@@ -195,6 +206,7 @@ export interface FileRouteTypes {
     | '/dealership'
     | '/help'
     | '/login'
+    | '/oauth-callback'
     | '/profile'
     | '/search'
     | '/settings'
@@ -213,6 +225,7 @@ export interface RootRouteChildren {
   DealershipRoute: typeof DealershipRoute
   HelpRoute: typeof HelpRoute
   LoginRoute: typeof LoginRoute
+  OauthCallbackRoute: typeof OauthCallbackRoute
   ProfileRoute: typeof ProfileRoute
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
@@ -267,6 +280,13 @@ declare module '@tanstack/react-router' {
       path: '/profile'
       fullPath: '/profile'
       preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth-callback': {
+      id: '/oauth-callback'
+      path: '/oauth-callback'
+      fullPath: '/oauth-callback'
+      preLoaderRoute: typeof OauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -341,6 +361,7 @@ const rootRouteChildren: RootRouteChildren = {
   DealershipRoute: DealershipRoute,
   HelpRoute: HelpRoute,
   LoginRoute: LoginRoute,
+  OauthCallbackRoute: OauthCallbackRoute,
   ProfileRoute: ProfileRoute,
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,

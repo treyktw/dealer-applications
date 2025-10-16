@@ -13,6 +13,8 @@ const isPublicRoute = createRouteMatcher([
   "/verify-email/(.*)",
   "/invitation/(.*)",
   "/api/(.*)", // Allow API routes to be public for external access
+  "/desktop-sso",
+  "/desktop-sso/(.*)",
 ]);
 
 // Routes that are part of the setup flow (don't redirect these)

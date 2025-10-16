@@ -1,9 +1,10 @@
-// src/components/auth/AuthGuard.tsx - FOR DESKTOP SIGNING APP
 import { useAuth, useUser } from "@clerk/clerk-react";
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { LoadingScreen } from "@/components/ui/loading-screen";
 
-const PUBLIC_ROUTES = ["/login", "/sso-callback"];
+const PUBLIC_ROUTES = ["/login", "/sso-callback", "/oauth-callback"];
+const LOADING_TIMEOUT = 3000; // 3 seconds
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -12,32 +13,46 @@ interface AuthGuardProps {
 export function AuthGuard({ children }: AuthGuardProps) {
   const { isSignedIn, isLoaded } = useAuth();
   const { user } = useUser();
+  const [showContent, setShowContent] = useState(false);
   
-  // Get current path using native browser API (avoids router issues)
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
-  
-  const isPublicRoute = PUBLIC_ROUTES.some(route => 
-    currentPath.startsWith(route)
-  );
-  
-  // Show loading while checking auth
-  if (!isLoaded) {
-    return <LoadingScreen message="Connecting to DealerPro..." />;
-  }
-  
-  // Allow access to public routes (login)
+  const isPublicRoute = PUBLIC_ROUTES.some(route => currentPath.startsWith(route));
+
+  useEffect(() => {
+    // Method 1: Show immediately if Clerk is loaded
+    if (isLoaded) {
+      console.log('✅ Clerk loaded - showing content');
+      setShowContent(true);
+      return;
+    }
+
+    // Method 2: Show after timeout regardless
+    const timer = setTimeout(() => {
+      console.log('⏱️ Timeout reached - forcing content display');
+      setShowContent(true);
+    }, LOADING_TIMEOUT);
+
+    return () => clearTimeout(timer);
+  }, [isLoaded]);
+
+  // Quick exit for public routes
   if (isPublicRoute) {
     return <>{children}</>;
   }
-  
-  // Redirect to login if not signed in
+
+  // Show loading only for first 3 seconds
+  if (!showContent) {
+    return <LoadingScreen message="Connecting to DealerPro..." />;
+  }
+
+  // After showing content, check auth
   if (!isSignedIn) {
     const currentUrl = window.location.pathname + window.location.search;
     window.location.href = `/login?redirect=${encodeURIComponent(currentUrl)}`;
     return <LoadingScreen message="Redirecting to login..." />;
   }
-  
-  // Check if user has dealership access (they should get this from web app)
+
+  // Check dealership access
   if (!user?.publicMetadata?.dealersoftwareAccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-6">
@@ -53,8 +68,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
             <button
               type="button"
               onClick={() => window.open("https://dealer.universalautobrokers.com", "_blank")}
-              rel="noopener noreferrer"
-              className="block w-full py-2 px-4 bg-accent-foreground text-background rounded-md hover:bg-accent-foreground/90"
+              className="block w-full py-2 px-4 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
             >
               Open Web Portal
             </button>
@@ -73,7 +87,12 @@ export function AuthGuard({ children }: AuthGuardProps) {
       </div>
     );
   }
-  
-  // User is authenticated and has dealership - show app
+
   return <>{children}</>;
 }
+
+
+
+
+
+
