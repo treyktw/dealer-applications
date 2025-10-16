@@ -24,7 +24,7 @@ const isPublicRoute = createRouteMatcher([
 const setupRoutes = [
   "/subscription",
   "/onboarding", 
-];
+];    
 
 export default clerkMiddleware(async (auth, req) => {
   const { userId } = await auth();
