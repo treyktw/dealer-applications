@@ -14,7 +14,13 @@ import "./App.css";
 import { SubscriptionProvider } from "./lib/subscription/SubscriptionProvider";
 import { setupDeepLinkListener } from './lib/deeplink-listener'
 
-const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+
+const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || 'pk_test_dGhvcm91Z2gtZWFnbGUtMTcuY2xlcmsuYWNjb3VudHMuZGV2JA';
+
+if (!clerkPubKey) {
+  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY environment variable");
+}
 
 const router = createRouter({
   routeTree,
