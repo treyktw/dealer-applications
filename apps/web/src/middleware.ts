@@ -16,7 +16,7 @@ const isPublicRoute = createRouteMatcher([
   "/desktop-sso",
   "/desktop-sso/(.*)",
   '/desktop-sso(.*)',
-  '/desktop-callback',
+  '/desktop-callback(.*)',
   '/desktop-callback/(.*)',
 ]);
 
