@@ -52,6 +52,9 @@ export const SubscriptionFeatures = {
     "analytics",
     "file_storage_50gb",
     "api_access",
+    "deals_management",
+    "desktop_app_access",
+    "custom_document_upload",
   ],
   [SubscriptionPlan.ENTERPRISE]: [
     "inventory_management",
@@ -65,6 +68,9 @@ export const SubscriptionFeatures = {
     "custom_integrations",
     "priority_support",
     "audit_logs",
+    "deals_management",
+    "desktop_app_access",
+    "custom_document_upload",
   ],
 } as const;
 
@@ -206,7 +212,7 @@ export default defineSchema({
     originalFileName: v.string(),
     fileSize: v.number(),
     fileType: v.string(),
-    category: v.string(), // vehicles, documents, logos, profiles
+    category: v.string(), // vehicles, documents, logos, profiles, custom_documents
     s3Key: v.string(),
     s3Bucket: v.string(),
     // Security
@@ -778,6 +784,26 @@ export default defineSchema({
     .index("by_deal", ["dealId"])
     .index("by_user", ["userId"])
     .index("by_timestamp", ["timestamp"]),
+
+  // Custom documents uploaded by dealers
+  dealer_uploaded_documents: defineTable({
+    dealId: v.id("deals"),
+    dealershipId: v.id("dealerships"),
+    documentName: v.string(),
+    documentType: v.string(), // contract, agreement, form, etc.
+    fileId: v.id("file_uploads"),
+    s3Key: v.string(),
+    s3Bucket: v.string(),
+    uploadedBy: v.string(), // userId
+    fileSize: v.number(),
+    mimeType: v.string(),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_deal", ["dealId"])
+    .index("by_dealership", ["dealershipId"])
+    .index("by_uploader", ["uploadedBy"]),
   template_mappings: defineTable({
     dealershipId: v.id("dealerships"),
     templateType: v.string(), // "bill_of_sale", "finance_contract", etc.

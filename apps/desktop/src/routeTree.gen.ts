@@ -9,22 +9,76 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WhatsNewRouteImport } from './routes/whats-new'
+import { Route as TeamsRouteImport } from './routes/teams'
+import { Route as SubscriptionRouteImport } from './routes/subscription'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SearchRouteImport } from './routes/search'
+import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as OauthCallbackRouteImport } from './routes/oauth-callback'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as HelpRouteImport } from './routes/help'
+import { Route as DealershipRouteImport } from './routes/dealership'
+import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DealsIndexRouteImport } from './routes/deals/index'
 import { Route as DealsNewIndexRouteImport } from './routes/deals/new/index'
 import { Route as DealsDealsIdIndexRouteImport } from './routes/deals/$dealsId/index'
 import { Route as DealsDealsIdDocumentsRouteImport } from './routes/deals/$dealsId/documents'
 
+const WhatsNewRoute = WhatsNewRouteImport.update({
+  id: '/whats-new',
+  path: '/whats-new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TeamsRoute = TeamsRouteImport.update({
+  id: '/teams',
+  path: '/teams',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SubscriptionRoute = SubscriptionRouteImport.update({
+  id: '/subscription',
+  path: '/subscription',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthCallbackRoute = OauthCallbackRouteImport.update({
+  id: '/oauth-callback',
+  path: '/oauth-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HelpRoute = HelpRouteImport.update({
+  id: '/help',
+  path: '/help',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DealershipRoute = DealershipRouteImport.update({
+  id: '/dealership',
+  path: '/dealership',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalyticsRoute = AnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -55,8 +109,17 @@ const DealsDealsIdDocumentsRoute = DealsDealsIdDocumentsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/analytics': typeof AnalyticsRoute
+  '/dealership': typeof DealershipRoute
+  '/help': typeof HelpRoute
   '/login': typeof LoginRoute
+  '/oauth-callback': typeof OauthCallbackRoute
+  '/profile': typeof ProfileRoute
+  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
+  '/subscription': typeof SubscriptionRoute
+  '/teams': typeof TeamsRoute
+  '/whats-new': typeof WhatsNewRoute
   '/deals': typeof DealsIndexRoute
   '/deals/$dealsId/documents': typeof DealsDealsIdDocumentsRoute
   '/deals/$dealsId': typeof DealsDealsIdIndexRoute
@@ -64,8 +127,17 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/analytics': typeof AnalyticsRoute
+  '/dealership': typeof DealershipRoute
+  '/help': typeof HelpRoute
   '/login': typeof LoginRoute
+  '/oauth-callback': typeof OauthCallbackRoute
+  '/profile': typeof ProfileRoute
+  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
+  '/subscription': typeof SubscriptionRoute
+  '/teams': typeof TeamsRoute
+  '/whats-new': typeof WhatsNewRoute
   '/deals': typeof DealsIndexRoute
   '/deals/$dealsId/documents': typeof DealsDealsIdDocumentsRoute
   '/deals/$dealsId': typeof DealsDealsIdIndexRoute
@@ -74,8 +146,17 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/analytics': typeof AnalyticsRoute
+  '/dealership': typeof DealershipRoute
+  '/help': typeof HelpRoute
   '/login': typeof LoginRoute
+  '/oauth-callback': typeof OauthCallbackRoute
+  '/profile': typeof ProfileRoute
+  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
+  '/subscription': typeof SubscriptionRoute
+  '/teams': typeof TeamsRoute
+  '/whats-new': typeof WhatsNewRoute
   '/deals/': typeof DealsIndexRoute
   '/deals/$dealsId/documents': typeof DealsDealsIdDocumentsRoute
   '/deals/$dealsId/': typeof DealsDealsIdIndexRoute
@@ -85,8 +166,17 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/analytics'
+    | '/dealership'
+    | '/help'
     | '/login'
+    | '/oauth-callback'
+    | '/profile'
+    | '/search'
     | '/settings'
+    | '/subscription'
+    | '/teams'
+    | '/whats-new'
     | '/deals'
     | '/deals/$dealsId/documents'
     | '/deals/$dealsId'
@@ -94,8 +184,17 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/analytics'
+    | '/dealership'
+    | '/help'
     | '/login'
+    | '/oauth-callback'
+    | '/profile'
+    | '/search'
     | '/settings'
+    | '/subscription'
+    | '/teams'
+    | '/whats-new'
     | '/deals'
     | '/deals/$dealsId/documents'
     | '/deals/$dealsId'
@@ -103,8 +202,17 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/analytics'
+    | '/dealership'
+    | '/help'
     | '/login'
+    | '/oauth-callback'
+    | '/profile'
+    | '/search'
     | '/settings'
+    | '/subscription'
+    | '/teams'
+    | '/whats-new'
     | '/deals/'
     | '/deals/$dealsId/documents'
     | '/deals/$dealsId/'
@@ -113,8 +221,17 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AnalyticsRoute: typeof AnalyticsRoute
+  DealershipRoute: typeof DealershipRoute
+  HelpRoute: typeof HelpRoute
   LoginRoute: typeof LoginRoute
+  OauthCallbackRoute: typeof OauthCallbackRoute
+  ProfileRoute: typeof ProfileRoute
+  SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
+  SubscriptionRoute: typeof SubscriptionRoute
+  TeamsRoute: typeof TeamsRoute
+  WhatsNewRoute: typeof WhatsNewRoute
   DealsIndexRoute: typeof DealsIndexRoute
   DealsDealsIdDocumentsRoute: typeof DealsDealsIdDocumentsRoute
   DealsDealsIdIndexRoute: typeof DealsDealsIdIndexRoute
@@ -123,6 +240,27 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/whats-new': {
+      id: '/whats-new'
+      path: '/whats-new'
+      fullPath: '/whats-new'
+      preLoaderRoute: typeof WhatsNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/teams': {
+      id: '/teams'
+      path: '/teams'
+      fullPath: '/teams'
+      preLoaderRoute: typeof TeamsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/subscription': {
+      id: '/subscription'
+      path: '/subscription'
+      fullPath: '/subscription'
+      preLoaderRoute: typeof SubscriptionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -130,11 +268,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth-callback': {
+      id: '/oauth-callback'
+      path: '/oauth-callback'
+      fullPath: '/oauth-callback'
+      preLoaderRoute: typeof OauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/help': {
+      id: '/help'
+      path: '/help'
+      fullPath: '/help'
+      preLoaderRoute: typeof HelpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dealership': {
+      id: '/dealership'
+      path: '/dealership'
+      fullPath: '/dealership'
+      preLoaderRoute: typeof DealershipRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analytics': {
+      id: '/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AnalyticsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -177,8 +357,17 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AnalyticsRoute: AnalyticsRoute,
+  DealershipRoute: DealershipRoute,
+  HelpRoute: HelpRoute,
   LoginRoute: LoginRoute,
+  OauthCallbackRoute: OauthCallbackRoute,
+  ProfileRoute: ProfileRoute,
+  SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
+  SubscriptionRoute: SubscriptionRoute,
+  TeamsRoute: TeamsRoute,
+  WhatsNewRoute: WhatsNewRoute,
   DealsIndexRoute: DealsIndexRoute,
   DealsDealsIdDocumentsRoute: DealsDealsIdDocumentsRoute,
   DealsDealsIdIndexRoute: DealsDealsIdIndexRoute,

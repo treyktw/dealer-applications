@@ -1,166 +1,180 @@
-// src/components/layout/Header.tsx
-import { useState, useCallback } from 'react'
-import { useClerk, useUser } from '@clerk/clerk-react'
-import { Search, Menu, LogOut, X } from 'lucide-react'
-import { Input } from '../ui/input'
-import { Button } from '../ui/button'
+// src/components/layout/header-redesign.tsx
+import { useState } from "react";
+import { useUser, useClerk } from "@clerk/clerk-react";
+import { useNavigate } from "@tanstack/react-router";
+import { Search, Bell, Command, LogOut, User, Settings, CreditCard, HelpCircle, Sparkles } from "lucide-react";
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '../ui/dialog'
-import { toast } from 'react-hot-toast'
-import { ThemeToggle } from '../theme/theme-toggle'
-import { SessionStatus } from '../auth/session-status'
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
+import { ThemeToggle } from "../theme/theme-toggle";
+import { useSubscription } from "@/lib/subscription/SubscriptionProvider";
+import { cn } from "@/lib/utils";
+import { Separator } from "../ui/separator";
 
 interface HeaderProps {
-  toggleSidebar?: () => void
-  sidebarOpen?: boolean
+  sidebarOpen: boolean;
 }
 
-export function Header({ toggleSidebar, sidebarOpen = true }: HeaderProps) {
-  const { user } = useUser()
-  const clerk = useClerk()
-  const [searchQuery, setSearchQuery] = useState('')
-  const [showSignOutDialog, setShowSignOutDialog] = useState(false)
+export function Header({ sidebarOpen }: HeaderProps) {
+  const { user } = useUser();
+  const clerk = useClerk();
+  const navigate = useNavigate();
+  const { subscription } = useSubscription();
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Fast sign out - no waiting, no cleanup, just redirect
-  const handleSignOut = useCallback(() => {
-    // Close dialog immediately
-    setShowSignOutDialog(false)
-    
-    // Show toast briefly
-    toast.success('Signing out...')
-    
-    // Small delay to show toast, then sign out and redirect
-    setTimeout(() => {
-      clerk.signOut().then(() => {
-        // Clerk will handle the redirect, but as a fallback:
-        window.location.replace('/login')
-      }).catch(() => {
-        // On any error, just redirect
-        window.location.replace('/login')
-      })
-    }, 100)
-  }, [clerk])
+  const userRole = (user?.publicMetadata?.role as string) || "user";
+  const userInitials = `${user?.firstName?.[0] || ""}${user?.lastName?.[0] || ""}`;
+
+  const handleSignOut = () => {
+    clerk.signOut().then(() => {
+      navigate({ to: "/login" });
+    });
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate({ to: "/search", search: { q: searchQuery } });
+    }
+  };
 
   return (
-    <header 
-      className="fixed top-0 right-0 z-30 bg-background border-b border-border"
+    <header
+      className={cn(
+        "fixed top-0 right-0 z-30",
+        "bg-background/80 backdrop-blur-xl",
+        "border-b border-border/40",
+        "transition-all duration-300 ease-in-out"
+      )}
       style={{
-        height: '60px',
-        left: sidebarOpen ? '280px' : '0',
-        width: sidebarOpen ? 'calc(100% - 280px)' : '100%',
-        transition: 'all 300ms cubic-bezier(0.4, 0, 0.2, 1)'
+        height: "64px",
+        left: sidebarOpen ? "256px" : "64px",
+        width: sidebarOpen ? "calc(100% - 256px)" : "calc(100% - 64px)",
       }}
     >
       <div className="h-full px-6 flex items-center justify-between">
-        {/* Left Section: Menu Toggle + Dealership Name */}
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            className="p-2 hover:bg-accent rounded-md transition-colors"
-            title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-          >
-            {sidebarOpen ? (
-              <X className="w-5 h-5 text-foreground" />
-            ) : (
-              <Menu className="w-5 h-5 text-foreground" />
-            )}
-          </button>
-          
-          <div className="text-lg font-semibold text-foreground">
-            Premium Auto Group
-          </div>
-        </div>
-
-        {/* Center Section: Search */}
-        <div className="flex-1 max-w-xl mx-8">
-          <div className="relative">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        {/* Search */}
+        <form onSubmit={handleSearch} className="flex-1 max-w-xl">
+          <div className="relative group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search deals..."
+              placeholder="Search deals, clients, vehicles... (⌘K)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 w-full bg-background border-input"
+              className="pl-10 pr-20 h-10 bg-muted/50 border-transparent focus:bg-background focus:border-border transition-all"
             />
+            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+              <Command className="h-3 w-3" />K
+            </kbd>
           </div>
-        </div>
+        </form>
 
-        {/* Right Section: User Profile + Sign Out */}
-        <div className="flex items-center gap-3">
-          {/* Session Status */}
-          <SessionStatus showDetails={true} />
-          
-          {/* Divider */}
-          <div className="h-6 w-px bg-border" />
-          
+        {/* Right Section */}
+        <div className="flex items-center gap-2 ml-4">
           {/* Theme Toggle */}
           <ThemeToggle />
-          
-          {/* Divider */}
-          <div className="h-6 w-px bg-border" />
-          
-          <div className="flex items-center gap-3">
-            {/* User Avatar */}
-            <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-foreground">
-              {user?.firstName?.[0]}{user?.lastName?.[0]}
-            </div>
-            
-            {/* User Info */}
-            <div className="flex flex-col">
-              <span className="text-sm font-medium text-foreground">
-                {user?.firstName} {user?.lastName}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {user?.primaryEmailAddress?.emailAddress}
-              </span>
-            </div>
-          </div>
 
-          {/* Sign Out Button */}
-          <Dialog open={showSignOutDialog} onOpenChange={setShowSignOutDialog}>
-            <DialogTrigger asChild>
-              <Button 
-                variant="outline"
-                size="sm"
-                className="ml-2"
+          {/* Notifications */}
+          <Button variant="ghost" size="icon" className="relative">
+            <Bell className="h-5 w-5" />
+            <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
+          </Button>
+
+          {/* Help */}
+          <Button variant="ghost" size="icon">
+            <HelpCircle className="h-5 w-5" />
+          </Button>
+
+          <Separator orientation="vertical" className="h-6" />
+
+          {/* User Menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="gap-3 pl-2 pr-4 h-10 hover:bg-accent/50"
               >
-                <LogOut className="w-4 h-4 mr-2" />
-                Sign Out
+                <Avatar className="h-8 w-8 border-2 border-background shadow-sm">
+                  <AvatarImage src={user?.imageUrl} alt={user?.fullName || ""} />
+                  <AvatarFallback className="bg-gradient-to-br from-primary to-primary/60 text-primary-foreground font-semibold">
+                    {userInitials}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col items-start text-left">
+                  <span className="text-sm font-medium leading-none">
+                    {user?.firstName} {user?.lastName}
+                  </span>
+                  <span className="text-xs text-muted-foreground mt-0.5">
+                    {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
+                  </span>
+                </div>
+                {subscription && (
+                  <Badge variant="secondary" className="ml-2 text-xs">
+                    {subscription.plan}
+                  </Badge>
+                )}
               </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Sign Out</DialogTitle>
-                <DialogDescription>
-                  Are you sure you want to sign out?
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowSignOutDialog(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleSignOut}
-                  variant="destructive"
-                >
-                  Sign Out
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel>
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none">
+                    {user?.fullName}
+                  </p>
+                  <p className="text-xs leading-none text-muted-foreground">
+                    {user?.primaryEmailAddress?.emailAddress}
+                  </p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => navigate({ to: "/profile" })}>
+                <User className="mr-2 h-4 w-4" />
+                Profile & Account
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate({ to: "/subscription" })}>
+                <CreditCard className="mr-2 h-4 w-4" />
+                Subscription
+                {subscription && (
+                  <Badge variant="outline" className="ml-auto text-xs">
+                    {subscription.plan}
+                  </Badge>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate({ to: "/settings" })}>
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => navigate({ to: "/help" })}>
+                <HelpCircle className="mr-2 h-4 w-4" />
+                Help & Support
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate({ to: "/whats-new" })}>
+                <Sparkles className="mr-2 h-4 w-4" />
+                What's New
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                onClick={handleSignOut}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>
-  )
+  );
 }

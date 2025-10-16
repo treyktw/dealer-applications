@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { convexQuery } from '@/lib/convex';
-import { api, Id } from '@dealer/convex';
+import { api, type Id } from '@dealer/convex';
 import { useAuth } from '@clerk/clerk-react';
 import { Layout } from '@/components/layout/layout';
 import { Button } from '@/components/ui/button';
@@ -26,9 +26,62 @@ import {
   User,
   DollarSign,
   ChevronRight,
-  Loader2
+  Loader2,
+  Lock,
+  AlertCircle,
+  Monitor
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+// Type definitions
+type DealStatus = 'draft' | 'pending' | 'READY_TO_SIGN' | 'PENDING_SIGNATURE' | 'COMPLETED';
+type SortBy = 'recent' | 'oldest' | 'amount' | 'client';
+
+interface Client {
+  _id: Id<"clients">;
+  firstName: string;
+  lastName: string;
+  email?: string;
+}
+
+interface Vehicle {
+  _id: Id<"vehicles">;
+  year: number;
+  make: string;
+  model: string;
+  vin?: string;
+}
+
+interface Deal {
+  id: Id<"deals">;
+  type: string;
+  status: string;
+  clientId?: string;
+  vehicleId?: string;
+  dealershipId: string;
+  saleAmount?: number;
+  totalAmount?: number;
+  clientEmail?: string;
+  vin?: string;
+  createdAt: number;
+  updatedAt?: number;
+  client?: Client | null;
+  vehicle?: Vehicle | null;
+}
+
+interface DealStats {
+  total: number;
+  pending: number;
+  ready: number;
+  completed: number;
+  totalValue: number;
+}
+
+interface StatusConfig {
+  label: string;
+  color: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
 
 export const Route = createFileRoute('/deals/')({
   component: DealsPage,
@@ -37,9 +90,9 @@ export const Route = createFileRoute('/deals/')({
 function DealsPage() {
   const { isSignedIn } = useAuth();
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('recent');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<SortBy>('recent');
 
   // Fetch current user from Convex
   const { data: currentUser, isLoading: userLoading } = useQuery({
@@ -48,16 +101,28 @@ function DealsPage() {
     enabled: isSignedIn,
   });
 
+  // Check subscription status FIRST before trying to access deals
+  const { data: subscriptionStatus, isLoading: subscriptionLoading } = useQuery({
+    queryKey: ['subscription-status'],
+    queryFn: () => convexQuery(api.api.subscriptions.checkSubscriptionStatus, {}),
+    enabled: !!currentUser,
+  });
+
   // Fetch dealership information
   const { data: dealership, isLoading: dealershipLoading } = useQuery({
     queryKey: ['dealership', currentUser?.dealershipId],
     queryFn: () => convexQuery(api.api.dealerships.getDealershipById, { 
       dealershipId: currentUser?.dealershipId as Id<"dealerships"> 
     }),
-    enabled: !!currentUser?.dealershipId,
+    enabled: !!currentUser?.dealershipId && subscriptionStatus?.hasActiveSubscription,
   });
 
-  // Fetch deals for the user's dealership
+  // Check if user has required features
+  const hasDealsManagement = subscriptionStatus?.subscription?.features?.includes('deals_management');
+  const hasDesktopAccess = subscriptionStatus?.subscription?.features?.includes('desktop_app_access');
+  const canAccessDeals = subscriptionStatus?.hasActiveSubscription && hasDealsManagement && hasDesktopAccess;
+
+  // Only fetch deals if subscription is valid
   const { data: dealsData, isLoading: dealsLoading } = useQuery({
     queryKey: ['deals', currentUser?.dealershipId, statusFilter, searchQuery],
     queryFn: async () => {
@@ -69,13 +134,13 @@ function DealsPage() {
         search: searchQuery || undefined,
       });
     },
-    enabled: !!currentUser?.dealershipId,
+    enabled: !!currentUser?.dealershipId && canAccessDeals,
   });
 
-  const deals = Array.isArray(dealsData) ? dealsData : dealsData?.deals || [];
+  const deals: Deal[] = Array.isArray(dealsData) ? dealsData : dealsData?.deals || [];
 
   // Sort deals
-  const sortedDeals = [...deals].sort((a, b) => {
+  const sortedDeals: Deal[] = [...deals].sort((a: Deal, b: Deal) => {
     switch (sortBy) {
       case 'recent':
         return new Date(b.updatedAt || b.createdAt).getTime() - 
@@ -93,33 +158,39 @@ function DealsPage() {
   });
 
   // Calculate statistics
-  const stats = {
+  const stats: DealStats = {
     total: deals.length,
-    pending: deals.filter((d: any) => d.status === 'pending' || d.status === 'draft').length,
-    ready: deals.filter((d: any) => d.status === 'READY_TO_SIGN' || d.status === 'PENDING_SIGNATURE').length,
-    completed: deals.filter((d: any) => d.status === 'COMPLETED').length,
-    totalValue: deals.reduce((sum: any, d: any) => sum + (d.totalAmount || 0), 0),
+    pending: deals.filter((d: Deal) => d.status === 'pending' || d.status === 'draft').length,
+    ready: deals.filter((d: Deal) => d.status === 'READY_TO_SIGN' || d.status === 'PENDING_SIGNATURE').length,
+    completed: deals.filter((d: Deal) => d.status === 'COMPLETED').length,
+    totalValue: deals.reduce((sum: number, d: Deal) => sum + (d.totalAmount || 0), 0),
   };
 
-  const isLoading = userLoading || dealershipLoading || dealsLoading;
+  const isLoading = userLoading || subscriptionLoading || dealershipLoading;
 
-  if (userLoading) {
+  // Loading state
+  if (isLoading) {
     return (
       <Layout>
-        <div className="p-8 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin" />
+        <div className="p-8 flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
         </div>
       </Layout>
     );
   }
 
-  // Handle missing current user after hooks are declared to keep hook order stable
+  // Handle missing current user
   if (!currentUser) {
     return (
       <Layout>
         <div className="p-8">
           <Card>
             <CardContent className="p-8 text-center">
+              <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h2 className="text-xl font-semibold mb-2">User Not Found</h2>
               <p className="text-muted-foreground">
                 Please contact your administrator to be assigned to a dealership.
               </p>
@@ -130,12 +201,14 @@ function DealsPage() {
     );
   }
 
+  // Handle missing dealership
   if (!currentUser?.dealershipId) {
     return (
       <Layout>
         <div className="p-8">
           <Card>
             <CardContent className="p-8 text-center">
+              <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h2 className="text-xl font-semibold mb-2">No Dealership Associated</h2>
               <p className="text-muted-foreground">
                 Please contact your administrator to be assigned to a dealership.
@@ -147,6 +220,108 @@ function DealsPage() {
     );
   }
 
+  // Check subscription access - This is the key part!
+  if (!subscriptionStatus?.hasActiveSubscription) {
+    return (
+      <Layout>
+        <div className="p-8">
+          <Card className="border-amber-500/50">
+            <CardContent className="p-8 text-center">
+              <div className="flex items-center justify-center mb-4">
+                <Lock className="h-12 w-12 text-amber-500" />
+              </div>
+              <h2 className="text-xl font-semibold mb-2">No Active Subscription</h2>
+              <p className="text-muted-foreground mb-4">
+                You need an active subscription to access deal management.
+              </p>
+              <div className="mb-4 p-4 bg-muted/50 rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  Subscription Status: <span className="font-semibold text-amber-600">
+                    {subscriptionStatus?.subscriptionStatus || 'No Subscription'}
+                  </span>
+                </p>
+              </div>
+              <Button onClick={() => navigate({ to: '/subscription' })}>
+                View Subscription Plans
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Check for specific features
+  if (!hasDealsManagement || !hasDesktopAccess) {
+    return (
+      <Layout>
+        <div className="p-8">
+          <Card className="border-amber-500/50">
+            <CardContent className="p-8 text-center">
+              <div className="flex items-center justify-center mb-4">
+                <Lock className="h-12 w-12 text-amber-500" />
+              </div>
+              <h2 className="text-xl font-semibold mb-2">Premium Features Required</h2>
+              <p className="text-muted-foreground mb-6">
+                Your current plan doesn't include all required features for deal management.
+              </p>
+              
+              <div className="max-w-md mx-auto space-y-3 mb-6">
+                <div className="flex items-center justify-between p-3 rounded-lg border">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Deals Management</span>
+                  </div>
+                  <span className={cn(
+                    "text-xs px-2 py-1 rounded font-medium",
+                    hasDealsManagement 
+                      ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" 
+                      : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                  )}>
+                    {hasDealsManagement ? "✓ Active" : "✗ Required"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-3 rounded-lg border">
+                  <div className="flex items-center gap-2">
+                    <Monitor className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Desktop App Access</span>
+                  </div>
+                  <span className={cn(
+                    "text-xs px-2 py-1 rounded font-medium",
+                    hasDesktopAccess 
+                      ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" 
+                      : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                  )}>
+                    {hasDesktopAccess ? "✓ Active" : "✗ Required"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg mb-6">
+                <p className="text-sm text-blue-900 dark:text-blue-100">
+                  <strong>Current Plan:</strong> {subscriptionStatus?.subscription?.plan || 'Unknown'}
+                </p>
+                <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                  Upgrade to Premium or Enterprise to access deal management features
+                </p>
+              </div>
+
+              <div className="flex gap-3 justify-center">
+                <Button onClick={() => navigate({ to: '/subscription' })}>
+                  Upgrade Plan
+                </Button>
+                <Button variant="outline" onClick={() => navigate({ to: '/' })}>
+                  Back to Dashboard
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
+
+  // All checks passed - show the deals page
   return (
     <Layout>
       <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -254,7 +429,7 @@ function DealsPage() {
                 </SelectContent>
               </Select>
               
-              <Select value={sortBy} onValueChange={setSortBy}>
+              <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortBy)}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
@@ -270,7 +445,7 @@ function DealsPage() {
         </Card>
 
         {/* Deals List */}
-        {isLoading ? (
+        {dealsLoading ? (
           <Card>
             <CardContent className="p-8 text-center">
               <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
@@ -298,7 +473,7 @@ function DealsPage() {
         ) : (
           <div className="grid gap-4">
             {sortedDeals.map((deal) => (
-              <DealCard key={deal._id} deal={deal} />
+              <DealCard key={deal.id} deal={deal} />
             ))}
           </div>
         )}
@@ -307,10 +482,14 @@ function DealsPage() {
   );
 }
 
-function DealCard({ deal }: { deal: any }) {
+interface DealCardProps {
+  deal: Deal;
+}
+
+function DealCard({ deal }: DealCardProps) {
   const navigate = useNavigate();
   
-  const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
+  const statusConfig: Record<DealStatus, StatusConfig> = {
     draft: { label: 'Draft', color: 'text-gray-600', icon: FileText },
     pending: { label: 'Pending', color: 'text-amber-600', icon: Calendar },
     READY_TO_SIGN: { label: 'Ready to Sign', color: 'text-blue-600', icon: FileText },
@@ -318,7 +497,7 @@ function DealCard({ deal }: { deal: any }) {
     COMPLETED: { label: 'Completed', color: 'text-green-600', icon: FileText },
   };
   
-  const status = statusConfig[deal.status] || statusConfig.pending;
+  const status: StatusConfig = statusConfig[deal.status as DealStatus] || statusConfig.pending;
   const StatusIcon = status.icon;
   
   return (
@@ -326,7 +505,7 @@ function DealCard({ deal }: { deal: any }) {
       className="hover:shadow-md transition-shadow cursor-pointer"
       onClick={() => navigate({ 
         to: '/deals/$dealsId/documents', 
-        params: { dealsId: deal._id } 
+        params: { dealsId: deal.id } 
       })}
     >
       <CardContent className="p-6">
@@ -392,7 +571,7 @@ function DealCard({ deal }: { deal: any }) {
         
         {/* Bottom row with date and deal ID */}
         <div className="mt-4 pt-4 border-t flex justify-between text-sm text-muted-foreground">
-          <span>Deal #{deal._id.slice(-6)}</span>
+          <span>Deal #{deal.id.slice(-6)}</span>
           <span>{new Date(deal.createdAt).toLocaleDateString()}</span>
         </div>
       </CardContent>

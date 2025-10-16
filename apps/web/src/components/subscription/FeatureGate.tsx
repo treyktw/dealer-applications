@@ -1,3 +1,5 @@
+"use client";
+
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -7,7 +9,7 @@ import Link from "next/link";
 
 interface FeatureGateProps {
   children: React.ReactNode;
-  requiredPlan?: "starter" | "professional" | "enterprise";
+  requiredPlan?: "basic" | "premium" | "enterprise";
   fallback?: React.ReactNode;
 }
 
@@ -31,8 +33,8 @@ export function FeatureGate({ children, requiredPlan, fallback }: FeatureGatePro
 
   if (requiredPlan) {
     const planLevels = {
-      starter: 1,
-      professional: 2,
+      basic: 1,
+      premium: 2,
       enterprise: 3,
     };
 

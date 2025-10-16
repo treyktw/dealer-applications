@@ -13,9 +13,19 @@ import {
   handleOptions 
 } from "./external_api";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error("STRIPE_SECRET_KEY is not set");
+}
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-08-27.basil",
 });
+
+if (!process.env.STRIPE_WEBHOOK_SECRET) {
+  throw new Error("STRIPE_WEBHOOK_SECRET is not set");
+}
+
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 // Stripe webhook handler (existing)
 const stripeWebhook = httpAction(async (ctx, request) => {
@@ -42,7 +52,7 @@ const stripeWebhook = httpAction(async (ctx, request) => {
     const event = await stripe.webhooks.constructEventAsync(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      webhookSecret
     );
 
     console.log("Webhook event verified successfully:", {

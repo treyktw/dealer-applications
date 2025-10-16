@@ -29,7 +29,8 @@ async function createDirectoryStructure(bucketName: string, dealershipId: string
     `${dealershipId}/vehicles/`,
     `${dealershipId}/logos/`,
     `${dealershipId}/documents/`,
-    `${dealershipId}/profiles/`
+    `${dealershipId}/profiles/`,
+    `${dealershipId}/custom-documents/`
   ];
 
   // Create each directory placeholder using Upload instead of PutObjectCommand
@@ -100,6 +101,11 @@ export async function createDealershipBucket(dealershipId: string): Promise<stri
 }
 
 // Function to get the path for a specific file - unchanged
-export function getDealershipFilePath(dealershipId: string, fileType: 'public' | 'vehicles' | 'logos' | 'documents' | 'profiles', fileName: string): string {
+export function getDealershipFilePath(dealershipId: string, fileType: 'public' | 'vehicles' | 'logos' | 'documents' | 'profiles' | 'custom_documents', fileName: string): string {
   return `${dealershipId}/${fileType}/${fileName}`;
+}
+
+// Helper function to get custom document path
+export function getCustomDocumentPath(dealershipId: string, dealId: string, fileName: string): string {
+  return `${dealershipId}/custom-documents/${dealId}/${fileName}`;
 }

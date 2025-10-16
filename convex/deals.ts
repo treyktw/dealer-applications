@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
+import { api } from "./_generated/api";
 
 export const getDeals = query({
   args: {
@@ -9,6 +10,22 @@ export const getDeals = query({
     search: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    // Check subscription for deals management
+    const subscriptionStatus = await ctx.runQuery(api.subscriptions.checkSubscriptionStatus, {});
+    if (!subscriptionStatus?.hasActiveSubscription) {
+      throw new Error("Premium subscription required for deal management");
+    }
+
+    const hasDealsManagement = subscriptionStatus.subscription?.features?.includes("deals_management");
+    if (!hasDealsManagement) {
+      throw new Error("Premium subscription with deals management required");
+    }
+
     let deals = await ctx.db
       .query("deals")
       .filter((q) => q.eq(q.field("dealershipId"), args.dealershipId))
@@ -161,6 +178,17 @@ export const createDeal = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
+    // Check subscription for deals management
+    const subscriptionStatus = await ctx.runQuery(api.subscriptions.checkSubscriptionStatus, {});
+    if (!subscriptionStatus?.hasActiveSubscription) {
+      throw new Error("Premium subscription required for deal management");
+    }
+
+    const hasDealsManagement = subscriptionStatus.subscription?.features?.includes("deals_management");
+    if (!hasDealsManagement) {
+      throw new Error("Premium subscription with deals management required");
+    }
+
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
@@ -294,5 +322,71 @@ export const deleteDeal = mutation({
     await ctx.db.delete(args.dealId);
 
     return { success: true, message: "Deal deleted successfully" };
+  },
+});
+
+// Get complete deal data for desktop app
+export const getCompleteDealData = query({
+  args: {
+    dealId: v.id("deals"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    // Check subscription for deals management
+    const subscriptionStatus = await ctx.runQuery(api.subscriptions.checkSubscriptionStatus, {});
+    if (!subscriptionStatus?.hasActiveSubscription) {
+      throw new Error("Premium subscription required for deal management");
+    }
+
+    const hasDealsManagement = subscriptionStatus.subscription?.features?.includes("deals_management");
+    if (!hasDealsManagement) {
+      throw new Error("Premium subscription with deals management required");
+    }
+
+    const deal = await ctx.db.get(args.dealId);
+    if (!deal) {
+      return null;
+    }
+
+    // Fetch related data
+    const client = deal.clientId ? await ctx.db.get(deal.clientId) : null;
+    const vehicle = deal.vehicleId ? await ctx.db.get(deal.vehicleId) : null;
+    
+    // Get document pack
+    const documentPack = await ctx.db
+      .query("document_packs")
+      .withIndex("by_deal", (q) => q.eq("dealId", args.dealId))
+      .first();
+
+    // Get custom uploaded documents
+    const customDocuments = await ctx.db
+      .query("dealer_uploaded_documents")
+      .withIndex("by_deal", (q) => q.eq("dealId", args.dealId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    // Get dealership info
+    const dealership = deal.dealershipId ? await ctx.db.get(deal.dealershipId as Id<"dealerships">) : null;
+
+    return {
+      // Core deal data
+      deal: {
+        ...deal,
+        id: deal._id,
+      },
+      // Related entities
+      client,
+      vehicle,
+      dealership,
+      // Document data
+      documentPack,
+      customDocuments,
+      // Metadata
+      lastUpdated: Date.now(),
+    };
   },
 });

@@ -49,6 +49,20 @@ export const generateDeepLinkToken = action({
       throw new Error("User not found");
     }
 
+    // Check if user has Premium subscription for deals management and desktop access
+    const subscriptionStatus = await ctx.runQuery(api.subscriptions.checkSubscriptionStatus, {});
+    if (!subscriptionStatus?.hasActiveSubscription) {
+      throw new Error("Premium subscription required for deal management and desktop app access");
+    }
+
+    // Check for specific features
+    const hasDealsManagement = subscriptionStatus.subscription?.features?.includes("deals_management");
+    const hasDesktopAccess = subscriptionStatus.subscription?.features?.includes("desktop_app_access");
+    
+    if (!hasDealsManagement || !hasDesktopAccess) {
+      throw new Error("Premium subscription with deals management and desktop app access required");
+    }
+
     const deal = await ctx.runQuery(api.deals.getDeal, {
       dealId: args.dealId,
     });
@@ -213,10 +227,25 @@ export const exchangeDeepLinkToken = action({
         dealId: args.dealId as Id<"deals">,
       });
 
+      if (!deal) {
+        return {
+          success: false,
+          error: "Deal not found",
+          deal: null,
+          templates: [],
+          dealershipId: null,
+        };
+      }
+
+      // Get complete deal data including document pack and custom documents
+      const completeDealData = await ctx.runQuery(api.deals.getCompleteDealData, {
+        dealId: args.dealId as Id<"deals">,
+      });
+
       return {
         success: true,
         error: null,
-        deal,
+        deal: completeDealData,
         templates: [],
         dealershipId: user.dealershipId || null,
       };

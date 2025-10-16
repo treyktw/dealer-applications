@@ -1,5 +1,5 @@
 // src/components/auth/login-form.tsx
-import { useState, useEffect, useId } from "react"
+import { useState, useId } from "react"
 import { useSignIn } from "@clerk/clerk-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Eye, EyeOff, Loader2 } from "lucide-react"
 import { toast } from "react-hot-toast"
-import { rateLimiter } from "@/lib/auth/rate-limiter"
 // Removed custom session manager - using Clerk's built-in session management
 import { cn } from "@/lib/utils"
 
@@ -17,36 +16,16 @@ export function LoginForm() {
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [lockoutTimer, setLockoutTimer] = useState(0)
+  const [lockoutTimer] = useState(0)
   const [rememberMe, setRememberMe] = useState(false)
   const rememberMeId = useId()
 
-  useEffect(() => {
-    if (lockoutTimer > 0) {
-      const interval = setInterval(() => {
-        const remaining = rateLimiter.getRemainingLockTime(email)
-        if (remaining <= 0) {
-          setLockoutTimer(0)
-        } else {
-          setLockoutTimer(Math.ceil(remaining / 1000))
-        }
-      }, 1000)
-      return () => clearInterval(interval)
-    }
-  }, [lockoutTimer, email])
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!isLoaded || !signIn) return
 
-    const rateLimit = rateLimiter.recordAttempt(email)
-    
-    if (!rateLimit.allowed) {
-      const seconds = Math.ceil((rateLimit.lockedUntil ?? Date.now()) - Date.now()) / 1000
-      setLockoutTimer(seconds)
-      toast.error(`Too many attempts. Try again in ${seconds} seconds`)
-      return
-    }
+  
 
     setIsLoading(true)
 
@@ -57,7 +36,6 @@ export function LoginForm() {
       })
 
       if (result.status === "complete") {
-        rateLimiter.reset(email)
         await setActive({ session: result.createdSessionId })
         
         // Clerk handles session management automatically
@@ -68,29 +46,51 @@ export function LoginForm() {
       }
     } catch (error) {
       console.error('Login error:', error)
-      if (rateLimit.remainingAttempts) {
-        toast.error(`Invalid credentials. ${rateLimit.remainingAttempts} attempts remaining`)
-      } else {
-        toast.error("Invalid email or password")
-      }
+      toast.error("Invalid email or password")
     } finally {
       setIsLoading(false)
     }
   }
+
+  // Deprecated - Google sign-in is not supported in the desktop app
+  // const handleGoogleSignIn = async () => {
+  //   if (!isLoaded || !signIn) return
+    
+  //   setIsLoading(true)
+  //   try {
+  //     await signIn.authenticateWithRedirect({
+  //       strategy: "oauth_google",
+  //       redirectUrl: "/sso-callback",
+  //       redirectUrlComplete: "/",
+  //     })
+  //   } catch (error) {
+  //     console.error('Google sign-in error:', error)
+  //     toast.error("Failed to sign in with Google")
+  //     setIsLoading(false)
+  //   }
+  // }
 
   const handleGoogleSignIn = async () => {
     if (!isLoaded || !signIn) return
     
     setIsLoading(true)
     try {
-      await signIn.authenticateWithRedirect({
-        strategy: "oauth_google",
-        redirectUrl: "/sso-callback",
-        redirectUrlComplete: "/",
-      })
+      // Generate CSRF state token
+      const state = crypto.randomUUID()
+      sessionStorage.setItem('oauth_state', state)
+      
+      // Build web SSO URL
+      const webUrl = import.meta.env.VITE_WEB_URL || 'https://dealer.universalautobrokers.com'
+      const ssoUrl = `${webUrl}/desktop-sso?state=${state}`
+      
+      // Open in system browser using Tauri
+      const { open } = await import('@tauri-apps/plugin-shell')
+      await open(ssoUrl)
+      
+      // Don't set loading to false - user will complete auth in browser
     } catch (error) {
-      console.error('Google sign-in error:', error)
-      toast.error("Failed to sign in with Google")
+      console.error('Failed to open browser:', error)
+      toast.error('Failed to open sign-in page')
       setIsLoading(false)
     }
   }
