@@ -16,6 +16,8 @@ const isPublicRoute = createRouteMatcher([
   "/desktop-sso",
   "/desktop-sso/(.*)",
   '/desktop-sso(.*)',
+  '/desktop-callback',
+  '/desktop-callback/(.*)',
 ]);
 
 // Routes that are part of the setup flow (don't redirect these)
