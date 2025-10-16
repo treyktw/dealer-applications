@@ -26,7 +26,7 @@ export default function DesktopSSOPage() {
   }
 
   // Use HTTPS callback page instead of deep link
-  const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://dealer.universalautobrokers.net'}/desktop-callback?state=${state}`
+  const callbackUrl = `http://dealer.universalautobrokers.net/desktop-callback?state=${state}`
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
