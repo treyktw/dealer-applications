@@ -19,7 +19,6 @@ import { Route as OauthCallbackRouteImport } from './routes/oauth-callback'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as DealershipRouteImport } from './routes/dealership'
-import { Route as AuthVerifyRouteImport } from './routes/auth-verify'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DealsIndexRouteImport } from './routes/deals/index'
@@ -77,11 +76,6 @@ const DealershipRoute = DealershipRouteImport.update({
   path: '/dealership',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthVerifyRoute = AuthVerifyRouteImport.update({
-  id: '/auth-verify',
-  path: '/auth-verify',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AnalyticsRoute = AnalyticsRouteImport.update({
   id: '/analytics',
   path: '/analytics',
@@ -116,7 +110,6 @@ const DealsDealsIdDocumentsRoute = DealsDealsIdDocumentsRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/analytics': typeof AnalyticsRoute
-  '/auth-verify': typeof AuthVerifyRoute
   '/dealership': typeof DealershipRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
@@ -135,7 +128,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/analytics': typeof AnalyticsRoute
-  '/auth-verify': typeof AuthVerifyRoute
   '/dealership': typeof DealershipRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
@@ -155,7 +147,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/analytics': typeof AnalyticsRoute
-  '/auth-verify': typeof AuthVerifyRoute
   '/dealership': typeof DealershipRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
@@ -176,7 +167,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/analytics'
-    | '/auth-verify'
     | '/dealership'
     | '/help'
     | '/login'
@@ -195,7 +185,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/analytics'
-    | '/auth-verify'
     | '/dealership'
     | '/help'
     | '/login'
@@ -214,7 +203,6 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/analytics'
-    | '/auth-verify'
     | '/dealership'
     | '/help'
     | '/login'
@@ -234,7 +222,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AnalyticsRoute: typeof AnalyticsRoute
-  AuthVerifyRoute: typeof AuthVerifyRoute
   DealershipRoute: typeof DealershipRoute
   HelpRoute: typeof HelpRoute
   LoginRoute: typeof LoginRoute
@@ -323,13 +310,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DealershipRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auth-verify': {
-      id: '/auth-verify'
-      path: '/auth-verify'
-      fullPath: '/auth-verify'
-      preLoaderRoute: typeof AuthVerifyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/analytics': {
       id: '/analytics'
       path: '/analytics'
@@ -378,7 +358,6 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AnalyticsRoute: AnalyticsRoute,
-  AuthVerifyRoute: AuthVerifyRoute,
   DealershipRoute: DealershipRoute,
   HelpRoute: HelpRoute,
   LoginRoute: LoginRoute,

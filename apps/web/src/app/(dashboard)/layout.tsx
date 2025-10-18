@@ -58,8 +58,8 @@ export default function DashboardLayout({
   const createCheckoutSession = useAction(api.subscriptions.createCheckoutSession);
   const createUser = useMutation(api.users.createUser);
   const forceSyncCurrentUser = useMutation(api.subscriptions.forceSyncCurrentUser);
-  const subscriptionStatus = useQuery(api.subscriptions.checkSubscriptionStatus);
-  const currentDealership = useQuery(api.dealerships.getCurrentDealership);
+  const subscriptionStatus = useQuery(api.subscriptions.checkSubscriptionStatus, {});
+  const currentDealership = useQuery(api.dealerships.getCurrentDealership, {});
   const { user } = useUser();
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(Date.now());
