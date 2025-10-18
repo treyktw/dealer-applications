@@ -2,21 +2,23 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { api } from "./_generated/api";
+import { requireAuth } from "./emailAuth";
 
 export const getDeals = query({
   args: {
     dealershipId: v.string(),
     status: v.optional(v.string()),
     search: v.optional(v.string()),
+    emailAuthToken: v.optional(v.string()), // For desktop app auth
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
+    // Use the new auth helper that supports both Clerk and email auth
+    await requireAuth(ctx, args.emailAuthToken);
 
     // Check subscription for deals management
-    const subscriptionStatus = await ctx.runQuery(api.subscriptions.checkSubscriptionStatus, {});
+    const subscriptionStatus = await ctx.runQuery(api.subscriptions.checkSubscriptionStatus, { 
+      emailAuthToken: args.emailAuthToken 
+    });
     if (!subscriptionStatus?.hasActiveSubscription) {
       throw new Error("Premium subscription required for deal management");
     }
@@ -59,8 +61,10 @@ export const getDeals = query({
 export const getDeal = query({
   args: {
     dealId: v.id("deals"),
+    emailAuthToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAuth(ctx, args.emailAuthToken);
     const deal = await ctx.db.get(args.dealId);
     if (!deal) {
       return null;
@@ -111,12 +115,10 @@ export const updateDealStatus = mutation({
   args: {
     dealId: v.id("deals"),
     status: v.string(),
+    emailAuthToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await ctx.auth.getUserIdentity();
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
+    await requireAuth(ctx, args.emailAuthToken);
 
     const deal = await ctx.db.get(args.dealId);
     if (!deal) {
@@ -138,12 +140,10 @@ export const markDocumentSigned = mutation({
   args: {
     documentId: v.id("documents"),
     type: v.string(), // "client" | "dealer" | "notary"
+    emailAuthToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await ctx.auth.getUserIdentity();
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
+    await requireAuth(ctx, args.emailAuthToken);
 
     const document = await ctx.db.get(args.documentId);
     if (!document) {
@@ -173,13 +173,15 @@ export const createDeal = mutation({
     clientPhone: v.optional(v.string()),
     vin: v.optional(v.string()),
     stockNumber: v.optional(v.string()),
+    emailAuthToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
+    const user = await requireAuth(ctx, args.emailAuthToken);
 
     // Check subscription for deals management
-    const subscriptionStatus = await ctx.runQuery(api.subscriptions.checkSubscriptionStatus, {});
+    const subscriptionStatus = await ctx.runQuery(api.subscriptions.checkSubscriptionStatus, { 
+      emailAuthToken: args.emailAuthToken 
+    });
     if (!subscriptionStatus?.hasActiveSubscription) {
       throw new Error("Premium subscription required for deal management");
     }
@@ -189,12 +191,7 @@ export const createDeal = mutation({
       throw new Error("Premium subscription with deals management required");
     }
 
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
-      .first();
-
-    if (!user || !user.dealershipId) {
+    if (!user.dealershipId) {
       throw new Error("User not associated with a dealership");
     }
 
@@ -288,17 +285,10 @@ export const createDeal = mutation({
 export const deleteDeal = mutation({
   args: {
     dealId: v.id("deals"),
+    emailAuthToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
-      .first();
-
-    if (!user) throw new Error("User not found");
+    const user = await requireAuth(ctx, args.emailAuthToken);
 
     const deal = await ctx.db.get(args.dealId);
     if (!deal) throw new Error("Deal not found");
@@ -329,15 +319,15 @@ export const deleteDeal = mutation({
 export const getCompleteDealData = query({
   args: {
     dealId: v.id("deals"),
+    emailAuthToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
+    await requireAuth(ctx, args.emailAuthToken);
 
     // Check subscription for deals management
-    const subscriptionStatus = await ctx.runQuery(api.subscriptions.checkSubscriptionStatus, {});
+    const subscriptionStatus = await ctx.runQuery(api.subscriptions.checkSubscriptionStatus, { 
+      emailAuthToken: args.emailAuthToken 
+    });
     if (!subscriptionStatus?.hasActiveSubscription) {
       throw new Error("Premium subscription required for deal management");
     }

@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useUser } from "@clerk/clerk-react";
 import { 
   User, 
   Mail, 
@@ -17,29 +16,39 @@ import {
 } from "lucide-react";
 import { useId, useState } from "react";
 import { toast } from "react-hot-toast";
+import { useQuery } from "@tanstack/react-query";
+import { convexQuery } from "@/lib/convex";
+import { api } from "@dealer/convex";
 
 export const Route = createFileRoute("/profile")({
   component: ProfilePage,
 });
 
 function ProfilePage() {
-  const { user } = useUser();
+  const { data: currentUser } = useQuery({
+    queryKey: ["current-user"],
+    queryFn: () => convexQuery(api.api.users.getCurrentUser, {}),
+  });
+
   const [isEditing, setIsEditing] = useState(false);
+  const firstName = currentUser?.name?.split(" ")[0] || "";
+  const lastName = currentUser?.name?.split(" ")[1] || "";
+  
   const [formData, setFormData] = useState({
-    firstName: user?.firstName || "",
-    lastName: user?.lastName || "",
-    email: user?.primaryEmailAddress?.emailAddress || "",
-    phone: user?.phoneNumbers?.[0]?.phoneNumber || "",
+    firstName: firstName,
+    lastName: lastName,
+    email: currentUser?.email || "",
+    phone: "",
   });
 
   const handleSave = () => {
-    // TODO: Implement save functionality with Clerk
+    // TODO: Implement save functionality with Convex
     toast.success("Profile updated successfully!");
     setIsEditing(false);
   };
 
-  const userRole = (user?.publicMetadata?.role as string) || "user";
-  const userInitials = `${user?.firstName?.[0] || ""}${user?.lastName?.[0] || ""}`;
+  const userRole = currentUser?.role || "user";
+  const userInitials = `${firstName?.[0] || ""}${lastName?.[0] || ""}`;
 
   return (
     <Layout>
@@ -58,7 +67,7 @@ function ProfilePage() {
             <div className="flex items-start gap-6">
               <div className="relative group">
                 <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
-                  <AvatarImage src={user?.imageUrl} alt={user?.fullName || ""} />
+                  <AvatarImage src={currentUser?.image} alt={currentUser?.name || ""} />
                   <AvatarFallback className="text-2xl bg-gradient-to-br from-primary to-primary/60 text-primary-foreground">
                     {userInitials}
                   </AvatarFallback>
@@ -68,8 +77,8 @@ function ProfilePage() {
                 </button>
               </div>
               <div className="flex-1">
-                <h2 className="text-2xl font-bold">{user?.fullName}</h2>
-                <p className="text-muted-foreground">{user?.primaryEmailAddress?.emailAddress}</p>
+                <h2 className="text-2xl font-bold">{currentUser?.name}</h2>
+                <p className="text-muted-foreground">{currentUser?.email}</p>
                 <div className="flex gap-2 mt-3">
                   <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
                     <Shield className="h-3 w-3" />

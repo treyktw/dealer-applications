@@ -13,7 +13,6 @@ import { Separator } from "@/components/ui/separator";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { convexQuery, convexMutation } from "@/lib/convex";
 import { api } from "@dealer/convex";
-import { useUser } from "@clerk/clerk-react";
 import { useId } from "react";
 import { 
   Building2,
@@ -65,7 +64,6 @@ export const Route = createFileRoute("/dealership")({
 });
 
 function DealershipPage() {
-  const { user } = useUser();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("overview");
@@ -87,14 +85,13 @@ function DealershipPage() {
   const { data: currentUser, isLoading: userLoading } = useQuery({
     queryKey: ["current-user"],
     queryFn: () => convexQuery(api.api.users.getCurrentUser, {}),
-    enabled: !!user,
   });
 
   // Get dealership
   const { data: dealership, isLoading: dealershipLoading } = useQuery({
     queryKey: ["current-dealership"],
     queryFn: () => convexQuery(api.api.dealerships.getCurrentDealership, {}),
-    enabled: !!user,
+    enabled: !!currentUser,
   });
 
   // Get dealership stats

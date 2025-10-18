@@ -701,6 +701,7 @@ name = "dealer-software"
 version = "0.1.0"
 dependencies = [
  "keyring",
+ "once_cell",
  "serde",
  "serde_json",
  "tauri",

@@ -1,6 +1,5 @@
 // src/routes/index-redesign.tsx
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { useUser } from "@clerk/clerk-react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Layout } from "@/components/layout/layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,25 +57,18 @@ interface StatusConfig {
 }
 
 export const Route = createFileRoute("/")({
-  beforeLoad: async ({ context }) => {
-    if (!context.auth?.isLoaded) return;
-    if (!context.auth?.isSignedIn) {
-      throw redirect({ to: "/login" });
-    }
-  },
   component: HomePage,
 });
 
 function HomePage() {
-  const { user } = useUser();
   const navigate = useNavigate();
-  const firstName = user?.firstName || "there";
 
   const { data: currentUser, isLoading: userLoading } = useQuery({
     queryKey: ["current-user"],
     queryFn: () => convexQuery(api.api.users.getCurrentUser, {}),
-    enabled: !!user,
   });
+
+  const firstName = currentUser?.name?.split(" ")[0] || "there";
 
   const { data: dealsData, isLoading: dealsLoading } = useQuery({
     queryKey: ["deals", currentUser?.dealershipId],

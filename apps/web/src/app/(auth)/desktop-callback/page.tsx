@@ -1,135 +1,240 @@
-'use client'
-import { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+// app/desktop-callback/page.tsx - Generates JWT and triggers deep link back to desktop
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import { useAuth, useUser } from '@clerk/nextjs';
+import { useSearchParams } from 'next/navigation';
+import { CheckCircle2, Copy, ExternalLink, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function DesktopCallbackPage() {
-  const searchParams = useSearchParams()
-  const state = searchParams.get('state')
-  const [status, setStatus] = useState('Redirecting to desktop app...')
-  const [showFallback, setShowFallback] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const { user } = useUser();
+  const searchParams = useSearchParams();
+  
+  const [jwt, setJwt] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [autoLinkAttempted, setAutoLinkAttempted] = useState(false);
+
+  const state = searchParams.get('state');
+
+  const attemptDeepLink = useCallback((token: string, state: string) => {
+    try {
+      const deepLink = `dealer-sign://auth/callback?token=${encodeURIComponent(token)}&state=${encodeURIComponent(state)}`;
+      console.log('🔗 Attempting deep link:', deepLink);
+      
+      // Try to trigger deep link
+      window.location.href = deepLink;
+      
+      console.log('✅ Deep link triggered - browser will prompt to open app');
+    } catch (err) {
+      console.error('❌ Failed to trigger deep link:', err);
+    }
+  }, []);
+
+  const generateJWT = useCallback(async () => {
+    if (!isLoaded) return;
+    
+    if (!isSignedIn || !user) {
+      setError('Not authenticated. Please sign in first.');
+      return;
+    }
+
+    if (!state) {
+      setError('Invalid request - missing state parameter');
+      return;
+    }
+
+    try {
+      // Get JWT token from Clerk using the desktop-app template
+      console.log('🔐 Generating JWT with desktop-app template...');
+      const token = await getToken({ template: 'desktop-app' });
+      
+      if (!token) {
+        throw new Error('Failed to generate authentication token');
+      }
+
+      console.log('✅ JWT generated successfully');
+      setJwt(token);
+
+      // Automatically attempt deep link
+      if (!autoLinkAttempted) {
+        setAutoLinkAttempted(true);
+        attemptDeepLink(token, state);
+      }
+    } catch (err) {
+      console.error('❌ JWT generation failed:', err);
+      setError(err instanceof Error ? err.message : 'Failed to generate token');
+    }
+  }, [isLoaded, isSignedIn, user, state, getToken, autoLinkAttempted, attemptDeepLink]);
 
   useEffect(() => {
-    if (!state) {
-      setError('Missing state parameter')
-      return
+    generateJWT();
+  }, [generateJWT]);
+
+  const copyToken = useCallback(() => {
+    if (jwt) {
+      navigator.clipboard.writeText(jwt);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
+  }, [jwt]);
 
-    const attemptDeepLink = async () => {
-      try {
-        setStatus('Opening desktop app...')
-        
-        // Create the deep link URL
-        const deepLink = `dealer-sign://oauth/callback?state=${state}`
-        console.log('Redirecting to deep link:', deepLink)
-        
-        // Try multiple methods to open the deep link
-        const methods = [
-          () => {
-            // Method 1: Direct window.location.href
-            window.location.href = deepLink
-          },
-          () => {
-            // Method 2: Create a temporary link and click it
-            const link = document.createElement('a')
-            link.href = deepLink
-            link.style.display = 'none'
-            document.body.appendChild(link)
-            link.click()
-            document.body.removeChild(link)
-          },
-          () => {
-            // Method 3: Use window.open as fallback
-            window.open(deepLink, '_self')
-          }
-        ]
-
-        // Try each method with a small delay
-        for (let i = 0; i < methods.length; i++) {
-          try {
-            methods[i]()
-            console.log(`Deep link method ${i + 1} attempted`)
-            
-            // Wait a bit before trying next method
-            if (i < methods.length - 1) {
-              await new Promise(resolve => setTimeout(resolve, 500))
-            }
-          } catch (err) {
-            console.warn(`Deep link method ${i + 1} failed:`, err)
-          }
-        }
-
-        // Set success status
-        setStatus('✓ Desktop app should be opening...')
-        
-        // Show fallback message after 3 seconds
-        setTimeout(() => {
-          setShowFallback(true)
-          setStatus('Authentication successful!')
-        }, 3000)
-
-      } catch (err) {
-        console.error('Deep link error:', err)
-        setError('Failed to open desktop app')
-        setShowFallback(true)
-      }
+  const retryDeepLink = useCallback(() => {
+    if (jwt && state) {
+      attemptDeepLink(jwt, state);
     }
-
-    attemptDeepLink()
-  }, [state])
+  }, [jwt, state, attemptDeepLink]);
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-6">
-        <div className="text-center space-y-4 max-w-md">
-          <div className="text-4xl">❌</div>
-          <h2 className="text-xl font-bold text-destructive">Error</h2>
-          <p className="text-sm text-muted-foreground">{error}</p>
-          <button
-            type="button"
-            onClick={() => window.close()}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded hover:opacity-90"
-          >
-            Close Window
-          </button>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-red-100 p-6">
+        <div className="max-w-md w-full">
+          <div className="bg-white rounded-lg shadow-xl p-8 text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8 text-red-600" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              Authentication Error
+            </h1>
+            <p className="text-gray-600 mb-6">
+              {error}
+            </p>
+            <p className="text-sm text-gray-500">
+              Please close this window and try again from the desktop app.
+            </p>
+          </div>
         </div>
       </div>
-    )
+    );
+  }
+
+  if (!jwt) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
+        <div className="max-w-md w-full">
+          <div className="bg-white rounded-lg shadow-xl p-8 text-center">
+            <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              Preparing Authentication...
+            </h1>
+            <p className="text-gray-600">
+              Generating secure token for desktop app
+            </p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-6">
-      <div className="text-center space-y-4 max-w-md">
-        {!showFallback ? (
-          <>
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
-            <p className="text-lg font-medium">{status}</p>
-            <p className="text-sm text-muted-foreground">
-              Please wait while we redirect you to the desktop app...
-            </p>
-          </>
-        ) : (
-          <div className="space-y-4">
-            <div className="text-4xl">✅</div>
-            <h2 className="text-xl font-bold text-green-600">Authentication Successful!</h2>
-            <p className="text-sm text-muted-foreground">
-              You can now close this window and return to the desktop app.
-            </p>
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => window.close()}
-                className="w-full px-4 py-2 bg-primary text-primary-foreground rounded hover:opacity-90"
-              >
-                Close Window
-              </button>
-              <p className="text-xs text-muted-foreground">
-                If the desktop app didn&apos;t open automatically, please check that it&apos;s installed and running.
-              </p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 p-6">
+      <div className="max-w-lg w-full">
+        <div className="bg-white rounded-lg shadow-xl p-8">
+          {/* Success Icon */}
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle2 className="w-8 h-8 text-green-600" />
+          </div>
+
+          {/* Title */}
+          <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">
+            Authentication Successful!
+          </h1>
+          <p className="text-gray-600 text-center mb-8">
+            You can now return to DealerPro Desktop
+          </p>
+
+          {/* Instructions */}
+          <div className="space-y-4 mb-8">
+            <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 text-sm font-bold">
+                1
+              </div>
+              <div>
+                <p className="font-medium text-gray-900">Browser Prompt</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  Your browser should prompt you to &quot;Open DealerPro Desktop&quot;. Click <strong>Open</strong> or <strong>Allow</strong>.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-4 bg-purple-50 rounded-lg border border-purple-200">
+              <div className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center flex-shrink-0 text-sm font-bold">
+                2
+              </div>
+              <div>
+                <p className="font-medium text-gray-900">Manual Return (if needed)</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  If the prompt didn&apos;t appear, click the button below to try again.
+                </p>
+              </div>
             </div>
           </div>
-        )}
+
+          {/* Action Buttons */}
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={retryDeepLink}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+            >
+              <ExternalLink className="w-5 h-5" />
+              Open in DealerPro Desktop
+            </button>
+
+            <button
+              type="button"
+              onClick={copyToken}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium rounded-lg transition-colors"
+            >
+              {copied ? (
+                <>
+                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-5 h-5" />
+                  Copy Token (Manual Fallback)
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Token Display (collapsed by default) */}
+          <details className="mt-6">
+            <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700">
+              Show authentication token (advanced)
+            </summary>
+            <div className="mt-3 p-3 bg-gray-50 rounded border border-gray-200">
+              <p className="text-xs font-mono text-gray-600 break-all">
+                {jwt}
+              </p>
+            </div>
+          </details>
+
+          {/* Security Notice */}
+          <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <p className="text-xs text-gray-600 text-center">
+              🔒 This token will expire in 5 minutes. Do not share it with anyone.
+              You can close this window after returning to the desktop app.
+            </p>
+          </div>
+        </div>
+
+        {/* Help Text */}
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-600">
+            Having trouble?{' '}
+            <a
+              href="mailto:support@dealerpro.com"
+              className="text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Contact Support
+            </a>
+          </p>
+        </div>
       </div>
     </div>
-  )
+  );
 }

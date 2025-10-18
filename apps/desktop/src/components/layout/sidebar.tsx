@@ -1,6 +1,5 @@
 // src/components/layout/sidebar-redesign.tsx
 import { Link, useLocation } from "@tanstack/react-router";
-import { useUser } from "@clerk/clerk-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +25,7 @@ import {
   BarChart3,
   UserCircle,
 } from "lucide-react";
+import { useAuth } from "@/components/auth/AuthContext";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -95,8 +95,18 @@ const NavItem = ({ item, isOpen, isActive }: { item: NavItem; isOpen: boolean; i
 
 export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const location = useLocation();
-  const { user } = useUser();
-  const userRole = (user?.publicMetadata?.role as string) || "user";
+  const { user } = useAuth();
+
+  // User is guaranteed to exist here because AuthGuard protects this component
+  if (!user) {
+    return null;
+  }
+
+  const userName = user.name || "User";
+  const nameParts = userName.split(" ");
+  const firstInitial = nameParts[0]?.[0] || "U";
+  const lastInitial = nameParts[1]?.[0] || "";
+  const userRole = user.role;
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
@@ -263,12 +273,11 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
         <div className="border-t border-border p-4 shrink-0">
           <div className="flex items-center gap-3 p-2 rounded-lg bg-muted/50">
             <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary">
-              {user?.firstName?.[0]}
-              {user?.lastName?.[0]}
+              {firstInitial}{lastInitial}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">
-                {user?.firstName} {user?.lastName}
+                {userName}
               </p>
               <p className="text-xs text-muted-foreground truncate">
                 {userRole.charAt(0).toUpperCase() + userRole.slice(1)}

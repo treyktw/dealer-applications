@@ -34,7 +34,6 @@ import { Label } from "@/components/ui/label";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { convexQuery, convexMutation } from "@/lib/convex";
 import { api, type Id } from "@dealer/convex";
-import { useUser } from "@clerk/clerk-react";
 import { 
   Plus, 
   Mail, 
@@ -57,7 +56,6 @@ export const Route = createFileRoute("/teams")({
 });
 
 function TeamPage() {
-  const { user } = useUser();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
@@ -70,7 +68,6 @@ function TeamPage() {
   const { data: currentUser } = useQuery({
     queryKey: ["current-user"],
     queryFn: () => convexQuery(api.api.users.getCurrentUser, {}),
-    enabled: !!user,
   });
 
   // Get all team members

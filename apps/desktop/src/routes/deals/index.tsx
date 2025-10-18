@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { convexQuery } from '@/lib/convex';
 import { api, type Id } from '@dealer/convex';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth } from '@/components/auth/AuthContext';
 import { Layout } from '@/components/layout/layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -88,33 +88,26 @@ export const Route = createFileRoute('/deals/')({
 });
 
 function DealsPage() {
-  const { isSignedIn } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<SortBy>('recent');
 
-  // Fetch current user from Convex
-  const { data: currentUser, isLoading: userLoading } = useQuery({
-    queryKey: ['current-user'],
-    queryFn: () => convexQuery(api.api.users.getCurrentUser, {}),
-    enabled: isSignedIn,
-  });
-
   // Check subscription status FIRST before trying to access deals
   const { data: subscriptionStatus, isLoading: subscriptionLoading } = useQuery({
     queryKey: ['subscription-status'],
     queryFn: () => convexQuery(api.api.subscriptions.checkSubscriptionStatus, {}),
-    enabled: !!currentUser,
+    enabled: !!user,
   });
 
   // Fetch dealership information
   const { data: dealership, isLoading: dealershipLoading } = useQuery({
-    queryKey: ['dealership', currentUser?.dealershipId],
+    queryKey: ['dealership', user?.dealershipId],
     queryFn: () => convexQuery(api.api.dealerships.getDealershipById, { 
-      dealershipId: currentUser?.dealershipId as Id<"dealerships"> 
+      dealershipId: user?.dealershipId as Id<"dealerships"> 
     }),
-    enabled: !!currentUser?.dealershipId && subscriptionStatus?.hasActiveSubscription,
+    enabled: !!user?.dealershipId && !!subscriptionStatus?.hasActiveSubscription,
   });
 
   // Check if user has required features
@@ -124,18 +117,25 @@ function DealsPage() {
 
   // Only fetch deals if subscription is valid
   const { data: dealsData, isLoading: dealsLoading } = useQuery({
-    queryKey: ['deals', currentUser?.dealershipId, statusFilter, searchQuery],
+    queryKey: ['deals', user?.dealershipId, statusFilter, searchQuery],
     queryFn: async () => {
-      if (!currentUser?.dealershipId) return { deals: [] };
+      if (!user?.dealershipId) return { deals: [] };
       
       return await convexQuery(api.api.deals.getDeals, {
-        dealershipId: currentUser.dealershipId,
+        dealershipId: user.dealershipId,
         status: statusFilter !== 'all' ? statusFilter : undefined,
         search: searchQuery || undefined,
       });
     },
-    enabled: !!currentUser?.dealershipId && canAccessDeals,
+    enabled: !!user?.dealershipId && canAccessDeals,
   });
+
+  // User is guaranteed to exist here because AuthGuard protects this component
+  if (!user) {
+    return null;
+  }
+
+  const currentUser = user;
 
   const deals: Deal[] = Array.isArray(dealsData) ? dealsData : dealsData?.deals || [];
 
@@ -166,7 +166,7 @@ function DealsPage() {
     totalValue: deals.reduce((sum: number, d: Deal) => sum + (d.totalAmount || 0), 0),
   };
 
-  const isLoading = userLoading || subscriptionLoading || dealershipLoading;
+  const isLoading = subscriptionLoading || dealershipLoading;
 
   // Loading state
   if (isLoading) {
@@ -182,27 +182,8 @@ function DealsPage() {
     );
   }
 
-  // Handle missing current user
-  if (!currentUser) {
-    return (
-      <Layout>
-        <div className="p-8">
-          <Card>
-            <CardContent className="p-8 text-center">
-              <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h2 className="text-xl font-semibold mb-2">User Not Found</h2>
-              <p className="text-muted-foreground">
-                Please contact your administrator to be assigned to a dealership.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </Layout>
-    );
-  }
-
   // Handle missing dealership
-  if (!currentUser?.dealershipId) {
+  if (!currentUser.dealershipId) {
     return (
       <Layout>
         <div className="p-8">
@@ -330,7 +311,7 @@ function DealsPage() {
           <div>
             <h1 className="text-3xl font-bold">Deals</h1>
             <p className="text-muted-foreground mt-1">
-              {dealership?.name || 'Dealership'} - Manage all deals
+              {dealership?.name || 'Your Dealership'} - Manage all deals
             </p>
           </div>
           

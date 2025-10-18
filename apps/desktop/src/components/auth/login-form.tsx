@@ -1,51 +1,63 @@
 import { useState, useId } from "react"
-import { useSignIn } from "@clerk/clerk-react"
+import { useAuth } from "@/components/auth/AuthContext"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Eye, EyeOff, Loader2, ExternalLink } from "lucide-react"
+import { Loader2, ExternalLink, Mail, ArrowLeft } from "lucide-react"
 import { toast } from "react-hot-toast"
-import { cn } from "@/lib/utils"
 
 export function LoginForm() {
-  const { isLoaded, signIn, setActive } = useSignIn()
+  const { requestVerificationCode, verifyCode } = useAuth()
   const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
+  const [verificationCode, setVerificationCode] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [lockoutTimer] = useState(0)
-  const [rememberMe, setRememberMe] = useState(false)
+  const [step, setStep] = useState<"email" | "verify">("email")
+  const [devCode, setDevCode] = useState<string | undefined>()
   const [googleStatus, setGoogleStatus] = useState<string>("")
-  const rememberMeId = useId()
+  const emailInputId = useId()
+  const codeInputId = useId()
 
-  console.log('ENV CHECK:', {
-    webUrl: import.meta.env.VITE_WEB_URL_PROD,
-    clerkKey: import.meta.env.VITE_CLERK_PUBLISHABLE_KEY?.substring(0, 10) + '...',
-    mode: import.meta.env.MODE,
-  })
-
-  const handleEmailSignIn = async (e: React.FormEvent) => {
+  const handleRequestCode = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!isLoaded || !signIn) return
+    if (!email) return
 
     setIsLoading(true)
 
     try {
-      const result = await signIn.create({
-        identifier: email,
-        password,
-      })
-
-      if (result.status === "complete") {
-        await setActive({ session: result.createdSessionId })
-        toast.success("Welcome back!")
+      const result = await requestVerificationCode(email)
+      
+      if (result.success) {
+        setStep("verify")
+        // In development, show the code
+        if (result.code) {
+          setDevCode(result.code)
+          toast.success(`Verification code sent! (Dev: ${result.code})`, { duration: 8000 })
+        } else {
+          toast.success("Verification code sent to your email!")
+        }
       } else {
-        toast.error("Invalid credentials")
+        toast.error("Failed to send verification code")
       }
     } catch (error) {
-      console.error('Login error:', error)
-      toast.error("Invalid email or password")
+      console.error('Request code error:', error)
+      toast.error(error instanceof Error ? error.message : "Failed to send verification code")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email || !verificationCode) return
+
+    setIsLoading(true)
+
+    try {
+      await verifyCode(email, verificationCode)
+      toast.success("Welcome back!")
+    } catch (error) {
+      console.error('Verify code error:', error)
+      toast.error(error instanceof Error ? error.message : "Invalid verification code")
     } finally {
       setIsLoading(false)
     }
@@ -92,7 +104,7 @@ export function LoginForm() {
       <div className="space-y-2">
         <Button
           onClick={handleGoogleSignIn}
-          disabled={isLoading || lockoutTimer > 0}
+          disabled={isLoading || step === "verify"}
           variant="secondary"
           className="w-full"
         >
@@ -132,103 +144,125 @@ export function LoginForm() {
         </div>
         <div className="relative flex justify-center text-xs uppercase">
           <span className="bg-zinc-50 dark:bg-zinc-900 px-2 text-zinc-500 dark:text-zinc-400">
-            Or continue with
+            Or continue with email
           </span>
         </div>
       </div>
 
-      <form onSubmit={handleEmailSignIn} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="email" className="text-zinc-700 dark:text-zinc-200">
-            Email
-          </Label>
-          <Input
-            id={useId()}
-            type="email"
-            placeholder="admin@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={isLoading || lockoutTimer > 0}
-            required
-            className="bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-600 text-zinc-900 dark:text-white"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="password" className="text-zinc-700 dark:text-zinc-200">
-            Password
-          </Label>
-          <div className="relative">
-            <Input
-              id={useId()}
-              type={showPassword ? "text" : "password"}
-              value={password}
-              placeholder="Enter your password"
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={isLoading || lockoutTimer > 0}
-              required
-              className="bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-600 text-zinc-900 dark:text-white pr-10"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="absolute right-0 top-0 h-full px-3 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-              onClick={() => setShowPassword(!showPassword)}
-            >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id={rememberMeId}
-              checked={rememberMe}
-              onCheckedChange={(checked) => setRememberMe(checked as boolean)}
-              disabled={isLoading || lockoutTimer > 0}
-            />
-            <Label 
-              htmlFor={rememberMeId} 
-              className="text-sm text-zinc-700 dark:text-zinc-200 cursor-pointer"
-            >
-              Remember me
+      {step === "email" ? (
+        <form onSubmit={handleRequestCode} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-zinc-700 dark:text-zinc-200">
+              Email Address
             </Label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                id={emailInputId}
+                type="email"
+                placeholder="your@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={isLoading}
+                required
+                className="bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-600 text-zinc-900 dark:text-white pl-10"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              We'll send you a verification code to sign in
+            </p>
           </div>
-          <Button variant="link" className="text-sm">
-            Forgot Password?
+
+          <Button
+            type="submit"
+            disabled={isLoading || !email}
+            className="w-full bg-blue-600 hover:bg-blue-700"
+          >
+            {isLoading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              "Send Verification Code"
+            )}
           </Button>
-        </div>
+        </form>
+      ) : (
+        <form onSubmit={handleVerifyCode} className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-zinc-700 dark:text-zinc-200">
+              Email
+            </Label>
+            <div className="flex items-center gap-2 p-3 bg-muted rounded-md border">
+              <Mail className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">{email}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setStep("email")
+                  setVerificationCode("")
+                  setDevCode(undefined)
+                }}
+                className="ml-auto"
+              >
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Change
+              </Button>
+            </div>
+          </div>
 
-        <Button
-          type="submit"
-          disabled={isLoading || lockoutTimer > 0 || !email || !password}
-          className={cn(
-            "w-full",
-            lockoutTimer > 0 
-              ? "bg-red-600 hover:bg-red-600" 
-              : "bg-blue-600 hover:bg-blue-700"
-          )}
-        >
-          {isLoading ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : lockoutTimer > 0 ? (
-            `Locked (${lockoutTimer}s)`
-          ) : (
-            "Sign In"
-          )}
-        </Button>
-      </form>
+          <div className="space-y-2">
+            <Label htmlFor="code" className="text-zinc-700 dark:text-zinc-200">
+              Verification Code
+            </Label>
+            <Input
+              id={codeInputId}
+              type="text"
+              placeholder="Enter 6-digit code"
+              value={verificationCode}
+              onChange={(e) => setVerificationCode(e.target.value)}
+              disabled={isLoading}
+              required
+              maxLength={6}
+              className="bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-600 text-zinc-900 dark:text-white text-center text-lg tracking-widest"
+            />
+            {devCode && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Development code: {devCode}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Check your email for the verification code
+            </p>
+          </div>
 
-      {/* Debug Info */}
+          <Button
+            type="submit"
+            disabled={isLoading || verificationCode.length !== 6}
+            className="w-full bg-blue-600 hover:bg-blue-700"
+          >
+            {isLoading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              "Verify & Sign In"
+            )}
+          </Button>
+
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            className="w-full"
+            onClick={handleRequestCode}
+            disabled={isLoading}
+          >
+            Didn't receive code? Resend
+          </Button>
+        </form>
+      )}
+
       <div className="text-center text-xs text-muted-foreground space-y-1">
-        <p>Web URL: {import.meta.env.VITE_WEB_URL_DEV || 'NOT SET'}</p>
-        <p>Clerk Loaded: {isLoaded ? '✅' : '❌'}</p>
-      </div>
-
-      <div className="text-center text-xs text-muted-foreground space-y-1">
-        App Version v1.6
+        App Version v2.0 (Email Auth)
       </div>
     </div>
   )

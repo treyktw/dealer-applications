@@ -1,4 +1,4 @@
-// convex/http.ts - Updated with External API Routes
+// convex/http.ts - Updated with Verification Code Auth + External API Routes
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -27,7 +27,10 @@ if (!process.env.STRIPE_WEBHOOK_SECRET) {
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-// Stripe webhook handler (existing)
+// ============================================================================
+// STRIPE WEBHOOK (existing)
+// ============================================================================
+
 const stripeWebhook = httpAction(async (ctx, request) => {
   console.log("=== STRIPE WEBHOOK RECEIVED ===");
   console.log("Method:", request.method);
@@ -69,17 +72,21 @@ const stripeWebhook = httpAction(async (ctx, request) => {
 
     console.log("Webhook processed successfully");
     return new Response("OK", { status: 200 });
-  } catch (err: any) {
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
     console.error("Webhook processing error:", {
-      message: err.message,
-      stack: err.stack,
-      name: err.name,
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
     });
-    return new Response(`Webhook error: ${err.message}`, { status: 400 });
+    return new Response(`Webhook error: ${error.message}`, { status: 400 });
   }
 });
 
-// Health check endpoint
+// ============================================================================
+// HEALTH & STATUS ENDPOINTS (existing)
+// ============================================================================
+
 const healthCheck = httpAction(async (_ctx, _request) => {
   return new Response(JSON.stringify({
     status: "healthy",
@@ -94,7 +101,6 @@ const healthCheck = httpAction(async (_ctx, _request) => {
   });
 });
 
-// API status endpoint
 const apiStatus = httpAction(async (_ctx, _request) => {
   return new Response(JSON.stringify({
     message: "Dealership API is running",
@@ -102,7 +108,9 @@ const apiStatus = httpAction(async (_ctx, _request) => {
       "GET /api/vehicles/{dealershipId}",
       "GET /api/vehicle/{dealershipId}/{vehicleId}", 
       "GET /api/dealership/{dealershipId}",
-      "GET /api/search/{dealershipId}?q=search_term"
+      "GET /api/search/{dealershipId}?q=search_term",
+      "POST /auth/request-code",
+      "POST /auth/verify-code"
     ],
     rateLimit: {
       vehicles: "60 requests/hour per IP",
@@ -120,7 +128,120 @@ const apiStatus = httpAction(async (_ctx, _request) => {
   });
 });
 
-// Create and export the HTTP router
+// ============================================================================
+// EMAIL AUTH ENDPOINTS (VERIFICATION CODES)
+// ============================================================================
+
+/**
+ * Request verification code - public endpoint
+ * POST /auth/request-code
+ * Body: { email: string }
+ */
+const requestVerificationCodeHttp = httpAction(async (ctx, request) => {
+  if (request.method !== "POST") {
+    return new Response("Method not allowed", { status: 405 });
+  }
+
+  try {
+    const body = await request.json();
+    const { email } = body;
+
+    if (!email || typeof email !== 'string') {
+      return new Response(JSON.stringify({
+        error: "Email is required"
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Call the requestVerificationCode action from email-auth.ts  
+    const { api } = await import('./_generated/api');
+    const result = await ctx.runAction(api.emailAuth.requestVerificationCode, {
+      email: email.toLowerCase().trim(),
+    });
+
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    console.error("Verification code request error:", error);
+    return new Response(JSON.stringify({
+      error: error.message || "Failed to send verification code"
+    }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+});
+
+/**
+ * Verify code - public endpoint
+ * POST /auth/verify-code
+ * Body: { email: string, code: string }
+ */
+const verifyCodeHttp = httpAction(async (ctx, request) => {
+  if (request.method !== "POST") {
+    return new Response("Method not allowed", { status: 405 });
+  }
+
+  try {
+    const body = await request.json();
+    const { email, code } = body;
+
+    if (!email || typeof email !== 'string') {
+      return new Response(JSON.stringify({
+        error: "Email is required"
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (!code || typeof code !== 'string') {
+      return new Response(JSON.stringify({
+        error: "Code is required"
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Call the verifyCode mutation from email-auth.ts
+    const { api } = await import('./_generated/api');
+    const result = await ctx.runMutation(api.emailAuth.verifyCode, {
+      email: email.toLowerCase().trim(),
+      code: code.trim(),
+    });
+
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    console.error("Code verification error:", error);
+    return new Response(JSON.stringify({
+      error: error.message || "Failed to verify code"
+    }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+});
+
+// ============================================================================
+// HTTP ROUTER
+// ============================================================================
+
 const http = httpRouter();
 
 // Health and status endpoints
@@ -143,7 +264,36 @@ http.route({
   handler: stripeWebhook,
 });
 
-// External API routes for dealer websites
+// Email auth endpoints (VERIFICATION CODES)
+http.route({
+  path: "/auth/request-code",
+  method: "POST",
+  handler: requestVerificationCodeHttp,
+});
+
+http.route({
+  path: "/auth/verify-code",
+  method: "POST",
+  handler: verifyCodeHttp,
+});
+
+// CORS preflight for auth endpoints
+http.route({
+  path: "/auth/{path+}",
+  method: "OPTIONS",
+  handler: httpAction(async (_ctx, _request) => {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
+    });
+  }),
+});
+
+// External API routes for dealer websites (existing)
 http.route({
   path: "/api/vehicles/{dealershipId}",
   method: "GET",
@@ -168,14 +318,14 @@ http.route({
   handler: searchVehicles,
 });
 
-// CORS preflight for all API routes
+// CORS preflight for all API routes (existing)
 http.route({
   path: "/api/{path+}",
   method: "OPTIONS",
   handler: handleOptions,
 });
 
-// Catch-all for undefined API routes
+// Catch-all for undefined API routes (existing)
 http.route({
   path: "/api/{path+}",
   method: "GET",
