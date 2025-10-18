@@ -23,6 +23,7 @@ export default function DesktopCallbackPage() {
   const tokenGenerationInFlight = useRef(false);
   const tokenGenerated = useRef(false);
   const deepLinkAttempted = useRef(false);
+  const autoCloseTimer = useRef<NodeJS.Timeout | null>(null);
 
   // STABLE CALLBACK: Attempt deep link
   const attemptDeepLink = useCallback((token: string, state: string) => {
@@ -43,6 +44,12 @@ export default function DesktopCallbackPage() {
       
       // Clean up URL to prevent re-triggering on refresh
       window.history.replaceState(null, '', '/desktop-callback?done=1');
+      
+      // Start auto-close timer (1 minute)
+      autoCloseTimer.current = setTimeout(() => {
+        console.log('⏰ Auto-closing page after 1 minute');
+        window.close();
+      }, 60000);
     } catch (err) {
       console.error('❌ Failed to trigger deep link:', err);
     }
@@ -133,6 +140,12 @@ export default function DesktopCallbackPage() {
       tokenGenerated.current = false;
       deepLinkAttempted.current = false;
       wasReady.current = false;
+      
+      // Clear auto-close timer
+      if (autoCloseTimer.current) {
+        clearTimeout(autoCloseTimer.current);
+        autoCloseTimer.current = null;
+      }
     };
   }, []);
 
@@ -148,6 +161,12 @@ export default function DesktopCallbackPage() {
   // STABLE CALLBACK: Manual retry deep link
   const retryDeepLink = useCallback(() => {
     if (jwt && frozenState) {
+      // Clear existing timer
+      if (autoCloseTimer.current) {
+        clearTimeout(autoCloseTimer.current);
+        autoCloseTimer.current = null;
+      }
+      
       // Reset the guard to allow retry
       deepLinkAttempted.current = false;
       attemptDeepLink(jwt, frozenState);
@@ -292,7 +311,7 @@ export default function DesktopCallbackPage() {
           <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
             <p className="text-xs text-gray-600 text-center">
               🔒 This token will expire in 5 minutes. Do not share it with anyone.
-              You can close this window after returning to the desktop app.
+              This window will auto-close in 1 minute or you can close it manually.
             </p>
           </div>
         </div>

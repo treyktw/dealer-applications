@@ -11,8 +11,9 @@ import type { Doc } from "./_generated/dataModel";
 // CONSTANTS
 // ============================================================================
 
-const SESSION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const CLERK_JWKS_URL = "https://api.clerk.com/v1/jwks";
+// const SESSION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const SESSION_EXPIRY_MS = 60 * 1000; // Change to 1 minute for testing
+const CLERK_JWKS_URL = "https://thorough-eagle-17.clerk.accounts.dev/.well-known/jwks.json";
 
 // ============================================================================
 // TYPES
