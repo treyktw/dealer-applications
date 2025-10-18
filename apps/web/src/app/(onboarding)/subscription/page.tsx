@@ -27,7 +27,7 @@ export default function SubscriptionPage() {
   // Convex mutations and queries
   const createCheckoutSession = useAction(api.subscriptions.createCheckoutSession);
   const createUser = useMutation(api.users.createUser);
-  const subscriptionStatus = useQuery(api.subscriptions.checkSubscriptionStatus);
+  const subscriptionStatus = useQuery(api.subscriptions.checkSubscriptionStatus, {});
 
   // Create user when component mounts
   useEffect(() => {

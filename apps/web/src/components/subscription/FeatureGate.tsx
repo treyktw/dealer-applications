@@ -14,7 +14,7 @@ interface FeatureGateProps {
 }
 
 export function FeatureGate({ children, requiredPlan, fallback }: FeatureGateProps) {
-  const subscription = useQuery(api.subscriptions.checkSubscriptionStatus);
+  const subscription = useQuery(api.subscriptions.checkSubscriptionStatus, {});
 
   if (!subscription?.hasActiveSubscription) {
     return fallback || (

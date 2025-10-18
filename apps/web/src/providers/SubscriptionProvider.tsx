@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useCallback } from 'react'
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { useUser } from '@clerk/nextjs';
-import {  Id } from '@/convex/_generated/dataModel';
+import type { Id } from '@/convex/_generated/dataModel';
 
 // Define the subscription type based on your schema
 interface Subscription {
@@ -41,7 +41,7 @@ const SubscriptionContext = createContext<SubscriptionContextType | undefined>(u
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const { user, isLoaded } = useUser();
-  const subscriptionStatusQuery = useQuery(api.subscriptions.checkSubscriptionStatus);
+  const subscriptionStatusQuery = useQuery(api.subscriptions.checkSubscriptionStatus, {});
   const forceSyncCurrentUser = useMutation(api.subscriptions.forceSyncCurrentUser);
   const createUser = useMutation(api.users.createUser);
 
