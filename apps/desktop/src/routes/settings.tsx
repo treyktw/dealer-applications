@@ -13,7 +13,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { convexQuery, convexMutation } from "@/lib/convex";
 import { api, type Id } from "@dealer/convex";
-import { useUser } from "@clerk/clerk-react";
 import { 
   Building2,
   MapPin,
@@ -51,7 +50,6 @@ export const Route = createFileRoute("/settings")({
 });
 
 function SettingsPage() {
-  const { user } = useUser();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showApiKey, setShowApiKey] = useState(false);
@@ -73,13 +71,12 @@ function SettingsPage() {
   const { data: currentUser } = useQuery({
     queryKey: ["current-user"],
     queryFn: () => convexQuery(api.api.users.getCurrentUser, {}),
-    enabled: !!user,
   });
 
   const { data: dealership, isLoading } = useQuery({
     queryKey: ["current-dealership"],
     queryFn: () => convexQuery(api.api.dealerships.getCurrentDealership, {}),
-    enabled: !!user,
+    enabled: !!currentUser,
   });
 
   // Form state

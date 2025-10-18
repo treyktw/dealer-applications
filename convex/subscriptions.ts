@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { SubscriptionPlan, SubscriptionStatus, BillingCycle, SubscriptionFeatures } from "./schema";
 import Stripe from "stripe";
 import { api } from "./_generated/api";
+import { getAuthenticatedUser } from "./emailAuth";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2025-08-27.basil",
@@ -300,24 +301,12 @@ export const getDealershipSubscription = query({
 
 // Check subscription status
 export const checkSubscriptionStatus = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return { hasActiveSubscription: false, subscriptionStatus: "none" };
-    }
-
-    // console.log("Checking subscription for user:", identity.subject);
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .first();
-
-    // console.log("Found user:", user);
-
+  args: {
+    emailAuthToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx, args.emailAuthToken);
     if (!user) {
-      console.log("No user found for clerk ID:", identity.subject);
       return { hasActiveSubscription: false, subscriptionStatus: "none" };
     }
 

@@ -830,4 +830,32 @@ export default defineSchema({
   })
     .index("by_dealership_type", ["dealershipId", "templateType"])
     .index("by_dealership", ["dealershipId"]),
+
+  auth_sessions: defineTable({
+    userId: v.id("users"),
+    token: v.string(), // Session token stored in Tauri keyring
+    expiresAt: v.number(), // When session expires
+    createdAt: v.number(),
+    lastAccessedAt: v.number(), // Track activity
+    userAgent: v.optional(v.string()), // Device info
+    ipAddress: v.optional(v.string()), // For security logging
+  })
+    .index("by_token", ["token"])
+    .index("by_user", ["userId"])
+    .index("by_expiry", ["expiresAt"]),
+
+  // Active authentication sessions
+  verification_codes: defineTable({
+    userId: v.id("users"),
+    email: v.string(),
+    code: v.string(), // 6-digit code
+    expiresAt: v.number(), // Timestamp when code expires
+    used: v.boolean(), // Whether code has been used
+    usedAt: v.optional(v.number()), // When it was used
+    createdAt: v.number(),
+  })
+    .index("by_code", ["code"])
+    .index("by_email", ["email"])
+    .index("by_user", ["userId"])
+    .index("by_expiry", ["expiresAt"]),
 });

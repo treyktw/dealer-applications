@@ -14,7 +14,6 @@ import { Progress } from "@/components/ui/progress";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { convexQuery, convexMutation } from "@/lib/convex";
 import { api, type Id } from "@dealer/convex";
-import { useUser } from "@clerk/clerk-react";
 import {
   Calendar,
   TrendingUp,
@@ -34,7 +33,6 @@ export const Route = createFileRoute("/subscription")({
 });
 
 function SubscriptionPage() {
-  const { user } = useUser();
   const queryClient = useQueryClient();
 
   // Get subscription status
@@ -42,7 +40,6 @@ function SubscriptionPage() {
     queryKey: ["subscription-status"],
     queryFn: () =>
       convexQuery(api.api.subscriptions.checkSubscriptionStatus, {}),
-    enabled: !!user,
   });
 
 

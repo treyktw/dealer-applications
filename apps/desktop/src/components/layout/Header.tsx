@@ -1,6 +1,5 @@
 // src/components/layout/header-redesign.tsx
 import { useState } from "react";
-import { useUser, useClerk } from "@clerk/clerk-react";
 import { useNavigate } from "@tanstack/react-router";
 import { Search, Bell, Command, LogOut, User, Settings, CreditCard, HelpCircle, Sparkles } from "lucide-react";
 import { Input } from "../ui/input";
@@ -17,6 +16,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { ThemeToggle } from "../theme/theme-toggle";
 import { useSubscription } from "@/lib/subscription/SubscriptionProvider";
+import { useAuth } from "@/components/auth/AuthContext";
 import { cn } from "@/lib/utils";
 import { Separator } from "../ui/separator";
 
@@ -25,19 +25,28 @@ interface HeaderProps {
 }
 
 export function Header({ sidebarOpen }: HeaderProps) {
-  const { user } = useUser();
-  const clerk = useClerk();
   const navigate = useNavigate();
   const { subscription } = useSubscription();
+  const { user, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
 
-  const userRole = (user?.publicMetadata?.role as string) || "user";
-  const userInitials = `${user?.firstName?.[0] || ""}${user?.lastName?.[0] || ""}`;
+  // User is guaranteed to exist here because AuthGuard protects this component
+  if (!user) {
+    return null;
+  }
 
-  const handleSignOut = () => {
-    clerk.signOut().then(() => {
-      navigate({ to: "/login" });
-    });
+  const userName = user.name || "User";
+  const nameParts = userName.split(" ");
+  const firstName = nameParts[0];
+  const lastName = nameParts[1] || "";
+  const firstInitial = firstName[0] || "U";
+  const lastInitial = lastName[0] || "";
+  const userInitials = `${firstInitial}${lastInitial}`;
+  const userRole = user.role;
+
+  const handleSignOut = async () => {
+    await logout();
+    navigate({ to: "/login" });
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -105,14 +114,14 @@ export function Header({ sidebarOpen }: HeaderProps) {
                 className="gap-3 pl-2 pr-4 h-10 hover:bg-accent/50"
               >
                 <Avatar className="h-8 w-8 border-2 border-background shadow-sm">
-                  <AvatarImage src={user?.imageUrl} alt={user?.fullName || ""} />
+                  <AvatarImage src={user.image} alt={userName} />
                   <AvatarFallback className="bg-gradient-to-br from-primary to-primary/60 text-primary-foreground font-semibold">
                     {userInitials}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex flex-col items-start text-left">
                   <span className="text-sm font-medium leading-none">
-                    {user?.firstName} {user?.lastName}
+                    {firstName} {lastName}
                   </span>
                   <span className="text-xs text-muted-foreground mt-0.5">
                     {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
@@ -129,10 +138,10 @@ export function Header({ sidebarOpen }: HeaderProps) {
               <DropdownMenuLabel>
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium leading-none">
-                    {user?.fullName}
+                    {userName}
                   </p>
                   <p className="text-xs leading-none text-muted-foreground">
-                    {user?.primaryEmailAddress?.emailAddress}
+                    {user.email}
                   </p>
                 </div>
               </DropdownMenuLabel>

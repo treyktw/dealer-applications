@@ -27,6 +27,7 @@
     "@types/react-dom": "^19.1.9",
     "convex": "^1.26.2",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "resend": "^4.4.0"
   }
 }

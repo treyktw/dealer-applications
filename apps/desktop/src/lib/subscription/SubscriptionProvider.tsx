@@ -1,10 +1,10 @@
-import React, { createContext, useContext, useEffect, useCallback } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { convexMutation, convexQuery } from '@/lib/convex';
+// src/lib/subscription/SubscriptionProvider.tsx - Updated for Email Auth
+import React, { createContext, useContext } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { convexQuery } from '@/lib/convex';
 import { api } from '@dealer/convex';
-import { useAuth, useClerk } from '@clerk/clerk-react';
+import { useAuth } from '@/components/auth/AuthContext';
 
-// Define the subscription type based on your schema
 interface Subscription {
   _id: string;
   _creationTime: number;
@@ -39,57 +39,34 @@ interface SubscriptionContextType {
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
-  const { isLoaded } = useAuth();
-  const { user } = useClerk();
+  const { isAuthenticated, user } = useAuth();
   
   // Query subscription status
   const subscriptionStatusQuery = useQuery({
-    queryKey: ['subscription-status'],
+    queryKey: ['subscription-status', user?.dealershipId],
     queryFn: () => convexQuery(api.api.subscriptions.checkSubscriptionStatus, {}),
-    enabled: isLoaded && !!user,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    enabled: isAuthenticated && !!user?.dealershipId,
+    staleTime: 60000, // 1 minute
   });
 
-  // Force sync mutation
-  const forceSyncCurrentUser = useMutation({
-    mutationFn: () => convexMutation(api.api.subscriptions.forceSyncCurrentUser, {}),
-  });
+  const hasFeature = (feature: string): boolean => {
+    if (!subscriptionStatusQuery.data?.subscription?.features) return false;
+    return subscriptionStatusQuery.data.subscription.features.includes(feature);
+  };
 
-  const refreshStatus = useCallback(() => {
-    if (isLoaded && user) {
-      forceSyncCurrentUser.mutate();
-    }
-  }, [isLoaded, user, forceSyncCurrentUser]);
-
-  // Check if user has a specific feature
-  const hasFeature = useCallback((feature: string): boolean => {
-    return subscriptionStatusQuery.data?.subscription?.features?.includes(feature) || false;
-  }, [subscriptionStatusQuery.data]);
-
-  // Auto-refresh status every 30 seconds if subscription is pending
-  useEffect(() => {
-    if (subscriptionStatusQuery.data?.subscriptionStatus === "pending") {
-      const interval = setInterval(() => {
-        refreshStatus();
-      }, 30000); // 30 seconds
-
-      return () => clearInterval(interval);
-    }
-  }, [subscriptionStatusQuery.data?.subscriptionStatus, refreshStatus]);
-
-  const contextValue: SubscriptionContextType = {
-    isLoading: !isLoaded || subscriptionStatusQuery.isLoading,
-    hasActiveSubscription: subscriptionStatusQuery.data?.hasActiveSubscription || false,
-    hasPendingSubscription: subscriptionStatusQuery.data?.hasPendingSubscription || false,
-    subscriptionStatus: subscriptionStatusQuery.data?.subscriptionStatus || 'none',
-    subscription: subscriptionStatusQuery.data?.subscription || null,
-    dealershipId: subscriptionStatusQuery.data?.dealershipId || null,
-    refreshStatus,
+  const value: SubscriptionContextType = {
+    isLoading: subscriptionStatusQuery.isLoading,
+    hasActiveSubscription: subscriptionStatusQuery.data?.hasActiveSubscription ?? false,
+    hasPendingSubscription: subscriptionStatusQuery.data?.hasPendingSubscription ?? false,
+    subscriptionStatus: subscriptionStatusQuery.data?.subscriptionStatus ?? 'unknown',
+    subscription: subscriptionStatusQuery.data?.subscription ?? null,
+    dealershipId: user?.dealershipId ?? null,
+    refreshStatus: () => subscriptionStatusQuery.refetch(),
     hasFeature,
   };
 
   return (
-    <SubscriptionContext.Provider value={contextValue}>
+    <SubscriptionContext.Provider value={value}>
       {children}
     </SubscriptionContext.Provider>
   );
@@ -101,14 +78,4 @@ export function useSubscription() {
     throw new Error('useSubscription must be used within a SubscriptionProvider');
   }
   return context;
-}
-
-// Hook to check if user has deals management feature
-export function useDealsAccess() {
-  const { hasFeature, hasActiveSubscription } = useSubscription();
-  return {
-    canAccessDeals: hasActiveSubscription && hasFeature('deals_management'),
-    canAccessDesktop: hasActiveSubscription && hasFeature('desktop_app_access'),
-    canUploadCustomDocuments: hasActiveSubscription && hasFeature('custom_document_upload'),
-  };
 }

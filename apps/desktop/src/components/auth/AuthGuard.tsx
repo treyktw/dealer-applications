@@ -1,98 +1,73 @@
-import { useAuth, useUser } from "@clerk/clerk-react";
+// src/components/auth/AuthGuard.tsx - Updated for Email Auth
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useAuth } from "@/components/auth/AuthContext";
+import { useNavigate, useLocation } from "@tanstack/react-router";
 import { LoadingScreen } from "@/components/ui/loading-screen";
 
-const PUBLIC_ROUTES = ["/login", "/sso-callback", "/oauth-callback"];
-const LOADING_TIMEOUT = 3000; // 3 seconds
+const PUBLIC_ROUTES = ["/login", "/auth-verify"];
 
 interface AuthGuardProps {
   children: ReactNode;
 }
 
 export function AuthGuard({ children }: AuthGuardProps) {
-  const { isSignedIn, isLoaded } = useAuth();
-  const { user } = useUser();
-  const [showContent, setShowContent] = useState(false);
+  const { isLoading, isAuthenticated, user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   
-  const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
+  const currentPath = location.pathname;
   const isPublicRoute = PUBLIC_ROUTES.some(route => currentPath.startsWith(route));
 
+  // Redirect logic
   useEffect(() => {
-    // Method 1: Show immediately if Clerk is loaded
-    if (isLoaded) {
-      console.log('✅ Clerk loaded - showing content');
-      setShowContent(true);
+    if (isLoading) return; // Wait for auth to load
+
+    // If on public route and authenticated, redirect to home
+    if (isPublicRoute && isAuthenticated) {
+      navigate({ to: '/' });
       return;
     }
 
-    // Method 2: Show after timeout regardless
-    const timer = setTimeout(() => {
-      console.log('⏱️ Timeout reached - forcing content display');
-      setShowContent(true);
-    }, LOADING_TIMEOUT);
+    // If not authenticated and not on public route, redirect to login
+    if (!isPublicRoute && !isAuthenticated) {
+      const returnTo = `${currentPath}${location.search ? `?${location.search}` : ''}`;
+      navigate({ 
+        to: '/login',
+        search: { redirect: returnTo }
+      });
+      return;
+    }
+  }, [isLoading, isAuthenticated, isPublicRoute, currentPath, location.search, navigate]);
 
-    return () => clearTimeout(timer);
-  }, [isLoaded]);
-
-  // Quick exit for public routes
-  if (isPublicRoute) {
-    return <>{children}</>;
+  // Show loading while checking auth for private routes only
+  if (!isPublicRoute && isLoading) {
+    return <LoadingScreen message="Loading..." />;
   }
 
-  // Show loading only for first 3 seconds
-  if (!showContent) {
-    return <LoadingScreen message="Connecting to DealerPro..." />;
-  }
-
-  // After showing content, check auth
-  if (!isSignedIn) {
-    const currentUrl = window.location.pathname + window.location.search;
-    window.location.href = `/login?redirect=${encodeURIComponent(currentUrl)}`;
+  // Show loading while redirecting
+  if (!isPublicRoute && !isAuthenticated) {
     return <LoadingScreen message="Redirecting to login..." />;
   }
 
-  // Check dealership access
-  if (!user?.publicMetadata?.dealersoftwareAccess) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-6">
-        <div className="max-w-md text-center space-y-4">
-          <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
-            <span className="text-4xl">⚠️</span>
+  // Check dealership access (for authenticated users only)
+  if (isAuthenticated && !isPublicRoute) {
+    if (!user?.dealershipId) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background p-6">
+          <div className="max-w-md text-center space-y-4">
+            <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
+              <span className="text-4xl">⚠️</span>
+            </div>
+            <h2 className="text-2xl font-bold">Account Setup Required</h2>
+            <p className="text-muted-foreground">
+              Your account needs to be associated with a dealership. Please contact your administrator.
+            </p>
           </div>
-          <h2 className="text-2xl font-bold">Account Setup Required</h2>
-          <p className="text-muted-foreground">
-            Your account needs to be set up in the web portal before you can use the desktop app.
-          </p>
-          <div className="space-y-2">
-            <button
-              type="button"
-              onClick={() => window.open("https://dealer.universalautobrokers.com", "_blank")}
-              className="block w-full py-2 px-4 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-            >
-              Open Web Portal
-            </button>
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="block w-full py-2 px-4 border border-border rounded-md hover:bg-accent"
-            >
-              Refresh After Setup
-            </button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Contact your administrator if you need help
-          </p>
         </div>
-      </div>
-    );
+      );
+    }
   }
 
   return <>{children}</>;
 }
-
-
-
-
-
-

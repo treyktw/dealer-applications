@@ -1,109 +1,186 @@
-// src/routes/login.tsx
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { useAuth } from "@clerk/clerk-react";
-import { LoginForm } from "@/components/auth/login-form";
-import { ThemeToggle } from "@/components/theme/theme-toggle";
+// src/routes/login.tsx - Desktop SSO with Clerk
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Loader2, LogIn, Shield, CheckCircle2 } from "lucide-react";
+import { useAuth } from "@/components/auth/AuthContext";
 
 export const Route = createFileRoute("/login")({
-  beforeLoad: async ({ context }) => {
-    if (!context.auth?.isLoaded) {
-      return;
-    }
-
-    if (context.auth?.isSignedIn) {
-      throw redirect({ to: "/" });
-    }
-  },
   component: LoginPage,
 });
 
 function LoginPage() {
-  const { isSignedIn } = useAuth();
   const navigate = useNavigate();
+  const { isAuthenticated, isLoading, initiateLogin } = useAuth();
 
-
+  // Redirect if already authenticated
   useEffect(() => {
-    if (isSignedIn) {
+    if (isAuthenticated && !isLoading) {
       navigate({ to: "/" });
     }
-  }, [isSignedIn, navigate]);
+  }, [isAuthenticated, isLoading, navigate]);
+
+  const handleLogin = async () => {
+    try {
+      await initiateLogin();
+    } catch (error) {
+      console.error("Login initiation failed:", error);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 p-6">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left side - Image (2/3 of screen) */}
-      <div className="hidden lg:flex lg:w-2/3 relative">
-        <img
-          src="/ds-hero.jpg"
-          alt="Luxury car"
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-        {/* Overlay gradient */}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/50" />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 p-6">
+      <Card className="w-full max-w-md shadow-2xl border-0">
+        <CardHeader className="text-center space-y-4 pb-8">
+          {/* Logo/Icon */}
+          <div className="mx-auto w-20 h-20 bg-gradient-to-br from-primary to-primary/60 rounded-2xl flex items-center justify-center shadow-lg">
+            <svg
+              className="w-10 h-10 text-white"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-label="DealerPro Logo"
+              role="img"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+              />
+            </svg>
+          </div>
 
-        {/* Optional: Add branding on the image */}
-        <div className="relative z-10 flex items-end p-12">
+          {/* Title */}
           <div>
-            <h1 className="text-5xl font-bold text-white mb-4">
-              Dealer Management
-            </h1>
-            <p className="text-xl text-white/80">
-              Streamline your dealership operations
-            </p>
+            <CardTitle className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+              DealerPro Desktop
+            </CardTitle>
+            <CardDescription className="text-base mt-2">
+              Sign in to access your dealership
+            </CardDescription>
           </div>
-        </div>
-      </div>
+        </CardHeader>
 
-      {/* Right side - Login form (1/3 of screen) */}
-      <div className="w-full lg:w-1/3 flex items-center justify-center bg-zinc-50 dark:bg-zinc-900 relative">
-        {/* Theme Toggle */}
-        <div className="absolute top-6 right-6">
-          <ThemeToggle />
-        </div>
+        <CardContent className="space-y-6">
+          {/* Sign In Button */}
+          <Button
+            onClick={handleLogin}
+            size="lg"
+            className="w-full h-12 text-base font-semibold shadow-lg hover:shadow-xl transition-all"
+          >
+            <LogIn className="mr-2 h-5 w-5" />
+            Sign in with your account
+          </Button>
 
-        {/* Login Form Container */}
-        <div className="w-full max-w-md px-8">
-          <div className="w-full">
-            {/* Logo */}
-            <div className="flex justify-center mb-8">
-              <img src="/logo.png" alt="Dealer Software" className="w-50 h-50" />
-            </div>
-
-            {/* Header */}
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                Welcome Back
-              </h2>
-              <p className="text-gray-600 dark:text-gray-400">
-                Sign in to your account to continue
-              </p>
-            </div>
-
-            {/* Login Form with updated styling */}
-            <div className="space-y-6">
-              <LoginForm />
-            </div>
-
-            {/* Footer */}
-            <p className="text-center text-gray-600 dark:text-gray-400 mt-8 text-sm">
-              Don't have an account?{" "}
-              <span className="text-blue-600 dark:text-blue-400 font-medium">
-                Contact your administrator
-              </span>
+          {/* How it works */}
+          <div className="space-y-3 pt-4">
+            <p className="text-sm font-medium text-center text-muted-foreground">
+              How it works:
             </p>
-          </div>
-        </div>
-      </div>
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 text-sm">
+                <div className="mt-0.5">
+                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-bold text-primary">1</span>
+                  </div>
+                </div>
+                <p className="text-muted-foreground">
+                  Click the button to open your browser
+                </p>
+              </div>
 
-      {/* Mobile view - Show image as background */}
-      <div className="lg:hidden absolute inset-0 -z-10">
-        <img
-          src="/ds-hero.jpg"
-          alt="Luxury car"
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-black/60" />
-      </div>
+              <div className="flex items-start gap-3 text-sm">
+                <div className="mt-0.5">
+                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-bold text-primary">2</span>
+                  </div>
+                </div>
+                <p className="text-muted-foreground">
+                  Sign in with your email and password
+                </p>
+              </div>
+
+              <div className="flex items-start gap-3 text-sm">
+                <div className="mt-0.5">
+                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-bold text-primary">3</span>
+                  </div>
+                </div>
+                <p className="text-muted-foreground">
+                  Return to the app and start working
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Security Notice */}
+          <div className="mt-6 p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 rounded-lg">
+            <div className="flex items-start gap-3">
+              <Shield className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-green-900 dark:text-green-100">
+                  Secure Authentication
+                </p>
+                <p className="text-xs text-green-700 dark:text-green-300">
+                  Your credentials are never stored in the desktop app. We use
+                  enterprise-grade authentication to keep your account safe.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Features */}
+          <div className="mt-6 space-y-2 pt-4 border-t">
+            <p className="text-xs font-medium text-muted-foreground text-center mb-3">
+              DESKTOP FEATURES
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <CheckCircle2 className="w-4 h-4 text-primary" />
+                <span>7-day sessions</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <CheckCircle2 className="w-4 h-4 text-primary" />
+                <span>Offline access</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <CheckCircle2 className="w-4 h-4 text-primary" />
+                <span>Fast performance</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <CheckCircle2 className="w-4 h-4 text-primary" />
+                <span>Native integration</span>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+
+        {/* Footer */}
+        <div className="px-6 py-4 bg-muted/30 text-center border-t">
+          <p className="text-xs text-muted-foreground">
+            DealerPro Desktop v2.0 • {new Date().getFullYear()}
+          </p>
+        </div>
+      </Card>
     </div>
   );
 }

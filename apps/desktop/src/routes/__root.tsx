@@ -1,36 +1,43 @@
 // src/routes/__root.tsx
-import { createRootRouteWithContext, Outlet } from '@tanstack/react-router'
+import { createRootRoute, Outlet } from '@tanstack/react-router'
 import { Toaster } from 'react-hot-toast'
+import { AuthGuard } from '@/components/auth/AuthGuard'
+import { SubscriptionProvider } from '@/lib/subscription/SubscriptionProvider'
 
-type AuthContext = {
-  auth: {
-    isLoaded: boolean;
-    isSignedIn: boolean;
-    userId: string | null | undefined;
-  };
-};
-
-export const Route = createRootRouteWithContext<AuthContext>()({
+export const Route = createRootRoute({
   component: RootComponent,
 })
 
 function RootComponent() {
-  
-  // Pass auth context down to all routes
   return (
-    <>
-      <Outlet />
-      <Toaster 
-        position="top-right"
-        toastOptions={{
-          className: '',
-          style: {
-            background: '#1e293b',
-            color: '#fff',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-          },
-        }}
-      />
-    </>
+    <AuthGuard>
+      <SubscriptionProvider>
+        <Outlet />
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 3000,
+            style: {
+              background: '#363636',
+              color: '#fff',
+            },
+            success: {
+              duration: 3000,
+              iconTheme: {
+                primary: '#10b981',
+                secondary: '#fff',
+              },
+            },
+            error: {
+              duration: 4000,
+              iconTheme: {
+                primary: '#ef4444',
+                secondary: '#fff',
+              },
+            },
+          }}
+        />
+      </SubscriptionProvider>
+    </AuthGuard>
   )
 }
