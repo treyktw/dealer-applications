@@ -1,7 +1,7 @@
-// app/desktop-callback/page.tsx - Generates JWT and triggers deep link back to desktop
+// app/desktop-callback/page.tsx - Refactored with stable callbacks and guards
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth, useUser } from '@clerk/nextjs';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle2, Copy, ExternalLink, AlertCircle, Loader2 } from 'lucide-react';
@@ -14,40 +14,76 @@ export default function DesktopCallbackPage() {
   const [jwt, setJwt] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [autoLinkAttempted, setAutoLinkAttempted] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'generating' | 'success'>('idle');
 
-  const state = searchParams.get('state');
+  // Freeze state on mount
+  const [frozenState] = useState(() => searchParams.get('state'));
+  
+  // Single-flight guards
+  const tokenGenerationInFlight = useRef(false);
+  const tokenGenerated = useRef(false);
+  const deepLinkAttempted = useRef(false);
 
+  // STABLE CALLBACK: Attempt deep link
   const attemptDeepLink = useCallback((token: string, state: string) => {
+    if (deepLinkAttempted.current) {
+      console.log('⚠️ Deep link already attempted, skipping');
+      return;
+    }
+
     try {
       const deepLink = `dealer-sign://auth/callback?token=${encodeURIComponent(token)}&state=${encodeURIComponent(state)}`;
-      console.log('🔗 Attempting deep link:', deepLink);
+      console.log('🔗 Attempting deep link:', deepLink.substring(0, 80) + '...');
       
-      // Try to trigger deep link
+      // Critical line - triggers browser to ask "Open DealerPro Desktop?"
       window.location.href = deepLink;
       
-      console.log('✅ Deep link triggered - browser will prompt to open app');
+      deepLinkAttempted.current = true;
+      console.log('✅ Deep link triggered - browser should prompt to open app');
+      
+      // Clean up URL to prevent re-triggering on refresh
+      window.history.replaceState(null, '', '/desktop-callback?done=1');
     } catch (err) {
       console.error('❌ Failed to trigger deep link:', err);
     }
   }, []);
 
+  // STABLE CALLBACK: Generate JWT
   const generateJWT = useCallback(async () => {
-    if (!isLoaded) return;
+    // Guard: prevent concurrent or duplicate generation
+    if (tokenGenerationInFlight.current || tokenGenerated.current) {
+      console.log('⚠️ Token generation already in progress or completed');
+      return;
+    }
+
+    // Validate all preconditions BEFORE starting
+    if (!isLoaded) {
+      console.log('⏳ Waiting for Clerk to load...');
+      return;
+    }
     
     if (!isSignedIn || !user) {
+      console.error('❌ Not authenticated');
       setError('Not authenticated. Please sign in first.');
       return;
     }
 
-    if (!state) {
+    if (!frozenState) {
+      console.error('❌ Missing state parameter');
       setError('Invalid request - missing state parameter');
       return;
     }
 
+    // All checks passed - proceed with generation
+    tokenGenerationInFlight.current = true;
+    setStatus('generating');
+
     try {
-      // Get JWT token from Clerk using the desktop-app template
       console.log('🔐 Generating JWT with desktop-app template...');
+      console.log('  User:', user.primaryEmailAddress?.emailAddress);
+      console.log('  State:', frozenState.substring(0, 10) + '...');
+      
+      // Get JWT token from Clerk using the desktop-app template
       const token = await getToken({ template: 'desktop-app' });
       
       if (!token) {
@@ -55,23 +91,52 @@ export default function DesktopCallbackPage() {
       }
 
       console.log('✅ JWT generated successfully');
+      console.log('  Token length:', token.length);
+      console.log('  Token preview:', token.substring(0, 30) + '...');
+      
       setJwt(token);
+      tokenGenerated.current = true;
+      setStatus('success');
 
-      // Automatically attempt deep link
-      if (!autoLinkAttempted) {
-        setAutoLinkAttempted(true);
-        attemptDeepLink(token, state);
-      }
+      // Automatically attempt deep link once
+      console.log('📱 Auto-triggering deep link...');
+      attemptDeepLink(token, frozenState);
+      
     } catch (err) {
       console.error('❌ JWT generation failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to generate token');
+      setStatus('idle');
+    } finally {
+      tokenGenerationInFlight.current = false;
     }
-  }, [isLoaded, isSignedIn, user, state, getToken, autoLinkAttempted, attemptDeepLink]);
+  }, [isLoaded, isSignedIn, user, frozenState, getToken, attemptDeepLink]);
 
+  // EFFECT: Trigger JWT generation when ready
+  // Uses a "transition watcher" pattern - only runs when we go from not-ready to ready
+  const wasReady = useRef(false);
   useEffect(() => {
-    generateJWT();
-  }, [generateJWT]);
+    const ready = isLoaded && isSignedIn && !!user && !!frozenState;
+    
+    // Only act on false → true transition
+    if (ready && !wasReady.current) {
+      console.log('✅ All conditions met, generating JWT...');
+      wasReady.current = true;
+      generateJWT();
+    }
+  }, [isLoaded, isSignedIn, user, frozenState, generateJWT]);
 
+  // EFFECT: Reset guards on unmount (for dev hot reload)
+  useEffect(() => {
+    return () => {
+      console.log('🔌 Callback page unmounting, resetting guards');
+      tokenGenerationInFlight.current = false;
+      tokenGenerated.current = false;
+      deepLinkAttempted.current = false;
+      wasReady.current = false;
+    };
+  }, []);
+
+  // STABLE CALLBACK: Copy token
   const copyToken = useCallback(() => {
     if (jwt) {
       navigator.clipboard.writeText(jwt);
@@ -80,12 +145,16 @@ export default function DesktopCallbackPage() {
     }
   }, [jwt]);
 
+  // STABLE CALLBACK: Manual retry deep link
   const retryDeepLink = useCallback(() => {
-    if (jwt && state) {
-      attemptDeepLink(jwt, state);
+    if (jwt && frozenState) {
+      // Reset the guard to allow retry
+      deepLinkAttempted.current = false;
+      attemptDeepLink(jwt, frozenState);
     }
-  }, [jwt, state, attemptDeepLink]);
+  }, [jwt, frozenState, attemptDeepLink]);
 
+  // Error state
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-red-100 p-6">
@@ -109,7 +178,8 @@ export default function DesktopCallbackPage() {
     );
   }
 
-  if (!jwt) {
+  // Loading state
+  if (!jwt || status === 'generating') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
         <div className="max-w-md w-full">
@@ -121,12 +191,16 @@ export default function DesktopCallbackPage() {
             <p className="text-gray-600">
               Generating secure token for desktop app
             </p>
+            <p className="text-sm text-gray-500 mt-4">
+              This should only take a moment
+            </p>
           </div>
         </div>
       </div>
     );
   }
 
+  // Success state
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 p-6">
       <div className="max-w-lg w-full">
@@ -153,7 +227,8 @@ export default function DesktopCallbackPage() {
               <div>
                 <p className="font-medium text-gray-900">Browser Prompt</p>
                 <p className="text-sm text-gray-600 mt-1">
-                  Your browser should prompt you to &quot;Open DealerPro Desktop&quot;. Click <strong>Open</strong> or <strong>Allow</strong>.
+                  Your browser should have prompted you to &quot;Open DealerPro Desktop&quot;. 
+                  If you clicked <strong>Open</strong>, you&apos;re all set!
                 </p>
               </div>
             </div>
@@ -163,9 +238,9 @@ export default function DesktopCallbackPage() {
                 2
               </div>
               <div>
-                <p className="font-medium text-gray-900">Manual Return (if needed)</p>
+                <p className="font-medium text-gray-900">Didn&apos;t See a Prompt?</p>
                 <p className="text-sm text-gray-600 mt-1">
-                  If the prompt didn&apos;t appear, click the button below to try again.
+                  Click the button below to try again, or check if DealerPro Desktop is already open.
                 </p>
               </div>
             </div>

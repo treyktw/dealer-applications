@@ -7,7 +7,6 @@ import { AuthProvider } from "@/components/auth/AuthContext";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { convexClient } from "@/lib/convex";
 import "./App.css";
-import { AuthDebug } from "./components/auth/AuthDebug";
 
 const router = createRouter({
   routeTree,
@@ -39,7 +38,6 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <AuthProvider>
-          <AuthDebug />
             <RouterProvider router={router} />
           </AuthProvider>
         </ThemeProvider>
