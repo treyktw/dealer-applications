@@ -1,30 +1,10 @@
-// src-tauri/src/security.rs - Enhanced with detailed error logging
+// src-tauri/src/security.rs - FIXED: Accept dynamic key names
 use keyring::Entry;
 use std::sync::Mutex;
-use once_cell::sync::Lazy;
 
 const SERVICE_NAME: &str = "net.universalautobrokers.dealersoftware";
-const USERNAME: &str = "session-token";
 
 static KEYRING_LOCK: Mutex<()> = Mutex::new(());
-
-// Keep Entry persistent
-static PERSISTENT_ENTRY: Lazy<Entry> = Lazy::new(|| {
-    println!("🔐 Creating persistent keychain entry");
-    println!("   Service: {}", SERVICE_NAME);
-    println!("   Account: {}", USERNAME);
-    
-    match Entry::new(SERVICE_NAME, USERNAME) {
-        Ok(entry) => {
-            println!("✅ Keychain entry created successfully");
-            entry
-        }
-        Err(e) => {
-            eprintln!("❌ CRITICAL: Failed to create keychain entry: {}", e);
-            panic!("Cannot proceed without keychain access");
-        }
-    }
-});
 
 #[tauri::command]
 pub async fn store_secure(key: String, value: String) -> Result<(), String> {
@@ -34,14 +14,15 @@ pub async fn store_secure(key: String, value: String) -> Result<(), String> {
     println!("🔐 STORE_SECURE CALLED");
     println!("═══════════════════════════════════");
     println!("   Service: {}", SERVICE_NAME);
-    println!("   Account: {}", USERNAME);
-    println!("   Key parameter: {}", key);
+    println!("   Account: {}", key);  // ✅ Use the key parameter!
     println!("   Value length: {}", value.len());
     println!("   Value preview: {}...", &value[..20.min(value.len())]);
     
-    let entry = &*PERSISTENT_ENTRY;
+    // ✅ Create entry with dynamic key
+    let entry = Entry::new(SERVICE_NAME, &key)
+        .map_err(|e| format!("Failed to create entry: {}", e))?;
     
-    // Try to delete existing entry (ignore errors)
+    // Delete existing entry (ignore errors)
     println!("🗑️ Attempting to delete existing entry...");
     match entry.delete_credential() {
         Ok(_) => println!("   Deleted existing entry"),
@@ -57,7 +38,6 @@ pub async fn store_secure(key: String, value: String) -> Result<(), String> {
         Ok(_) => println!("✅ set_password() succeeded"),
         Err(e) => {
             eprintln!("❌ set_password() FAILED: {}", e);
-            eprintln!("   Error type: {:?}", e);
             return Err(format!("Store failed: {}", e));
         }
     }
@@ -70,17 +50,12 @@ pub async fn store_secure(key: String, value: String) -> Result<(), String> {
     match entry.get_password() {
         Ok(stored) => {
             println!("✅ VERIFICATION SUCCESS");
-            println!("   Retrieved length: {}", stored.len());
-            println!("   Original length: {}", value.len());
-            println!("   Lengths match: {}", stored.len() == value.len());
             
             let matches = stored == value;
             println!("   Values match: {}", matches);
             
             if !matches {
                 eprintln!("❌ VALUE MISMATCH!");
-                eprintln!("   Expected: {}...", &value[..20.min(value.len())]);
-                eprintln!("   Got: {}...", &stored[..20.min(stored.len())]);
                 return Err("Verification failed: value mismatch".to_string());
             }
             
@@ -88,10 +63,7 @@ pub async fn store_secure(key: String, value: String) -> Result<(), String> {
             Ok(())
         }
         Err(e) => {
-            eprintln!("❌ VERIFICATION FAILED");
-            eprintln!("   Could not retrieve after storing!");
-            eprintln!("   Error: {}", e);
-            eprintln!("   Error type: {:?}", e);
+            eprintln!("❌ VERIFICATION FAILED: {}", e);
             Err(format!("Verification failed: {}", e))
         }
     }
@@ -105,12 +77,13 @@ pub async fn retrieve_secure(key: String) -> Result<Option<String>, String> {
     println!("🔍 RETRIEVE_SECURE CALLED");
     println!("═══════════════════════════════════");
     println!("   Service: {}", SERVICE_NAME);
-    println!("   Account: {}", USERNAME);
-    println!("   Key parameter: {}", key);
+    println!("   Account: {}", key);  // ✅ Use the key parameter!
     
     std::thread::sleep(std::time::Duration::from_millis(50));
     
-    let entry = &*PERSISTENT_ENTRY;
+    // ✅ Create entry with dynamic key
+    let entry = Entry::new(SERVICE_NAME, &key)
+        .map_err(|e| format!("Failed to create entry: {}", e))?;
     
     println!("📡 Calling get_password()...");
     match entry.get_password() {
@@ -124,14 +97,12 @@ pub async fn retrieve_secure(key: String) -> Result<Option<String>, String> {
             println!("⚠️  NO ENTRY FOUND");
             println!("   Searched for:");
             println!("     Service: {}", SERVICE_NAME);
-            println!("     Account: {}", USERNAME);
+            println!("     Account: {}", key);
             println!("   This is normal on first launch or after logout");
             Ok(None)
         }
         Err(e) => {
             eprintln!("❌ RETRIEVE ERROR: {}", e);
-            eprintln!("   Error type: {:?}", e);
-            eprintln!("   This might indicate a keychain permission issue");
             Err(format!("Retrieve failed: {}", e))
         }
     }
@@ -145,10 +116,11 @@ pub async fn remove_secure(key: String) -> Result<(), String> {
     println!("🗑️ REMOVE_SECURE CALLED");
     println!("═══════════════════════════════════");
     println!("   Service: {}", SERVICE_NAME);
-    println!("   Account: {}", USERNAME);
-    println!("   Key parameter: {}", key);
+    println!("   Account: {}", key);  // ✅ Use the key parameter!
     
-    let entry = &*PERSISTENT_ENTRY;
+    // ✅ Create entry with dynamic key
+    let entry = Entry::new(SERVICE_NAME, &key)
+        .map_err(|e| format!("Failed to create entry: {}", e))?;
     
     match entry.delete_credential() {
         Ok(_) => {
