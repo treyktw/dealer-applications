@@ -10,7 +10,7 @@ const client = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL);
 const STORAGE_KEY = 'dealer_auth_token';
 
 // Helper to get stored token
-async function getStoredToken(): Promise<string | null> {
+export async function getStoredToken(): Promise<string | null> {
   try {
     const token = await invoke<string | null>('retrieve_secure', { key: STORAGE_KEY });
     return token;
@@ -25,9 +25,8 @@ export async function convexQuery<Query extends FunctionReference<"query">>(
   query: Query,
   args: Query["_args"]
 ): Promise<FunctionReturnType<Query>> {
-  const token = await getStoredToken();
-  const argsWithAuth = token ? { ...args, authToken: token } : args;
-  return client.query(query, argsWithAuth as Query["_args"]);
+  // Desktop auth: token passed explicitly in args, don't auto-inject
+  return client.query(query, args);  // ✅ Just pass args as-is
 }
 
 // Helper to run Convex mutations with auto-injected auth token
@@ -35,9 +34,8 @@ export async function convexMutation<Mutation extends FunctionReference<"mutatio
   mutation: Mutation,
   args: Mutation["_args"]
 ): Promise<FunctionReturnType<Mutation>> {
-  const token = await getStoredToken();
-  const argsWithAuth = token ? { ...args, authToken: token } : args;
-  return client.mutation(mutation, argsWithAuth as Mutation["_args"]);
+  // Desktop auth: token passed explicitly in args, don't auto-inject
+  return client.mutation(mutation, args);  // ✅ Just pass args as-is
 }
 
 // Helper to run Convex actions

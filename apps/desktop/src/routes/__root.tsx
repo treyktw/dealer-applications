@@ -3,12 +3,37 @@ import { createRootRoute, Outlet } from '@tanstack/react-router'
 import { Toaster } from 'react-hot-toast'
 import { AuthGuard } from '@/components/auth/AuthGuard'
 import { SubscriptionProvider } from '@/lib/subscription/SubscriptionProvider'
+import { useEffect } from 'react'
+import { setupDeepLinkListener } from '@/lib/deeplink-listener'
 
 export const Route = createRootRoute({
   component: RootComponent,
 })
 
 function RootComponent() {
+
+  useEffect(() => {
+    console.log('🚀 Root layout mounting - setting up deep link listener...');
+    
+    let unlisten: (() => void) | undefined;
+    
+    setupDeepLinkListener()
+      .then((unlistenFn) => {
+        unlisten = unlistenFn;
+        console.log('✅ Deep link listener setup complete');
+      })
+      .catch((error) => {
+        console.error('❌ Failed to setup deep link listener:', error);
+      });
+    
+    return () => {
+      console.log('🔌 Root layout unmounting - cleaning up');
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, []);
+
   return (
     <AuthGuard>
       <SubscriptionProvider>
