@@ -95,6 +95,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (result) {
           setConvexAuth(storedToken);
+          console.log("🔍 Session data:", result);
+          console.log("🔍 Session Data object:", sessionData?.user);
           return result;
         } else {
           await removeToken();
@@ -110,7 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     },
     enabled: !!storedToken && !tokenLoading,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 5 * 60 * 1000000,
     retry: false,
   });
 

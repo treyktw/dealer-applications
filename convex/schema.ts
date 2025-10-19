@@ -91,6 +91,17 @@ export default defineSchema({
     needsOnboarding: v.optional(v.boolean()),
     subscriptionStatus: v.optional(v.string()),
     subscriptionId: v.optional(v.id("subscriptions")),
+    // User settings
+    settings: v.optional(v.object({
+      emailNotifications: v.boolean(),
+      pushNotifications: v.boolean(),
+      dealUpdates: v.boolean(),
+      marketingEmails: v.boolean(),
+      theme: v.string(),
+      language: v.string(),
+      profileVisibility: v.string(),
+      activityTracking: v.boolean(),
+    })),
     // Security fields
     failedLoginAttempts: v.optional(v.number()),
     lastFailedLogin: v.optional(v.number()),
@@ -844,18 +855,4 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_expiry", ["expiresAt"]),
 
-  // Active authentication sessions
-  verification_codes: defineTable({
-    userId: v.id("users"),
-    email: v.string(),
-    code: v.string(), // 6-digit code
-    expiresAt: v.number(), // Timestamp when code expires
-    used: v.boolean(), // Whether code has been used
-    usedAt: v.optional(v.number()), // When it was used
-    createdAt: v.number(),
-  })
-    .index("by_code", ["code"])
-    .index("by_email", ["email"])
-    .index("by_user", ["userId"])
-    .index("by_expiry", ["expiresAt"]),
 });

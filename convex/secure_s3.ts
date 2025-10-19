@@ -940,7 +940,7 @@ export const updateBucketCors = action({
     dealershipId: v.id("dealerships"),
   },
   handler: async (ctx, _args) => {
-    const dealership = await ctx.runQuery(api.dealerships.getCurrentDealership);
+    const dealership = await ctx.runQuery(api.dealerships.getCurrentDealership, {});
     if (!dealership?.s3BucketName) {
       throw new ConvexError("Dealership S3 bucket not configured");
     }

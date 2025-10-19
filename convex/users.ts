@@ -10,6 +10,7 @@ import { internalQuery, internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { UserRole } from "./schema";
 import { internal } from "./_generated/api";
+import { api } from "./_generated/api";
 
 // User roles
 export const USER_ROLES = ["ADMIN", "STAFF", "READONLY"] as const;
@@ -666,6 +667,72 @@ export const updateUser = mutation({
 
     console.log("Updated user successfully");
     return user._id;
+  },
+});
+
+ // Update user settings - Desktop compatible
+export const updateUserSettings = mutation({
+  args: {
+    userId: v.id("users"),
+    settings: v.object({
+      emailNotifications: v.boolean(),
+      pushNotifications: v.boolean(),
+      dealUpdates: v.boolean(),
+      marketingEmails: v.boolean(),
+      theme: v.string(),
+      language: v.string(),
+      profileVisibility: v.string(),
+      activityTracking: v.boolean(),
+    }),
+    token: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Desktop auth: validate token
+    if (args.token) {
+      try {
+        const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { 
+          token: args.token 
+        });
+        if (!sessionData) {
+          throw new Error("Invalid or expired session");
+        }
+        // Verify user has access to update their own settings
+        if (sessionData.user.id !== args.userId) {
+          throw new Error("Not authorized to update these settings");
+        }
+      } catch (error) {
+        console.error("Desktop auth validation failed:", error);
+        throw new Error("Authentication failed");
+      }
+    } else {
+      // Web auth: use Clerk
+      const identity = await ctx.auth.getUserIdentity();
+      if (!identity) {
+        throw new Error("Not authenticated");
+      }
+
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+        .first();
+
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      // Verify user has access to update their own settings
+      if (user._id !== args.userId) {
+        throw new Error("Not authorized to update these settings");
+      }
+    }
+
+    // Update user settings
+    await ctx.db.patch(args.userId, {
+      settings: args.settings,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
   },
 });
 

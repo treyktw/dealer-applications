@@ -32,6 +32,8 @@ tauri-plugin-store = "2"
 aes-gcm = "0.10"      # AES-256-GCM encryption
 base64 = "0.22"       # Base64 encoding/decoding
 rand = "0.9.2"          # Random number generation
+tauri-plugin-process = "2"
+tauri-plugin-dialog = "2"
 
 # Desktop-specific dependencies (macOS, Windows, Linux)
 [target."cfg(any(target_os = \"macos\", windows, target_os = \"linux\"))".dependencies]
@@ -39,3 +41,6 @@ rand = "0.9.2"          # Random number generation
 tauri-plugin-single-instance = { version = "2.0.0", features = ["deep-link"] }
 # Deep link plugin - works on all desktop platforms
 tauri-plugin-deep-link = "2.0.0"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"

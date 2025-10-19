@@ -1,4 +1,4 @@
-// src/components/layout/sidebar-redesign.tsx
+// src/components/layout/sidebar.tsx - Type-safe version
 import { Link, useLocation } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -15,14 +15,11 @@ import {
   Home,
   FileText,
   Settings,
-  Users,
   Building2,
   CreditCard,
-  Bell,
   HelpCircle,
   ChevronLeft,
   Sparkles,
-  BarChart3,
   UserCircle,
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthContext";
@@ -40,7 +37,15 @@ interface NavItem {
   requiresRole?: string[];
 }
 
-const NavItem = ({ item, isOpen, isActive }: { item: NavItem; isOpen: boolean; isActive: (path: string) => boolean }) => {
+const NavItem = ({
+  item,
+  isOpen,
+  isActive,
+}: {
+  item: NavItem;
+  isOpen: boolean;
+  isActive: (path: string) => boolean;
+}) => {
   const Icon = item.icon;
   const active = isActive(item.path);
 
@@ -102,11 +107,8 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
     return null;
   }
 
-  const userName = user.name || "User";
-  const nameParts = userName.split(" ");
-  const firstInitial = nameParts[0]?.[0] || "U";
-  const lastInitial = nameParts[1]?.[0] || "";
-  const userRole = user.role;
+  // Normalize role to lowercase for comparison
+  const userRole = user.role?.toLowerCase() || "";
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
@@ -129,25 +131,11 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
           icon: FileText,
           badge: null,
         },
-        {
-          name: "Analytics",
-          path: "/analytics",
-          icon: BarChart3,
-          badge: "Pro",
-          requiresRole: ["admin", "manager"],
-        },
       ],
     },
     {
       label: "Management",
       items: [
-        {
-          name: "Team",
-          path: "/teams",
-          icon: Users,
-          badge: null,
-          requiresRole: ["admin", "manager"],
-        },
         {
           name: "Dealership",
           path: "/dealership",
@@ -173,12 +161,6 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
           badge: null,
         },
         {
-          name: "Notifications",
-          path: "/notifications",
-          icon: Bell,
-          badge: "3",
-        },
-        {
           name: "Settings",
           path: "/settings",
           icon: Settings,
@@ -194,7 +176,6 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
     },
   ];
 
-
   return (
     <aside
       className={cn(
@@ -205,8 +186,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
     >
       {/* Logo Section */}
       <div className="h-16 border-b border-border px-4 flex items-center justify-between shrink-0">
-        {isOpen ? (
-          <div className="flex items-center gap-2">
+          <div className={cn("flex items-center gap-2", isOpen ? "flex" : "hidden")}>
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-sm">
               <Sparkles className="h-4 w-4 text-primary-foreground" />
             </div>
@@ -215,12 +195,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
               <span className="text-xs text-muted-foreground">v2.0</span>
             </div>
           </div>
-        ) : (
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-sm mx-auto sm:hidden">
-            <Sparkles className="h-4 w-4 text-primary-foreground" />
-          </div>
-        )}
-        
+
         <Button
           variant="ghost"
           size="icon"
@@ -246,46 +221,30 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
               )}
               <div className="space-y-2">
                 {group.items.map((item) => {
-                  // Check if user has permission
-                  if ('requiresRole' in item && item.requiresRole && !item.requiresRole.includes(userRole)) {
+                  // Check if user has permission (case-insensitive)
+                  if (
+                    "requiresRole" in item &&
+                    item.requiresRole &&
+                    !item.requiresRole.includes(userRole)
+                  ) {
                     return null;
                   }
                   return (
-                    <NavItem 
-                      key={item.path} 
-                      item={item} 
-                      isOpen={isOpen} 
-                      isActive={isActive} 
+                    <NavItem
+                      key={item.path}
+                      item={item}
+                      isOpen={isOpen}
+                      isActive={isActive}
                     />
                   );
                 })}
               </div>
-              {navigationGroups.indexOf(group) < navigationGroups.length - 1 && (
-                <Separator className="my-4" />
-              )}
+              {navigationGroups.indexOf(group) <
+                navigationGroups.length - 1 && <Separator className="my-4" />}
             </div>
           ))}
         </div>
       </ScrollArea>
-
-      {/* User Section */}
-      {isOpen && (
-        <div className="border-t border-border p-4 shrink-0">
-          <div className="flex items-center gap-3 p-2 rounded-lg bg-muted/50">
-            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary">
-              {firstInitial}{lastInitial}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">
-                {userName}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">
-                {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </aside>
   );
 }

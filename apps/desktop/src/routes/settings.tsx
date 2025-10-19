@@ -1,157 +1,122 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router"
-// src/routes/settings/index.tsx
+// src/routes/settings.tsx
+import { createFileRoute } from "@tanstack/react-router";
 import { Layout } from "@/components/layout/layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { convexQuery, convexMutation } from "@/lib/convex";
-import { api, type Id } from "@dealer/convex";
-import { 
-  Building2,
-  MapPin,
-  Phone,
-  Mail,
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Settings as SettingsIcon,
+  Bell,
+  Moon,
   Globe,
-  Palette,
   Shield,
-  Key,
-  Upload,
   Save,
-  AlertCircle,
-  Lock,
-  Eye,
-  EyeOff,
+  X,
 } from "lucide-react";
 import { useId, useState } from "react";
-import { toast } from "react-hot-toast";
-
-// Type definitions
-interface DealershipFormData {
-  name?: string;
-  description?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
-  phone?: string;
-  email?: string;
-  website?: string;
-}
+import { toast } from "sonner";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { convexClient } from "@/lib/convex";
+import { api, Id } from "@dealer/convex";
+import { useAuth } from "@/components/auth/AuthContext";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
 });
 
 function SettingsPage() {
-  const navigate = useNavigate();
+  const { user, session } = useAuth();
   const queryClient = useQueryClient();
-  const [showApiKey, setShowApiKey] = useState(false);
-  
-  // Generate all IDs at the top level
-  const nameId = useId();
-  const descriptionId = useId();
-  const phoneId = useId();
-  const emailId = useId();
-  const websiteId = useId();
-  const addressId = useId();
-  const cityId = useId();
-  const stateId = useId();
-  const zipCodeId = useId();
-  const primaryColorId = useId();
-  const secondaryColorId = useId();
+  const [isEditing, setIsEditing] = useState(false);
 
-  // Get current user and dealership
-  const { data: currentUser } = useQuery({
-    queryKey: ["current-user"],
-    queryFn: () => convexQuery(api.api.users.getCurrentUser, {}),
+  const emailNotificationsId = useId();
+  const pushNotificationsId = useId();
+  const dealUpdatesId = useId();
+  const marketingEmailsId = useId();
+  const themeId = useId();
+  const languageId = useId();
+  const profileVisibilityId = useId();
+  const activityTrackingId = useId();
+  // Settings state
+  const [settings, setSettings] = useState({
+    // Notifications
+    emailNotifications: true,
+    pushNotifications: true,
+    dealUpdates: true,
+    marketingEmails: false,
+
+    // Appearance
+    theme: "system",
+    language: "en",
+
+    // Privacy
+    profileVisibility: "team",
+    activityTracking: true,
   });
 
-  const { data: dealership, isLoading } = useQuery({
-    queryKey: ["current-dealership"],
-    queryFn: () => convexQuery(api.api.dealerships.getCurrentDealership, {}),
-    enabled: !!currentUser,
-  });
+  // Update settings mutation
+  const updateSettingsMutation = useMutation({
+    mutationFn: async (data: typeof settings) => {
+      if (!user?.id) {
+        throw new Error("User not found");
+      }
 
-  // Form state
-  const [dealershipForm, setDealershipForm] = useState({
-    name: "",
-    description: "",
-    address: "",
-    city: "",
-    state: "",
-    zipCode: "",
-    phone: "",
-    email: "",
-    website: "",
-  });
+      const token = session?.token;
+      if (!token) {
+        throw new Error("No authentication token found");
+      }
 
-  // Update form when dealership data loads
-  useState(() => {
-    if (dealership) {
-      setDealershipForm({
-        name: dealership.name || "",
-        description: dealership.description || "",
-        address: dealership.address || "",
-        city: dealership.city || "",
-        state: dealership.state || "",
-        zipCode: dealership.zipCode || "",
-        phone: dealership.phone || "",
-        email: dealership.email || "",
-        website: dealership.website || "",
-      });
-    }
-  });
-
-  // Update dealership mutation
-  const updateDealershipMutation = useMutation({
-    mutationFn: async (data: DealershipFormData) => {
-      return await convexMutation(api.api.dealerships.updateDealershipSettings, {
-        dealershipId: dealership?._id as Id<"dealerships">,
-        ...data,
+      return await convexClient.mutation(api.api.users.updateUserSettings, {
+        userId: user.id as Id<"users">,
+        settings: {
+          emailNotifications: data.emailNotifications,
+          pushNotifications: data.pushNotifications,
+          dealUpdates: data.dealUpdates,
+          marketingEmails: data.marketingEmails,
+          theme: data.theme,
+          language: data.language,
+          profileVisibility: data.profileVisibility,
+          activityTracking: data.activityTracking,
+        },
+        token: token,
       });
     },
     onSuccess: () => {
-      toast.success("Dealership settings updated successfully");
-      queryClient.invalidateQueries({ queryKey: ["current-dealership"] });
+      queryClient.invalidateQueries({ queryKey: ["auth-session"] });
+      toast.success("Settings saved successfully!");
+      setIsEditing(false);
     },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to update settings");
+    onError: (error: Error) => {
+      toast.error("Failed to save settings", {
+        description: error.message,
+      });
     },
   });
 
-  const handleSaveDealership = () => {
-    updateDealershipMutation.mutate(dealershipForm);
+  const handleSave = () => {
+    updateSettingsMutation.mutate(settings);
   };
 
-  if (currentUser?.role !== "ADMIN") {
-    return (
-      <Layout>
-        <div className="max-w-2xl mx-auto mt-12">
-          <Card>
-            <CardContent className="p-12 text-center">
-              <AlertCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-              <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
-              <p className="text-muted-foreground mb-6">
-                You need administrator privileges to access settings.
-              </p>
-              <Button onClick={() => navigate({ to: "/" })}>
-                Return to Dashboard
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </Layout>
-    );
-  }
+  const handleCancel = () => {
+    // Reset to original values (you might want to fetch from user object if stored)
+    setIsEditing(false);
+  };
 
-  if (isLoading) {
+  if (!user) {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
@@ -168,373 +133,293 @@ function SettingsPage() {
     <Layout>
       <div className="max-w-4xl mx-auto space-y-8">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold">Settings</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your dealership and account settings
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Settings</h1>
+            <p className="text-muted-foreground mt-1">
+              Manage your application preferences and settings
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {isEditing ? (
+              <>
+                <Button variant="outline" onClick={handleCancel}>
+                  <X className="mr-2 h-4 w-4" />
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSave}
+                  disabled={updateSettingsMutation.isPending}
+                >
+                  {updateSettingsMutation.isPending ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Save Changes
+                    </>
+                  )}
+                </Button>
+              </>
+            ) : (
+              <Button variant="outline" onClick={() => setIsEditing(true)}>
+                <SettingsIcon className="mr-2 h-4 w-4" />
+                Edit Settings
+              </Button>
+            )}
+          </div>
         </div>
 
-        <Tabs defaultValue="dealership" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="dealership">
-              <Building2 className="h-4 w-4 mr-2" />
-              Dealership
-            </TabsTrigger>
-            <TabsTrigger value="appearance">
-              <Palette className="h-4 w-4 mr-2" />
-              Appearance
-            </TabsTrigger>
-            <TabsTrigger value="security">
-              <Shield className="h-4 w-4 mr-2" />
-              Security
-            </TabsTrigger>
-            <TabsTrigger value="integrations">
-              <Key className="h-4 w-4 mr-2" />
-              Integrations
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Dealership Tab */}
-          <TabsContent value="dealership" className="space-y-6">
-            {/* Basic Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Basic Information</CardTitle>
-                <CardDescription>
-                  Your dealership's public information
+        {/* Notifications */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-blue-500/10 rounded-xl">
+                <Bell className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <CardTitle>Notifications</CardTitle>
+                <CardDescription className="mt-1">
+                  Configure how you receive notifications
                 </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Dealership Name</Label>
-                  <Input
-                    id={nameId}
-                    value={dealershipForm.name}
-                    onChange={(e) => setDealershipForm({ ...dealershipForm, name: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id={descriptionId}
-                    rows={3}
-                    value={dealershipForm.description}
-                    onChange={(e) => setDealershipForm({ ...dealershipForm, description: e.target.value })}
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id={phoneId}
-                        type="tel"
-                        className="pl-10"
-                        value={dealershipForm.phone}
-                        onChange={(e) => setDealershipForm({ ...dealershipForm, phone: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id={emailId}
-                        type="email"
-                        className="pl-10"
-                        value={dealershipForm.email}
-                        onChange={(e) => setDealershipForm({ ...dealershipForm, email: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="website">Website</Label>
-                  <div className="relative">
-                    <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id={websiteId}
-                      type="url"
-                      className="pl-10"
-                      value={dealershipForm.website}
-                      onChange={(e) => setDealershipForm({ ...dealershipForm, website: e.target.value })}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="email-notifications">Email Notifications</Label>
+                <p className="text-sm text-muted-foreground">
+                  Receive notifications via email
+                </p>
+              </div>
+              <Switch
+                id={emailNotificationsId}
+                checked={settings.emailNotifications}
+                onCheckedChange={(checked) =>
+                  setSettings({ ...settings, emailNotifications: checked })
+                }
+                disabled={!isEditing}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="push-notifications">Push Notifications</Label>
+                <p className="text-sm text-muted-foreground">
+                  Receive push notifications on desktop
+                </p>
+              </div>
+              <Switch
+                id={pushNotificationsId}
+                checked={settings.pushNotifications}
+                onCheckedChange={(checked) =>
+                  setSettings({ ...settings, pushNotifications: checked })
+                }
+                disabled={!isEditing}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="deal-updates">Deal Updates</Label>
+                <p className="text-sm text-muted-foreground">
+                  Get notified when deals change status
+                </p>
+              </div>
+              <Switch
+                id={dealUpdatesId}
+                checked={settings.dealUpdates}
+                onCheckedChange={(checked) =>
+                  setSettings({ ...settings, dealUpdates: checked })
+                }
+                disabled={!isEditing}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="marketing-emails">Marketing Emails</Label>
+                <p className="text-sm text-muted-foreground">
+                  Receive updates about new features and promotions
+                </p>
+              </div>
+              <Switch
+                id={marketingEmailsId}
+                checked={settings.marketingEmails}
+                onCheckedChange={(checked) =>
+                  setSettings({ ...settings, marketingEmails: checked })
+                }
+                disabled={!isEditing}
+              />
+            </div>
+          </CardContent>
+        </Card>
 
-            {/* Location */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5" />
-                  Location
-                </CardTitle>
-                <CardDescription>
-                  Your dealership's physical address
+        {/* Appearance */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-purple-500/10 rounded-xl">
+                <Moon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div>
+                <CardTitle>Appearance</CardTitle>
+                <CardDescription className="mt-1">
+                  Customize how the application looks
                 </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="address">Street Address</Label>
-                  <Input
-                    id={addressId}
-                    value={dealershipForm.address}
-                    onChange={(e) => setDealershipForm({ ...dealershipForm, address: e.target.value })}
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="city">City</Label>
-                    <Input
-                      id={cityId}
-                      value={dealershipForm.city}
-                      onChange={(e) => setDealershipForm({ ...dealershipForm, city: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="state">State</Label>
-                    <Input
-                      id={stateId}
-                      value={dealershipForm.state}
-                      onChange={(e) => setDealershipForm({ ...dealershipForm, state: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2 max-w-xs">
-                  <Label htmlFor="zipCode">ZIP Code</Label>
-                  <Input
-                    id={zipCodeId}
-                    value={dealershipForm.zipCode}
-                    onChange={(e) => setDealershipForm({ ...dealershipForm, zipCode: e.target.value })}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex justify-end">
-              <Button
-                onClick={handleSaveDealership}
-                disabled={updateDealershipMutation.isPending}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="theme">Theme</Label>
+              <Select
+                value={settings.theme}
+                onValueChange={(value) =>
+                  setSettings({ ...settings, theme: value })
+                }
+                disabled={!isEditing}
               >
-                <Save className="mr-2 h-4 w-4" />
-                {updateDealershipMutation.isPending ? "Saving..." : "Save Changes"}
+                <SelectTrigger id={themeId}>
+                  <SelectValue placeholder="Select theme" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="light">Light</SelectItem>
+                  <SelectItem value="dark">Dark</SelectItem>
+                  <SelectItem value="system">System</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                Choose your preferred color theme
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="language">Language</Label>
+              <Select
+                value={settings.language}
+                onValueChange={(value) =>
+                  setSettings({ ...settings, language: value })
+                }
+                disabled={!isEditing}
+              >
+                <SelectTrigger id={languageId}>
+                  <SelectValue placeholder="Select language" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="es">Español</SelectItem>
+                  <SelectItem value="fr">Français</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                Select your preferred language
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Privacy & Security */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-orange-500/10 rounded-xl">
+                <Shield className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div>
+                <CardTitle>Privacy & Security</CardTitle>
+                <CardDescription className="mt-1">
+                  Control your privacy and security settings
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="profile-visibility">Profile Visibility</Label>
+              <Select
+                value={settings.profileVisibility}
+                onValueChange={(value) =>
+                  setSettings({ ...settings, profileVisibility: value })
+                }
+                disabled={!isEditing}
+              >
+                <SelectTrigger id={profileVisibilityId}>
+                  <SelectValue placeholder="Select visibility" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="public">Public</SelectItem>
+                  <SelectItem value="team">Team Only</SelectItem>
+                  <SelectItem value="private">Private</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                Control who can see your profile information
+              </p>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="activity-tracking">Activity Tracking</Label>
+                <p className="text-sm text-muted-foreground">
+                  Allow tracking of your activity for analytics
+                </p>
+              </div>
+              <Switch
+                id={activityTrackingId}
+                checked={settings.activityTracking}
+                onCheckedChange={(checked) =>
+                  setSettings({ ...settings, activityTracking: checked })
+                }
+                disabled={!isEditing}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Regional Settings */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-green-500/10 rounded-xl">
+                <Globe className="h-6 w-6 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <CardTitle>Regional Settings</CardTitle>
+                <CardDescription className="mt-1">
+                  Configure timezone and regional preferences
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-4 rounded-lg border">
+              <div>
+                <p className="font-medium">Timezone</p>
+                <p className="text-sm text-muted-foreground">
+                  {Intl.DateTimeFormat().resolvedOptions().timeZone}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => toast.info("Timezone settings coming soon!")}
+              >
+                Change
               </Button>
             </div>
-          </TabsContent>
-
-          {/* Appearance Tab */}
-          <TabsContent value="appearance" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Logo & Branding</CardTitle>
-                <CardDescription>
-                  Customize your dealership's appearance
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div>
-                  <Label>Dealership Logo</Label>
-                  <div className="mt-2 flex items-center gap-4">
-                    <Avatar className="h-20 w-20 rounded-lg">
-                      <AvatarImage src={dealership?.logo} />
-                      <AvatarFallback className="rounded-lg bg-primary/10 text-primary font-bold text-2xl">
-                        {dealership?.name?.charAt(0) || "D"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex gap-2">
-                      <Button variant="outline">
-                        <Upload className="mr-2 h-4 w-4" />
-                        Upload Logo
-                      </Button>
-                      <Button variant="outline" disabled={!dealership?.logo}>
-                        Remove
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Recommended: Square image, at least 200x200px
-                  </p>
-                </div>
-
-                <Separator />
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="primaryColor">Primary Color</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id={primaryColorId}
-                        type="color"
-                        value={dealership?.primaryColor || "#3b82f6"}
-                        className="w-20 h-10"
-                      />
-                      <Input
-                        value={dealership?.primaryColor || "#3b82f6"}
-                        readOnly
-                        className="flex-1"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="secondaryColor">Secondary Color</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id={secondaryColorId}
-                        type="color"
-                        value={dealership?.secondaryColor || "#8b5cf6"}
-                        className="w-20 h-10"
-                      />
-                      <Input
-                        value={dealership?.secondaryColor || "#8b5cf6"}
-                        readOnly
-                        className="flex-1"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Appearance
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Security Tab */}
-          <TabsContent value="security" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5" />
-                  Security Settings
-                </CardTitle>
-                <CardDescription>
-                  Manage access control and security features
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Two-Factor Authentication</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Require 2FA for all team members
-                    </p>
-                  </div>
-                  <Switch />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>IP Whitelisting</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Restrict access to specific IP addresses
-                    </p>
-                  </div>
-                  <Switch />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Session Timeout</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Auto-logout after 30 minutes of inactivity
-                    </p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Activity Log</CardTitle>
-                <CardDescription>
-                  Recent security events and user activity
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg border">
-                      <Lock className="h-4 w-4 text-muted-foreground" />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">User login from new device</p>
-                        <p className="text-xs text-muted-foreground">2 hours ago</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Integrations Tab */}
-          <TabsContent value="integrations" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Key className="h-5 w-5" />
-                  API Access
-                </CardTitle>
-                <CardDescription>
-                  Manage API keys and integrations
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="p-4 rounded-lg border bg-muted/50">
-                  <div className="flex items-center justify-between mb-2">
-                    <Label>API Key</Label>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowApiKey(!showApiKey)}
-                    >
-                      {showApiKey ? (
-                        <><EyeOff className="h-4 w-4 mr-2" /> Hide</>
-                      ) : (
-                        <><Eye className="h-4 w-4 mr-2" /> Show</>
-                      )}
-                    </Button>
-                  </div>
-                  <Input
-                    value={showApiKey ? "sk_live_1234567890abcdef" : "••••••••••••••••"}
-                    readOnly
-                    className="font-mono"
-                  />
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Keep your API key secure. Don't share it publicly.
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline">Regenerate Key</Button>
-                  <Button variant="outline">View Documentation</Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Connected Services</CardTitle>
-                <CardDescription>
-                  Third-party integrations and services
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8 text-muted-foreground">
-                  No integrations connected yet
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+            <div className="flex items-center justify-between p-4 rounded-lg border">
+              <div>
+                <p className="font-medium">Date Format</p>
+                <p className="text-sm text-muted-foreground">MM/DD/YYYY</p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => toast.info("Date format settings coming soon!")}
+              >
+                Change
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </Layout>
   );

@@ -53,6 +53,16 @@
       "desktop": {
         "schemes": ["dealer-sign"]
       }
+    },
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/treyktw/dealer-applications/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      },
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg3MUQwMkM2QTFGOTUyQkYKUldTL1V2bWh4Z0lkaDJOaDg2VUN4enp6aTljTkR3Tm9NREgvL2tOYUh3YnlMcGJGTzZCK1N6aHAK%"
     }
   }
 }

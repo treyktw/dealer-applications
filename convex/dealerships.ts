@@ -1,6 +1,65 @@
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
-import { query } from "./_generated/server";
+import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
+import { api } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
+
+// Helper function to require authentication (supports both web and desktop)
+async function requireAuth(ctx: QueryCtx | MutationCtx, token?: string): Promise<Doc<"users">> {
+  let user: Doc<"users"> | null = null;
+
+  // Desktop auth: validate token
+  if (token) {
+    try {
+      const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { 
+        token 
+      });
+      if (!sessionData) {
+        throw new Error("Invalid or expired session");
+      }
+      // Map desktop auth user to Convex user format
+      const desktopUser = sessionData.user;
+      user = {
+        _id: desktopUser.id as Id<"users">,
+        _creationTime: Date.now(),
+        clerkId: "",
+        email: desktopUser.email,
+        name: desktopUser.name,
+        role: desktopUser.role,
+        dealershipId: desktopUser.dealershipId,
+        image: desktopUser.image,
+        subscriptionStatus: desktopUser.subscriptionStatus,
+        permissions: [],
+        isActive: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      } as Doc<"users">;
+    } catch (error) {
+      console.error("Desktop auth validation failed:", error);
+      throw new Error("Authentication failed");
+    }
+  } else {
+    // Web auth: use Clerk
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+  }
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  return user;
+}
 
 export const createDealership = mutation({
   args: {
@@ -19,6 +78,7 @@ export const createDealership = mutation({
     s3BucketName: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
+    token: v.optional(v.string()), // Optional for backward compatibility
   },
   handler: async (ctx, args) => {
     console.log("Creating dealership with args:", args);
@@ -61,30 +121,19 @@ export const updateDealership = mutation({
     logo: v.optional(v.string()),
     primaryColor: v.optional(v.string()),
     secondaryColor: v.optional(v.string()),
+    licenseNumber: v.optional(v.string()),
+    token: v.optional(v.string()), // Optional for backward compatibility
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
-
-    // Get user's dealership ID
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .first();
-
-    if (!user) {
-      throw new Error("User not found");
-    }
+    const user = await requireAuth(ctx, args.token);
 
     // Verify user has access to the dealership
     if (user.dealershipId !== args.dealershipId) {
       throw new Error("Not authorized to update this dealership");
     }
 
-    // Remove dealershipId from the update data
-    const { dealershipId, ...updateData } = args;
+    // Remove dealershipId and token from the update data
+    const { dealershipId, token, ...updateData } = args;
 
     // Update dealership
     await ctx.db.patch(dealershipId, {
@@ -111,30 +160,18 @@ export const updateDealershipSettings = mutation({
     logo: v.optional(v.string()),
     primaryColor: v.optional(v.string()),
     secondaryColor: v.optional(v.string()),
+    token: v.optional(v.string()), // Optional for backward compatibility
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
-
-    // Get user's dealership ID
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .first();
-
-    if (!user) {
-      throw new Error("User not found");
-    }
+    const user = await requireAuth(ctx, args.token);
 
     // Verify user has access to the dealership
     if (user.dealershipId !== args.dealershipId) {
       throw new Error("Not authorized to update this dealership's settings");
     }
 
-    // Remove dealershipId from the update data
-    const { dealershipId, ...updateData } = args;
+    // Remove dealershipId and token from the update data
+    const { dealershipId, token, ...updateData } = args;
 
     // Update dealership settings
     await ctx.db.patch(dealershipId, {
@@ -163,41 +200,67 @@ export const updateUserClerkId = mutation({
   },
 });
 
-// FIXED - Consistent ClerkId handling
+// Support both web and desktop auth
 export const getCurrentDealership = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    // console.log("Auth identity:", identity);
-    
-    if (!identity) {
-      // console.log("No identity found");
-      return null;
+  args: {
+    token: v.optional(v.string()), // Optional for backward compatibility
+  },
+  handler: async (ctx, args): Promise<Doc<"dealerships"> | null> => {
+    let user: Doc<"users"> | null = null;
+
+    // Desktop auth: validate token
+    if (args.token) {
+      try {
+        const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { 
+          token: args.token 
+        });
+        if (!sessionData) {
+          return null;
+        }
+        // Map desktop auth user to Convex user format
+        const desktopUser = sessionData.user;
+        user = {
+          _id: desktopUser.id as Id<"users">,
+          _creationTime: Date.now(),
+          clerkId: "",
+          email: desktopUser.email,
+          name: desktopUser.name,
+          role: desktopUser.role,
+          dealershipId: desktopUser.dealershipId,
+          image: desktopUser.image,
+          subscriptionStatus: desktopUser.subscriptionStatus,
+          permissions: [],
+          isActive: true,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as Doc<"users">;
+      } catch (error) {
+        console.error("Desktop auth validation failed:", error);
+        return null;
+      }
+    } else {
+      // Web auth: use Clerk
+      const identity = await ctx.auth.getUserIdentity();
+      if (!identity) {
+        return null;
+      }
+
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+        .first();
+      
+      if (!user) {
+        console.log("No user found for clerkId:", identity.subject);
+        return null;
+      }
     }
 
-    // Use identity.subject consistently (not tokenIdentifier)
-    // console.log("Searching for user with clerkId:", identity.subject);
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .first();
-    
-    // console.log("User found by clerkId:", user);
-
-    if (!user) {
-      console.log("No user found for clerkId:", identity.subject);
-      return null;
-    }
-
-    if (!user.dealershipId) {
-      console.log("User has no dealershipId");
+    if (!user || !user.dealershipId) {
       return null;
     }
 
     const dealership = await ctx.db.get(user.dealershipId);
-    // console.log("Found dealership:", dealership);
-    
     return dealership || null;
   },
 });
@@ -207,11 +270,33 @@ export const getDealershipById = query({
     dealershipId: v.id("dealerships"),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
+    await requireAuth(ctx, args.dealershipId);
 
     const dealership = await ctx.db.get(args.dealershipId);
     if (!dealership) throw new Error("Dealership not found");
+
+    return dealership;
+  },
+});
+
+// New query specifically for desktop app
+export const getDealership = query({
+  args: {
+    dealershipId: v.id("dealerships"),
+    token: v.optional(v.string()), // Optional for backward compatibility
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuth(ctx, args.token);
+
+    // Verify user has access to this dealership
+    if (user.dealershipId !== args.dealershipId) {
+      throw new Error("Not authorized to view this dealership");
+    }
+
+    const dealership = await ctx.db.get(args.dealershipId);
+    if (!dealership) {
+      throw new Error("Dealership not found");
+    }
 
     return dealership;
   },

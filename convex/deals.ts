@@ -1,29 +1,55 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { api } from "./_generated/api";
-import { requireAuth } from "./emailAuth";
+import type { Doc } from "./_generated/dataModel";
+
+// Helper function to require authentication
+async function requireAuth(ctx: QueryCtx, token?: string): Promise<any> {
+  if (!token) {
+    throw new Error("Authentication token required");
+  }
+
+  // Validate session using desktopAuth
+  const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, {
+    token,
+  });
+  if (!sessionData) {
+    throw new Error("Invalid or expired session");
+  }
+
+  return sessionData.user;
+}
 
 export const getDeals = query({
   args: {
     dealershipId: v.string(),
     status: v.optional(v.string()),
     search: v.optional(v.string()),
-    emailAuthToken: v.optional(v.string()), // For desktop app auth
+    token: v.optional(v.string()), // For desktop app auth
   },
   handler: async (ctx, args) => {
     // Use the new auth helper that supports both Clerk and email auth
-    await requireAuth(ctx, args.emailAuthToken);
+    await requireAuth(ctx, args.token);
 
     // Check subscription for deals management
-    const subscriptionStatus = await ctx.runQuery(api.subscriptions.checkSubscriptionStatus, { 
-      emailAuthToken: args.emailAuthToken 
-    });
+    const subscriptionStatus = await ctx.runQuery(
+      api.subscriptions.checkSubscriptionStatus,
+      {
+        token: args.token,
+      }
+    );
     if (!subscriptionStatus?.hasActiveSubscription) {
       throw new Error("Premium subscription required for deal management");
     }
 
-    const hasDealsManagement = subscriptionStatus.subscription?.features?.includes("deals_management");
+    if (!subscriptionStatus?.hasActiveSubscription) {
+      console.log("❌ No active subscription found");
+      throw new Error("Premium subscription required for deal management");
+    }
+
+    const hasDealsManagement =
+      subscriptionStatus.subscription?.features?.includes("deals_management");
     if (!hasDealsManagement) {
       throw new Error("Premium subscription with deals management required");
     }
@@ -37,15 +63,15 @@ export const getDeals = query({
     }
     if (args.search) {
       const search = args.search.toLowerCase();
-      deals = deals.filter((d) =>
-        d._id.toLowerCase().includes(search)
-      );
+      deals = deals.filter((d) => d._id.toLowerCase().includes(search));
     }
     // Fetch related client and vehicle for each deal
     const dealsWithRelations = await Promise.all(
       deals.map(async (deal) => {
         const client = deal.clientId ? await ctx.db.get(deal.clientId) : null;
-        const vehicle = deal.vehicleId ? await ctx.db.get(deal.vehicleId) : null;
+        const vehicle = deal.vehicleId
+          ? await ctx.db.get(deal.vehicleId)
+          : null;
         return {
           ...deal,
           id: deal._id,
@@ -61,10 +87,10 @@ export const getDeals = query({
 export const getDeal = query({
   args: {
     dealId: v.id("deals"),
-    emailAuthToken: v.optional(v.string()),
+    token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx, args.emailAuthToken);
+    await requireAuth(ctx, args.token);
     const deal = await ctx.db.get(args.dealId);
     if (!deal) {
       return null;
@@ -82,27 +108,29 @@ export const getDeal = query({
       clientPhone: client?.phone,
       vin: vehicle?.vin,
       stockNumber: vehicle?.stock,
-      vehicle: vehicle ? {
-        id: vehicle.id,
-        vin: vehicle.vin,
-        stock: vehicle.stock,
-        make: vehicle.make,
-        model: vehicle.model,
-        year: vehicle.year,
-        mileage: vehicle.mileage,
-        price: vehicle.price,
-        status: vehicle.status,
-        featured: vehicle.featured,
-        trim: vehicle.trim,
-        exteriorColor: vehicle.exteriorColor,
-        interiorColor: vehicle.interiorColor,
-        fuelType: vehicle.fuelType,
-        transmission: vehicle.transmission,
-        engine: vehicle.engine,
-        description: vehicle.description,
-        features: vehicle.features,
-        images: vehicle.images,
-      } : null,
+      vehicle: vehicle
+        ? {
+            id: vehicle.id,
+            vin: vehicle.vin,
+            stock: vehicle.stock,
+            make: vehicle.make,
+            model: vehicle.model,
+            year: vehicle.year,
+            mileage: vehicle.mileage,
+            price: vehicle.price,
+            status: vehicle.status,
+            featured: vehicle.featured,
+            trim: vehicle.trim,
+            exteriorColor: vehicle.exteriorColor,
+            interiorColor: vehicle.interiorColor,
+            fuelType: vehicle.fuelType,
+            transmission: vehicle.transmission,
+            engine: vehicle.engine,
+            description: vehicle.description,
+            features: vehicle.features,
+            images: vehicle.images,
+          }
+        : null,
       documents: await ctx.db
         .query("documents")
         .filter((q) => q.eq(q.field("dealId"), deal._id))
@@ -115,10 +143,10 @@ export const updateDealStatus = mutation({
   args: {
     dealId: v.id("deals"),
     status: v.string(),
-    emailAuthToken: v.optional(v.string()),
+    token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx, args.emailAuthToken);
+    await requireAuth(ctx, args.token);
 
     const deal = await ctx.db.get(args.dealId);
     if (!deal) {
@@ -140,10 +168,10 @@ export const markDocumentSigned = mutation({
   args: {
     documentId: v.id("documents"),
     type: v.string(), // "client" | "dealer" | "notary"
-    emailAuthToken: v.optional(v.string()),
+    token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx, args.emailAuthToken);
+    await requireAuth(ctx, args.token);
 
     const document = await ctx.db.get(args.documentId);
     if (!document) {
@@ -162,7 +190,7 @@ export const markDocumentSigned = mutation({
 
     return { success: true };
   },
-}); 
+});
 
 export const createDeal = mutation({
   args: {
@@ -173,20 +201,27 @@ export const createDeal = mutation({
     clientPhone: v.optional(v.string()),
     vin: v.optional(v.string()),
     stockNumber: v.optional(v.string()),
-    emailAuthToken: v.optional(v.string()),
+    token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireAuth(ctx, args.emailAuthToken);
+    const user = (await requireAuth(ctx, args.token)) as Doc<"users">;
+    if (!user) {
+      throw new Error("User not found");
+    }
 
     // Check subscription for deals management
-    const subscriptionStatus = await ctx.runQuery(api.subscriptions.checkSubscriptionStatus, { 
-      emailAuthToken: args.emailAuthToken 
-    });
+    const subscriptionStatus = await ctx.runQuery(
+      api.subscriptions.checkSubscriptionStatus,
+      {
+        token: args.token,
+      }
+    );
     if (!subscriptionStatus?.hasActiveSubscription) {
       throw new Error("Premium subscription required for deal management");
     }
 
-    const hasDealsManagement = subscriptionStatus.subscription?.features?.includes("deals_management");
+    const hasDealsManagement =
+      subscriptionStatus.subscription?.features?.includes("deals_management");
     if (!hasDealsManagement) {
       throw new Error("Premium subscription with deals management required");
     }
@@ -201,8 +236,10 @@ export const createDeal = mutation({
       // Check if client exists
       const existingClient = await ctx.db
         .query("clients")
-        .withIndex("by_dealership", q => q.eq("dealershipId", user.dealershipId as Id<"dealerships">))
-        .filter(q => 
+        .withIndex("by_dealership", (q) =>
+          q.eq("dealershipId", user.dealershipId as Id<"dealerships">)
+        )
+        .filter((q) =>
           q.and(
             q.eq(q.field("firstName"), args.clientFirstName),
             q.eq(q.field("lastName"), args.clientLastName)
@@ -245,7 +282,7 @@ export const createDeal = mutation({
           vin: args.vin,
           stock: args.stockNumber || "",
           make: "Unknown",
-          model: "Unknown", 
+          model: "Unknown",
           year: new Date().getFullYear(),
           mileage: 0,
           price: 0,
@@ -285,10 +322,10 @@ export const createDeal = mutation({
 export const deleteDeal = mutation({
   args: {
     dealId: v.id("deals"),
-    emailAuthToken: v.optional(v.string()),
+    token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireAuth(ctx, args.emailAuthToken);
+    const user = await requireAuth(ctx, args.token);
 
     const deal = await ctx.db.get(args.dealId);
     if (!deal) throw new Error("Deal not found");
@@ -319,20 +356,24 @@ export const deleteDeal = mutation({
 export const getCompleteDealData = query({
   args: {
     dealId: v.id("deals"),
-    emailAuthToken: v.optional(v.string()),
+    token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx, args.emailAuthToken);
+    await requireAuth(ctx, args.token);
 
     // Check subscription for deals management
-    const subscriptionStatus = await ctx.runQuery(api.subscriptions.checkSubscriptionStatus, { 
-      emailAuthToken: args.emailAuthToken 
-    });
+    const subscriptionStatus = await ctx.runQuery(
+      api.subscriptions.checkSubscriptionStatus,
+      {
+        token: args.token,
+      }
+    );
     if (!subscriptionStatus?.hasActiveSubscription) {
       throw new Error("Premium subscription required for deal management");
     }
 
-    const hasDealsManagement = subscriptionStatus.subscription?.features?.includes("deals_management");
+    const hasDealsManagement =
+      subscriptionStatus.subscription?.features?.includes("deals_management");
     if (!hasDealsManagement) {
       throw new Error("Premium subscription with deals management required");
     }
@@ -345,7 +386,7 @@ export const getCompleteDealData = query({
     // Fetch related data
     const client = deal.clientId ? await ctx.db.get(deal.clientId) : null;
     const vehicle = deal.vehicleId ? await ctx.db.get(deal.vehicleId) : null;
-    
+
     // Get document pack
     const documentPack = await ctx.db
       .query("document_packs")
@@ -360,7 +401,9 @@ export const getCompleteDealData = query({
       .collect();
 
     // Get dealership info
-    const dealership = deal.dealershipId ? await ctx.db.get(deal.dealershipId as Id<"dealerships">) : null;
+    const dealership = deal.dealershipId
+      ? await ctx.db.get(deal.dealershipId as Id<"dealerships">)
+      : null;
 
     return {
       // Core deal data

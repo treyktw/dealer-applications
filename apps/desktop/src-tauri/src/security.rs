@@ -9,19 +9,19 @@ static KEYRING_LOCK: Mutex<()> = Mutex::new(());
 #[tauri::command]
 pub async fn store_secure(key: String, value: String) -> Result<(), String> {
     let _lock = KEYRING_LOCK.lock().unwrap();
-    
+
     println!("═══════════════════════════════════");
     println!("🔐 STORE_SECURE CALLED");
     println!("═══════════════════════════════════");
     println!("   Service: {}", SERVICE_NAME);
-    println!("   Account: {}", key);  // ✅ Use the key parameter!
+    println!("   Account: {}", key); // ✅ Use the key parameter!
     println!("   Value length: {}", value.len());
     println!("   Value preview: {}...", &value[..20.min(value.len())]);
-    
+
     // ✅ Create entry with dynamic key
-    let entry = Entry::new(SERVICE_NAME, &key)
-        .map_err(|e| format!("Failed to create entry: {}", e))?;
-    
+    let entry =
+        Entry::new(SERVICE_NAME, &key).map_err(|e| format!("Failed to create entry: {}", e))?;
+
     // Delete existing entry (ignore errors)
     println!("🗑️ Attempting to delete existing entry...");
     match entry.delete_credential() {
@@ -29,9 +29,9 @@ pub async fn store_secure(key: String, value: String) -> Result<(), String> {
         Err(keyring::Error::NoEntry) => println!("   No existing entry to delete"),
         Err(e) => println!("   Delete error (non-critical): {}", e),
     }
-    
+
     std::thread::sleep(std::time::Duration::from_millis(50));
-    
+
     // Store new value
     println!("💾 Storing new value...");
     match entry.set_password(&value) {
@@ -41,24 +41,24 @@ pub async fn store_secure(key: String, value: String) -> Result<(), String> {
             return Err(format!("Store failed: {}", e));
         }
     }
-    
+
     println!("⏳ Waiting 100ms...");
     std::thread::sleep(std::time::Duration::from_millis(100));
-    
+
     // Verify storage
     println!("🔍 Verifying storage...");
     match entry.get_password() {
         Ok(stored) => {
             println!("✅ VERIFICATION SUCCESS");
-            
+
             let matches = stored == value;
             println!("   Values match: {}", matches);
-            
+
             if !matches {
                 eprintln!("❌ VALUE MISMATCH!");
                 return Err("Verification failed: value mismatch".to_string());
             }
-            
+
             println!("✅ Token stored and verified successfully");
             Ok(())
         }
@@ -72,19 +72,19 @@ pub async fn store_secure(key: String, value: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn retrieve_secure(key: String) -> Result<Option<String>, String> {
     let _lock = KEYRING_LOCK.lock().unwrap();
-    
+
     println!("═══════════════════════════════════");
     println!("🔍 RETRIEVE_SECURE CALLED");
     println!("═══════════════════════════════════");
     println!("   Service: {}", SERVICE_NAME);
-    println!("   Account: {}", key);  // ✅ Use the key parameter!
-    
+    println!("   Account: {}", key); // ✅ Use the key parameter!
+
     std::thread::sleep(std::time::Duration::from_millis(50));
-    
+
     // ✅ Create entry with dynamic key
-    let entry = Entry::new(SERVICE_NAME, &key)
-        .map_err(|e| format!("Failed to create entry: {}", e))?;
-    
+    let entry =
+        Entry::new(SERVICE_NAME, &key).map_err(|e| format!("Failed to create entry: {}", e))?;
+
     println!("📡 Calling get_password()...");
     match entry.get_password() {
         Ok(password) => {
@@ -111,17 +111,17 @@ pub async fn retrieve_secure(key: String) -> Result<Option<String>, String> {
 #[tauri::command]
 pub async fn remove_secure(key: String) -> Result<(), String> {
     let _lock = KEYRING_LOCK.lock().unwrap();
-    
+
     println!("═══════════════════════════════════");
     println!("🗑️ REMOVE_SECURE CALLED");
     println!("═══════════════════════════════════");
     println!("   Service: {}", SERVICE_NAME);
-    println!("   Account: {}", key);  // ✅ Use the key parameter!
-    
+    println!("   Account: {}", key); // ✅ Use the key parameter!
+
     // ✅ Create entry with dynamic key
-    let entry = Entry::new(SERVICE_NAME, &key)
-        .map_err(|e| format!("Failed to create entry: {}", e))?;
-    
+    let entry =
+        Entry::new(SERVICE_NAME, &key).map_err(|e| format!("Failed to create entry: {}", e))?;
+
     match entry.delete_credential() {
         Ok(_) => {
             println!("✅ Entry deleted successfully");
