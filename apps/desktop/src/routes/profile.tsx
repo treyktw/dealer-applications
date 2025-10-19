@@ -9,45 +9,113 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
   User, 
   Mail, 
-  Phone, 
   Camera,
   Save,
   Shield,
+  X,
 } from "lucide-react";
-import { useId, useState } from "react";
-import { toast } from "react-hot-toast";
-import { useQuery } from "@tanstack/react-query";
-import { convexQuery } from "@/lib/convex";
+import { useState, useEffect, useId } from "react";
+import { toast } from "sonner";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { convexClient } from "@/lib/convex";
 import { api } from "@dealer/convex";
+import { useAuth } from "@/components/auth/AuthContext";
 
 export const Route = createFileRoute("/profile")({
   component: ProfilePage,
 });
 
 function ProfilePage() {
-  const { data: currentUser } = useQuery({
-    queryKey: ["current-user"],
-    queryFn: () => convexQuery(api.api.users.getCurrentUser, {}),
-  });
-
+  const { user, session } = useAuth();
+  const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
-  const firstName = currentUser?.name?.split(" ")[0] || "";
-  const lastName = currentUser?.name?.split(" ")[1] || "";
+
+  const firstName = user?.name?.split(" ")[0] || "";
+  const lastName = user?.name?.split(" ").slice(1).join(" ") || "";
+
+  const emailId = useId();
+  const firstNameId = useId();
+  const lastNameId = useId();
   
   const [formData, setFormData] = useState({
     firstName: firstName,
     lastName: lastName,
-    email: currentUser?.email || "",
-    phone: "",
+  });
+
+  // Update form data when user changes
+  useEffect(() => {
+    if (user) {
+      const first = user.name?.split(" ")[0] || "";
+      const last = user.name?.split(" ").slice(1).join(" ") || "";
+      setFormData({
+        firstName: first,
+        lastName: last,
+      });
+    }
+  }, [user]);
+
+  // Update user mutation
+  const updateUserMutation = useMutation({
+    mutationFn: async (data: typeof formData) => {
+      if (!user?.id) {
+        throw new Error("User not found");
+      }
+
+      const token = session?.token;
+      if (!token) {
+        throw new Error("No authentication token found");
+      }
+
+      return await convexClient.mutation(api.api.users.updateUser, {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        clerkId: user.id,
+        email: user.email,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["auth-session"] });
+      toast.success("Profile updated successfully!");
+      setIsEditing(false);
+    },
+    onError: (error: Error) => {
+      toast.error("Failed to update profile", {
+        description: error.message,
+      });
+    },
   });
 
   const handleSave = () => {
-    // TODO: Implement save functionality with Convex
-    toast.success("Profile updated successfully!");
+    updateUserMutation.mutate(formData);
+  };
+
+  const handleCancel = () => {
+    // Reset form to original values
+    if (user) {
+      const first = user.name?.split(" ")[0] || "";
+      const last = user.name?.split(" ").slice(1).join(" ") || "";
+      setFormData({
+        firstName: first,
+        lastName: last,
+      });
+    }
     setIsEditing(false);
   };
 
-  const userRole = currentUser?.role || "user";
+  if (!user) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-muted-foreground">Loading profile...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  const userRole = user.role || "user";
   const userInitials = `${firstName?.[0] || ""}${lastName?.[0] || ""}`;
 
   return (
@@ -67,41 +135,70 @@ function ProfilePage() {
             <div className="flex items-start gap-6">
               <div className="relative group">
                 <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
-                  <AvatarImage src={currentUser?.image} alt={currentUser?.name || ""} />
+                  <AvatarImage src={user.image} alt={user.name || ""} />
                   <AvatarFallback className="text-2xl bg-gradient-to-br from-primary to-primary/60 text-primary-foreground">
                     {userInitials}
                   </AvatarFallback>
                 </Avatar>
-                <button type="button" className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <button 
+                  type="button" 
+                  className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => toast.info("Profile picture upload coming soon!")}
+                >
                   <Camera className="h-6 w-6 text-white" />
                 </button>
               </div>
               <div className="flex-1">
-                <h2 className="text-2xl font-bold">{currentUser?.name}</h2>
-                <p className="text-muted-foreground">{currentUser?.email}</p>
+                <h2 className="text-2xl font-bold">{user.name}</h2>
+                <p className="text-muted-foreground">{user.email}</p>
                 <div className="flex gap-2 mt-3">
                   <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
                     <Shield className="h-3 w-3" />
-                    {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
+                    {userRole.charAt(0).toUpperCase() + userRole.slice(1).toLowerCase()}
                   </span>
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                    Active
-                  </span>
+                  {user.subscriptionStatus && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                      {user.subscriptionStatus === 'active' ? 'Active' : user.subscriptionStatus}
+                    </span>
+                  )}
                 </div>
               </div>
-              <Button 
-                variant={isEditing ? "default" : "outline"}
-                onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-              >
+              <div className="flex gap-2">
                 {isEditing ? (
                   <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Changes
+                    <Button 
+                      variant="outline"
+                      onClick={handleCancel}
+                    >
+                      <X className="mr-2 h-4 w-4" />
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleSave}
+                      disabled={updateUserMutation.isPending}
+                    >
+                      {updateUserMutation.isPending ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          Save Changes
+                        </>
+                      )}
+                    </Button>
                   </>
                 ) : (
-                  "Edit Profile"
+                  <Button 
+                    variant="outline"
+                    onClick={() => setIsEditing(true)}
+                  >
+                    Edit Profile
+                  </Button>
                 )}
-              </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -122,7 +219,7 @@ function ProfilePage() {
               <div className="space-y-2">
                 <Label htmlFor="firstName">First Name</Label>
                 <Input
-                  id={useId()}
+                  id={firstNameId}
                   type="text"
                   value={formData.firstName}
                   onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
@@ -132,7 +229,7 @@ function ProfilePage() {
               <div className="space-y-2">
                 <Label htmlFor="lastName">Last Name</Label>
                 <Input
-                  id={useId()}
+                  id={lastNameId}
                   type="text"
                   value={formData.lastName}
                   onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
@@ -145,9 +242,9 @@ function ProfilePage() {
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  id={useId()}
+                  id={emailId}
                   type="email"
-                  value={formData.email}
+                  value={user.email}
                   className="pl-10"
                   disabled
                 />
@@ -156,74 +253,8 @@ function ProfilePage() {
                 Email cannot be changed here. Please contact support if you need to update your email.
               </p>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number</Label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id={useId()}
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="pl-10"
-                  disabled={!isEditing}
-                />
-              </div>
-            </div>
           </CardContent>
-        </Card>
-
-        {/* Account Security */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              Account Security
-            </CardTitle>
-            <CardDescription>
-              Manage your password and security settings
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-4 rounded-lg border">
-              <div>
-                <p className="font-medium">Password</p>
-                <p className="text-sm text-muted-foreground">Last changed 3 months ago</p>
-              </div>
-              <Button variant="outline">Change Password</Button>
-            </div>
-            <div className="flex items-center justify-between p-4 rounded-lg border">
-              <div>
-                <p className="font-medium">Two-Factor Authentication</p>
-                <p className="text-sm text-muted-foreground">Add an extra layer of security</p>
-              </div>
-              <Button variant="outline">Enable 2FA</Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Danger Zone */}
-        <Card className="border-destructive">
-          <CardHeader>
-            <CardTitle className="text-destructive">Danger Zone</CardTitle>
-            <CardDescription>
-              Irreversible actions that affect your account
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/50">
-                <div>
-                  <p className="font-medium">Delete Account</p>
-                  <p className="text-sm text-muted-foreground">
-                    Permanently delete your account and all associated data
-                  </p>
-                </div>
-                <Button variant="destructive">Delete Account</Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        </Card>               
       </div>
     </Layout>
   );

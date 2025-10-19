@@ -1,4 +1,4 @@
-// src/routes/index-redesign.tsx
+// src/routes/index.tsx - Fixed with proper data fetching
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Layout } from "@/components/layout/layout";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { convexQuery } from "@/lib/convex";
+import { convexClient } from "@/lib/convex";
 import { api } from "@dealer/convex";
+import { useAuth } from "@/components/auth/AuthContext";
 
 // Type definitions
 interface Deal {
@@ -42,14 +43,6 @@ interface Deal {
   } | null;
 }
 
-interface QuickAction {
-  title: string;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
-  color: string;
-  onClick: () => void;
-}
-
 interface StatusConfig {
   label: string;
   class: string;
@@ -62,23 +55,29 @@ export const Route = createFileRoute("/")({
 
 function HomePage() {
   const navigate = useNavigate();
+  const { user, session } = useAuth();
 
-  const { data: currentUser, isLoading: userLoading } = useQuery({
-    queryKey: ["current-user"],
-    queryFn: () => convexQuery(api.api.users.getCurrentUser, {}),
-  });
+  const firstName = user?.name?.split(" ")[0] || "there";
 
-  const firstName = currentUser?.name?.split(" ")[0] || "there";
-
+  // Fetch deals using the same pattern as subscription and deals pages
   const { data: dealsData, isLoading: dealsLoading } = useQuery({
-    queryKey: ["deals", currentUser?.dealershipId],
+    queryKey: ["deals", user?.dealershipId],
     queryFn: async () => {
-      if (!currentUser?.dealershipId) return { deals: [] };
-      return await convexQuery(api.api.deals.getDeals, {
-        dealershipId: currentUser.dealershipId,
+      if (!user?.dealershipId) {
+        throw new Error("User not associated with a dealership");
+      }
+
+      const token = session?.token;
+      if (!token) {
+        throw new Error("No authentication token found");
+      }
+
+      return await convexClient.query(api.api.deals.getDeals, {
+        dealershipId: user.dealershipId,
+        token: token,
       });
     },
-    enabled: !!currentUser?.dealershipId,
+    enabled: !!user?.dealershipId && !!session?.token,
   });
 
   const deals: Deal[] = Array.isArray(dealsData) ? dealsData : dealsData?.deals || [];
@@ -101,32 +100,7 @@ function HomePage() {
     .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
     .slice(0, 5);
 
-  // Quick action cards
-  const quickActions: QuickAction[] = [
-    {
-      title: "New Deal",
-      description: "Start a fresh deal",
-      icon: Plus,
-      color: "from-blue-500 to-cyan-500",
-      onClick: () => navigate({ to: "/deals/new" }),
-    },
-    {
-      title: "Analytics",
-      description: "View insights",
-      icon: TrendingUp,
-      color: "from-purple-500 to-pink-500",
-      onClick: () => navigate({ to: "/analytics" }),
-    },
-    {
-      title: "Teams",
-      description: "Manage users",
-      icon: User,
-      color: "from-orange-500 to-red-500",
-      onClick: () => navigate({ to: "/teams" }),
-    },
-  ];
-
-  if (userLoading || dealsLoading) {
+  if (dealsLoading) {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
@@ -152,7 +126,7 @@ function HomePage() {
               Here's what's happening with your dealership today
             </p>
           </div>
-          <Button size="lg" className="gap-2 shadow-lg">
+          <Button size="lg" className="gap-2 shadow-lg" onClick={() => navigate({ to: "/deals/new" })}>
             <Plus className="h-5 w-5" />
             New Deal
           </Button>
@@ -231,34 +205,6 @@ function HomePage() {
           </Card>
         </div>
 
-        {/* Quick Actions */}
-        <div>
-          <h2 className="text-2xl font-bold mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {quickActions.map((action) => {
-              const Icon = action.icon;
-              return (
-                <Card
-                  key={action.title}
-                  className="border-none shadow-lg cursor-pointer hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group"
-                  onClick={action.onClick}
-                >
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className={cn("p-3 rounded-xl bg-gradient-to-br", action.color)}>
-                        <Icon className="h-6 w-6 text-white" />
-                      </div>
-                      <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
-                    </div>
-                    <h3 className="text-lg font-semibold mb-1">{action.title}</h3>
-                    <p className="text-sm text-muted-foreground">{action.description}</p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-
         {/* Recent Deals */}
         <Card className="border-none shadow-lg">
           <CardHeader>
@@ -289,8 +235,8 @@ function HomePage() {
                   <button
                     type="button"
                     key={deal.id}
-                    className="flex items-center justify-between p-4 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group"
-                    onClick={() => navigate({ to: "/deals/$dealsId/documents", params: { dealsId: deal.id } })}
+                    className="flex items-center justify-between p-4 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group w-full text-left"
+                    onClick={() => navigate({ to: `/deals/${deal.id}` })}
                   >
                     <div className="flex items-center gap-4 flex-1">
                       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">

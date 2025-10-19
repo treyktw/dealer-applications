@@ -1,7 +1,7 @@
 // src/components/layout/header-redesign.tsx
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Search, Bell, Command, LogOut, User, Settings, CreditCard, HelpCircle, Sparkles } from "lucide-react";
+import { Search, Command, LogOut, User, Settings, CreditCard, HelpCircle, Sparkles } from "lucide-react";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -93,14 +93,9 @@ export function Header({ sidebarOpen }: HeaderProps) {
           {/* Theme Toggle */}
           <ThemeToggle />
 
-          {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
-          </Button>
 
           {/* Help */}
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" onClick={() => navigate({ to: "/help" })}>
             <HelpCircle className="h-5 w-5" />
           </Button>
 

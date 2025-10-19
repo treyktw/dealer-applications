@@ -4,7 +4,6 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { SubscriptionPlan, SubscriptionStatus, BillingCycle, SubscriptionFeatures } from "./schema";
 import Stripe from "stripe";
 import { api } from "./_generated/api";
-import { getAuthenticatedUser } from "./emailAuth";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2025-08-27.basil",
@@ -96,7 +95,7 @@ export const createCheckoutSession = action({
     }
 
     // Get the current dealership
-    const dealership = await ctx.runQuery(api.dealerships.getCurrentDealership);
+    const dealership = await ctx.runQuery(api.dealerships.getCurrentDealership, {});
     if (!dealership) {
       throw new Error("Dealership not found");
     }
@@ -283,11 +282,26 @@ export const updateDealershipStripeCustomerId = mutation({
 export const getDealershipSubscription = query({
   args: {
     dealershipId: v.id("dealerships"),
+    token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
+    // For desktop auth, validate the token
+    if (args.token) {
+      try {
+        const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token: args.token });
+        if (!sessionData) {
+          throw new Error("Invalid or expired session");
+        }
+      } catch (error) {
+        console.error("Desktop auth validation failed:", error);
+        throw new Error("Authentication failed");
+      }
+    } else {
+      // Fallback to web auth
+      const identity = await ctx.auth.getUserIdentity();
+      if (!identity) {
+        throw new Error("Not authenticated");
+      }
     }
 
     const subscription = await ctx.db
@@ -302,12 +316,47 @@ export const getDealershipSubscription = query({
 // Check subscription status
 export const checkSubscriptionStatus = query({
   args: {
-    emailAuthToken: v.optional(v.string()),
+    token: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    const user = await getAuthenticatedUser(ctx, args.emailAuthToken);
-    if (!user) {
-      return { hasActiveSubscription: false, subscriptionStatus: "none" };
+   handler: async (ctx, args): Promise<{
+     hasActiveSubscription: boolean;
+     hasPendingSubscription?: boolean;
+     hasAnySubscription?: boolean;
+     subscription?: Doc<"subscriptions"> | null;
+     subscriptionStatus: string;
+     dealershipId?: Id<"dealerships">;
+   }> => {
+     let user: { dealershipId?: Id<"dealerships"> } | null = null;
+
+    // Desktop auth: validate token
+    if (args.token) {
+      try {
+        const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { 
+          token: args.token 
+        });
+        if (!sessionData) {
+          return { hasActiveSubscription: false, subscriptionStatus: "none" };
+        }
+        user = sessionData.user;
+      } catch (error) {
+        console.error("Desktop auth validation failed:", error);
+        return { hasActiveSubscription: false, subscriptionStatus: "none" };
+      }
+    } else {
+      // Web auth: use Clerk
+      const identity = await ctx.auth.getUserIdentity();
+      if (!identity) {
+        return { hasActiveSubscription: false, subscriptionStatus: "none" };
+      }
+
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+        .first();
+
+      if (!user) {
+        return { hasActiveSubscription: false, subscriptionStatus: "none" };
+      }
     }
 
     // If user has no dealership, they need to complete onboarding first
@@ -320,8 +369,6 @@ export const checkSubscriptionStatus = query({
       .query("subscriptions")
       .withIndex("by_dealership", (q) => q.eq("dealershipId", user.dealershipId as Id<"dealerships">))
       .first();
-
-    // console.log("Found subscription:", subscription);
 
     // Check various subscription states
     const hasActiveSubscription = subscription?.status === SubscriptionStatus.ACTIVE;

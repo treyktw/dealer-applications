@@ -1,6 +1,7 @@
 // src/components/auth/DevModeLogin.tsx - Development login bypass
 import { useState } from 'react';
 import { useAuth } from '@/components/auth/AuthContext';
+import { Input } from '../ui/input';
 
 export function DevModeLogin() {
   const [jwt, setJwt] = useState('');
@@ -25,6 +26,16 @@ export function DevModeLogin() {
     await handleAuthCallback(jwt, state);
   };
 
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      setJwt(text);
+    } catch (error) {
+      console.error('Failed to read clipboard:', error);
+      alert('Failed to read from clipboard. Please paste manually.');
+    }
+  };
+
   return (
     <div className="mt-8 p-4 border border-yellow-500 rounded-lg bg-yellow-50">
       <h3 className="text-sm font-bold text-yellow-800 mb-2">
@@ -34,12 +45,21 @@ export function DevModeLogin() {
         Deep links don't work in dev. Paste JWT from browser console:
       </p>
       
-      <textarea
-        value={jwt}
-        onChange={(e) => setJwt(e.target.value)}
-        placeholder="Paste JWT token here..."
-        className="w-full h-24 p-2 border rounded text-xs font-mono mb-2"
-      />
+      <div className="flex gap-2 mb-2">
+        <Input
+          value={jwt}
+          onChange={(e) => setJwt(e.target.value)}
+          placeholder="Paste JWT token here..."
+          className="flex-1 h-4 p-2 border rounded text-xs font-mono text-black"
+        />
+        <button
+          type="button"
+          onClick={handlePaste}
+          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs font-medium"
+        >
+          📋 Paste
+        </button>
+      </div>
       
       <button
         type="button"

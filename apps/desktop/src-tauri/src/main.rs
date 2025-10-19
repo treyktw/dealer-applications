@@ -1,16 +1,17 @@
-// src-tauri/src/main.rs - With hybrid secure storage
-mod security;
+// src-tauri/src/main.rs - With hybrid secure storage and updater
 mod encryption;
 mod file_permissions;
+mod security;
 
+use encryption::{decrypt_data, encrypt_data, generate_encryption_key};
+use file_permissions::{check_file_permissions, get_storage_file_path, set_file_permissions};
 use security::{remove_secure, retrieve_secure, store_secure};
-use encryption::{generate_encryption_key, encrypt_data, decrypt_data};
-use file_permissions::{set_file_permissions, check_file_permissions, get_storage_file_path};
 use tauri::{Emitter, Manager};
 
+#[cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 fn main() {
     println!("🚀 Tauri app starting...");
-    
+
     let mut builder = tauri::Builder::default();
 
     // Single instance plugin (must be first)
@@ -22,16 +23,19 @@ fn main() {
         }));
     }
 
-    // Initialize plugins
+    // Initialize plugins in correct order
     builder = builder
+        .plugin(tauri_plugin_updater::Builder::new().build()) // ✅ Updater plugin (only once!)
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_store::Builder::default().build()) // ✅ For encrypted storage file
         .setup(|app| {
             println!("🔗 Setting up deep link handler...");
-            
+
             use tauri_plugin_deep_link::DeepLinkExt;
-            
+
             // Register deep links at runtime for Linux/Windows dev
             #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
             {
@@ -55,12 +59,12 @@ fn main() {
                     eprintln!("⚠️  Failed to get current deep link: {}", e);
                 }
             }
-            
+
             // Listen for deep link events
             let app_handle = app.handle().clone();
             app.deep_link().on_open_url(move |event| {
                 let urls = event.urls().to_vec();
-                
+
                 println!("═══════════════════════════════════");
                 println!("🔗 DEEP LINK RECEIVED!");
                 println!("═══════════════════════════════════");
@@ -69,14 +73,14 @@ fn main() {
                 if let Some(url) = urls.first() {
                     let url_str = url.to_string();
                     println!("🔍 URL: {}", url_str);
-                    
+
                     if url_str.starts_with("dealer-sign://") {
                         println!("✅ Valid dealer-sign protocol");
-                        
+
                         if let Some(window) = app_handle.get_webview_window("main") {
                             println!("✅ Main window found");
                             println!("📤 Emitting to frontend...");
-                            
+
                             match window.emit("deep-link", &url_str) {
                                 Ok(_) => {
                                     println!("✅ Event emitted!");
@@ -84,7 +88,7 @@ fn main() {
                                     let _ = window.show();
                                     let _ = window.unminimize();
                                 }
-                                Err(e) => eprintln!("❌ Emit failed: {}", e)
+                                Err(e) => eprintln!("❌ Emit failed: {}", e),
                             }
                         } else {
                             eprintln!("❌ Window not found");
