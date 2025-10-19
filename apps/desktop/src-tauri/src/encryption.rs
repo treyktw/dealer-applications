@@ -51,7 +51,7 @@ pub fn encrypt_data(data: String, key: String) -> Result<String, String> {
     // Generate random nonce (12 bytes for GCM)
     let mut nonce_bytes = [0u8; NONCE_SIZE];
     OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = &Nonce::from(nonce_bytes);
 
     // Encrypt
     let ciphertext = cipher
@@ -100,7 +100,10 @@ pub fn decrypt_data(encrypted_data: String, key: String) -> Result<String, Strin
     }
 
     let (nonce_bytes, ciphertext) = combined.split_at(NONCE_SIZE);
-    let nonce = Nonce::from_slice(nonce_bytes);
+    let nonce_array: [u8; NONCE_SIZE] = nonce_bytes
+        .try_into()
+        .map_err(|_| "Encrypted data nonce length invalid".to_string())?;
+    let nonce = &Nonce::from(nonce_array);
 
     // Create cipher
     let cipher = Aes256Gcm::new_from_slice(&key_bytes)
