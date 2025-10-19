@@ -21,6 +21,8 @@ jobs:
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -89,6 +91,7 @@ jobs:
           ENABLE_CODE_SIGNING: true
         with:
           projectPath: apps/desktop
+          args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin' || '' }}
           tagName: v__VERSION__
           releaseName: 'Dealer Software v__VERSION__'
           releaseBody: 'See the assets to download and install this version.'
