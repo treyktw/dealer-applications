@@ -1,4 +1,6 @@
-// src-tauri/src/main.rs - With hybrid secure storage and updater
+// src-tauri/src/main.rs
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod encryption;
 mod file_permissions;
 mod security;
@@ -9,7 +11,6 @@ use security::{remove_secure, retrieve_secure, store_secure};
 use tauri::{Emitter, Manager};
 use log::{info, error};
 
-#[cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 fn main() {
     info!("🚀 Tauri app starting...");
 
