@@ -41,7 +41,7 @@ export default function DeveloperToolsPage() {
   const [bucketCheckResult, setBucketCheckResult] = useState<BucketCheckResult | null>(null);
   
   const { user } = useUser();
-  const currentDealership = useQuery(api.dealerships.getCurrentDealership);
+  const currentDealership = useQuery(api.dealerships.getCurrentDealership, {});
   const deleteUserData = useMutation(api.developer.deleteCurrentUserData);
   const checkAndCreateMissingBuckets = useAction(api.secure_s3.checkAndCreateMissingBuckets);
 

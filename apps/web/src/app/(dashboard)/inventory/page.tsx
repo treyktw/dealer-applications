@@ -104,7 +104,7 @@ export default function InventoryPage() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
 
   // Convex: Get current dealership from authenticated user
-  const currentDealership = useQuery(api.dealerships.getCurrentDealership);
+  const currentDealership = useQuery(api.dealerships.getCurrentDealership, {});
   const dealershipId = currentDealership?._id;
 
   // Enhanced search and pagination with URL state management

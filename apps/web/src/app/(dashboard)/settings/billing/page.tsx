@@ -241,7 +241,7 @@ function PaymentForm({ planId, dealershipId, onSuccess }: PaymentFormProps) {
 export default function BillingPage() {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const dealership = useQuery(api.dealerships.getCurrentDealership);
+  const dealership = useQuery(api.dealerships.getCurrentDealership, {});
   const subscription = useQuery(api.subscriptions.getDealershipSubscription, 
     dealership?._id ? { dealershipId: dealership._id } : "skip"
   );

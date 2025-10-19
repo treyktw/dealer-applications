@@ -1,6 +1,7 @@
 // src-tauri/src/file_permissions.rs - Set strict file permissions
 use tauri::{AppHandle, Manager};
 use log::info;
+use std::fs
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;

@@ -113,7 +113,7 @@ export default function S3ImageUpload({
   const vehicle = useQuery(api.inventory.getVehicle, 
     vehicleId && vehicleId.trim() !== "" && !vehicleId.startsWith("test-") ? { id: vehicleId as Id<"vehicles"> } : "skip"
   );
-  const dealership = useQuery(api.dealerships.getCurrentDealership);
+  const dealership = useQuery(api.dealerships.getCurrentDealership, {});
 
   // Handle file upload to S3
   const uploadToS3 = useCallback(

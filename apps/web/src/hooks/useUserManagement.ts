@@ -21,7 +21,7 @@ export function useUserManagement() {
   const revokeInvitationMutation = useMutation(api.employees.revokeInvitation);
 
   // Get current user's dealership (needed for invitations)
-  const currentDealership = useQuery(api.dealerships.getCurrentDealership);
+  const currentDealership = useQuery(api.dealerships.getCurrentDealership, {});
 
   // Extract users and invitations from the response
   const users = useMemo(() => usersData?.users || [], [usersData?.users]);

@@ -109,7 +109,7 @@ export default function VehicleAddFormPage({
   const form = useFormContext() as UseFormReturn<VehicleFormValues>;
 
   // Get current dealership from authenticated user
-  const currentDealership = useQuery(api.dealerships.getCurrentDealership);
+  const currentDealership = useQuery(api.dealerships.getCurrentDealership, {});
 
   // Create initial values based on whether we're editing
   const initialValues = vehicle

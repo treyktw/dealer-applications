@@ -36,7 +36,7 @@ export default function GeneralSettingsPage() {
   const [saving, setSaving] = useState(false);
   
   // Get dealership using Convex query
-  const dealership = useQuery(api.dealerships.getCurrentDealership);
+  const dealership = useQuery(api.dealerships.getCurrentDealership, {});
   
   // Initialize the form with validation
   const form = useForm<GeneralSettingsForm>({
