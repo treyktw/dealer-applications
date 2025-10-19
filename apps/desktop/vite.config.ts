@@ -7,8 +7,7 @@ import path from 'path'
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
-// https://vite.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig({
   plugins: [react(), tailwindcss(), tanstackRouter({
     routesDirectory: './src/routes',
     generatedRouteTree: './src/routeTree.gen.ts',
@@ -19,16 +18,14 @@ export default defineConfig(async () => ({
     },
   },
   optimizeDeps: {
-    // Make sure Vite prebundles convex browser client if you use it directly.
     include: ["convex/browser"]
   },
-
-
-  // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
-  //
-  // 1. prevent Vite from obscuring rust errors
+  build: {
+    sourcemap: false,
+    minify: "esbuild",
+  },
+  envPrefix: "VITE_",
   clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,
     strictPort: true,
@@ -41,8 +38,7 @@ export default defineConfig(async () => ({
         }
       : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
     },
   },
-}));
+});
