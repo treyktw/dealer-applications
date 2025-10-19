@@ -1,6 +1,6 @@
 // src-tauri/src/file_permissions.rs - Set strict file permissions
-use std::fs;
 use tauri::{AppHandle, Manager};
+use log::info;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -8,8 +8,8 @@ use std::os::unix::fs::PermissionsExt;
 /// Set strict file permissions (owner read/write only - 600)
 #[tauri::command]
 pub fn set_file_permissions(filename: String, app: AppHandle) -> Result<(), String> {
-    println!("🔒 Setting strict file permissions...");
-    println!("   File: {}", filename);
+    info!("🔒 Setting strict file permissions...");
+    info!("   File: {}", filename);
 
     // Get app data directory
     let app_dir = app
@@ -38,14 +38,14 @@ pub fn set_file_permissions(filename: String, app: AppHandle) -> Result<(), Stri
         fs::set_permissions(&file_path, perms)
             .map_err(|e| format!("Failed to set permissions: {}", e))?;
 
-        println!("✅ File permissions set to 600 (owner read/write only)");
-        println!("   Path: {:?}", file_path);
+        info!("✅ File permissions set to 600 (owner read/write only)");
+        info!("   Path: {:?}", file_path);
     }
 
     #[cfg(not(unix))]
     {
-        println!("⚠️  File permissions not set (Windows doesn't use Unix permissions)");
-        println!("   Using Windows ACLs instead (handled by OS)");
+        info!("⚠️  File permissions not set (Windows doesn't use Unix permissions)");
+        info!("   Using Windows ACLs instead (handled by OS)");
     }
 
     Ok(())
@@ -76,10 +76,10 @@ pub fn check_file_permissions(filename: String, app: AppHandle) -> Result<bool, 
         // Check if permissions are 600 (0o600 = 384 in decimal)
         let is_secure = (mode & 0o777) == 0o600;
 
-        println!("📋 File permissions check:");
-        println!("   Path: {:?}", file_path);
-        println!("   Mode: {:o}", mode & 0o777);
-        println!("   Secure (600): {}", is_secure);
+        info!("📋 File permissions check:");
+        info!("   Path: {:?}", file_path);
+        info!("   Mode: {:o}", mode & 0o777);
+        info!("   Secure (600): {}", is_secure);
 
         Ok(is_secure)
     }

@@ -5,22 +5,23 @@ use aes_gcm::{
     Aes256Gcm, Nonce,
 };
 use base64::{engine::general_purpose, Engine as _};
+use log::info;
 
 const NONCE_SIZE: usize = 12; // GCM standard nonce size
 
 /// Generate a new 256-bit encryption key
 #[tauri::command]
 pub fn generate_encryption_key() -> Result<String, String> {
-    println!("🔑 Generating new 256-bit encryption key...");
+    info!("🔑 Generating new 256-bit encryption key...");
 
     let mut key_bytes = [0u8; 32]; // 256 bits = 32 bytes
     OsRng.fill_bytes(&mut key_bytes);
 
     let key_base64 = general_purpose::STANDARD.encode(key_bytes);
 
-    println!("✅ Encryption key generated");
-    println!("   Length: 32 bytes (256 bits)");
-    println!("   Base64 length: {} chars", key_base64.len());
+    info!("✅ Encryption key generated");
+    info!("   Length: 32 bytes (256 bits)");
+    info!("   Base64 length: {} chars", key_base64.len());
 
     Ok(key_base64)
 }
@@ -28,8 +29,8 @@ pub fn generate_encryption_key() -> Result<String, String> {
 /// Encrypt data using AES-256-GCM
 #[tauri::command]
 pub fn encrypt_data(data: String, key: String) -> Result<String, String> {
-    println!("🔒 Encrypting data...");
-    println!("   Data length: {} chars", data.len());
+    info!("🔒 Encrypting data...");
+    info!("   Data length: {} chars", data.len());
 
     // Decode base64 key
     let key_bytes = general_purpose::STANDARD
@@ -63,9 +64,9 @@ pub fn encrypt_data(data: String, key: String) -> Result<String, String> {
 
     let encrypted_base64 = general_purpose::STANDARD.encode(combined);
 
-    println!("✅ Data encrypted");
-    println!("   Ciphertext length: {} bytes", ciphertext.len());
-    println!("   Base64 output: {} chars", encrypted_base64.len());
+    info!("✅ Data encrypted");
+    info!("   Ciphertext length: {} bytes", ciphertext.len());
+    info!("   Base64 output: {} chars", encrypted_base64.len());
 
     Ok(encrypted_base64)
 }
@@ -73,8 +74,8 @@ pub fn encrypt_data(data: String, key: String) -> Result<String, String> {
 /// Decrypt data using AES-256-GCM
 #[tauri::command]
 pub fn decrypt_data(encrypted_data: String, key: String) -> Result<String, String> {
-    println!("🔓 Decrypting data...");
-    println!("   Encrypted data length: {} chars", encrypted_data.len());
+    info!("🔓 Decrypting data...");
+    info!("   Encrypted data length: {} chars", encrypted_data.len());
 
     // Decode base64 key
     let key_bytes = general_purpose::STANDARD
@@ -113,8 +114,8 @@ pub fn decrypt_data(encrypted_data: String, key: String) -> Result<String, Strin
     let decrypted_string = String::from_utf8(plaintext)
         .map_err(|e| format!("Invalid UTF-8 in decrypted data: {}", e))?;
 
-    println!("✅ Data decrypted");
-    println!("   Plaintext length: {} chars", decrypted_string.len());
+    info!("✅ Data decrypted");
+    info!("   Plaintext length: {} chars", decrypted_string.len());
 
     Ok(decrypted_string)
 }
