@@ -1,7 +1,7 @@
 // src/app/(dashboard)/settings/developer/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +44,8 @@ export default function DeveloperToolsPage() {
   const currentDealership = useQuery(api.dealerships.getCurrentDealership, {});
   const deleteUserData = useMutation(api.developer.deleteCurrentUserData);
   const checkAndCreateMissingBuckets = useAction(api.secure_s3.checkAndCreateMissingBuckets);
+
+  const confirmDeleteId = useId();
 
   const handleBulkBucketCheck = async (dryRun: boolean = true) => {
     try {
@@ -177,8 +179,8 @@ export default function DeveloperToolsPage() {
                 </Button>
               </div>
               
-              {getApiEndpoints().map((endpoint, index) => (
-                <div key={index} className="border rounded-lg p-4 space-y-2">
+              {getApiEndpoints().map((endpoint) => (
+                <div key={endpoint.endpoint} className="border rounded-lg p-4 space-y-2">
                   <div className="flex items-center gap-2">
                     <Badge variant="outline">{endpoint.method}</Badge>
                     <code className="text-sm bg-zinc-900 px-2 py-1 rounded">
@@ -369,7 +371,7 @@ export default function DeveloperToolsPage() {
                     Type <code className="bg-red-100 px-1 rounded">DELETE MY DATA</code> to confirm:
                   </Label>
                   <Input
-                    id="confirm-delete"
+                    id={confirmDeleteId}
                     value={confirmText}
                     onChange={(e) => setConfirmText(e.target.value)}
                     placeholder="DELETE MY DATA"
