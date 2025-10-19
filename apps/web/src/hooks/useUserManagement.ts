@@ -2,7 +2,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import type { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
 
 export type UserRole = "ADMIN" | "STAFF" | "READONLY";
@@ -21,7 +21,7 @@ export function useUserManagement() {
   const revokeInvitationMutation = useMutation(api.employees.revokeInvitation);
 
   // Get current user's dealership (needed for invitations)
-  const currentDealership = useQuery(api.dealerships.getCurrentDealership);
+  const currentDealership = useQuery(api.dealerships.getCurrentDealership, {});
 
   // Extract users and invitations from the response
   const users = useMemo(() => usersData?.users || [], [usersData?.users]);

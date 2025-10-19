@@ -38,7 +38,7 @@ export default function OnboardingPage() {
   const updateCurrentUserByClerkId = useMutation(api.users.updateCurrentUserByClerkId);
   const createUser = useMutation(api.users.createUser);
   const ensureDealershipBucket = useAction(api.secure_s3.ensureDealershipBucket);
-  const currentDealership = useQuery(api.dealerships.getCurrentDealership);
+  const currentDealership = useQuery(api.dealerships.getCurrentDealership, {});
 
   // Create user when component mounts
   useEffect(() => {
