@@ -7,6 +7,7 @@ import { AuthProvider } from "@/components/auth/AuthContext";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { convexClient } from "@/lib/convex";
 import "./App.css";
+import { UpdateManager } from "./components/update/UpdateManager";
 
 const router = createRouter({
   routeTree,
@@ -33,12 +34,12 @@ declare module "@tanstack/react-router" {
 }
 
 function App() {
-
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <AuthProvider>
+            <UpdateManager />
             <RouterProvider router={router} />
           </AuthProvider>
         </ThemeProvider>

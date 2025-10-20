@@ -13,6 +13,8 @@ import {
   Save,
   Shield,
   X,
+  Download,
+  RefreshCw,
 } from "lucide-react";
 import { useState, useEffect, useId } from "react";
 import { toast } from "sonner";
@@ -20,6 +22,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { convexClient } from "@/lib/convex";
 import { api } from "@dealer/convex";
 import { useAuth } from "@/components/auth/AuthContext";
+import { checkForUpdatesManually } from "@/components/update/UpdateManager";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check } from "@tauri-apps/plugin-updater";
 
 export const Route = createFileRoute("/profile")({
   component: ProfilePage,
@@ -29,6 +34,8 @@ function ProfilePage() {
   const { user, session } = useAuth();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [currentVersion, setCurrentVersion] = useState<string>("");
 
   const firstName = user?.name?.split(" ")[0] || "";
   const lastName = user?.name?.split(" ").slice(1).join(" ") || "";
@@ -41,6 +48,25 @@ function ProfilePage() {
     firstName: firstName,
     lastName: lastName,
   });
+
+  // Get current app version
+  useEffect(() => {
+    const fetchVersion = async () => {
+      try {
+        const updateInfo = await check();
+        if (updateInfo) {
+          setCurrentVersion(updateInfo.currentVersion);
+        } else {
+          // If no update info available, try to get version from package.json or use fallback
+          setCurrentVersion("0.1.2"); // Fallback to version from tauri.conf.json
+        }
+      } catch (error) {
+        console.error("Failed to get app version:", error);
+        setCurrentVersion("0.1.2"); // Fallback to version from tauri.conf.json
+      }
+    };
+    fetchVersion();
+  }, []);
 
   // Update form data when user changes
   useEffect(() => {
@@ -67,10 +93,11 @@ function ProfilePage() {
       }
 
       return await convexClient.mutation(api.api.users.updateUser, {
-        firstName: data.firstName,
-        lastName: data.lastName,
         clerkId: user.id,
         email: user.email,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        imageUrl: user.image,
       });
     },
     onSuccess: () => {
@@ -100,6 +127,32 @@ function ProfilePage() {
       });
     }
     setIsEditing(false);
+  };
+
+  // ✅ Manual update check function
+  const handleCheckForUpdates = async () => {
+    setCheckingUpdates(true);
+    try {
+      const result = await checkForUpdatesManually();
+      if (result.available) {
+        toast.success(`Update available: v${result.version}`, {
+          description: "The update will be downloaded automatically.",
+        });
+        // The UpdateManager component will handle showing the dialog
+        relaunch(); // Reload to trigger UpdateManager
+      } else {
+        toast.success("You're on the latest version!", {
+          description: `Current version: v${result.currentVersion}`,
+        });
+      }
+    } catch (error) {
+      console.error("Update check failed:", error);
+      toast.error("Failed to check for updates", {
+        description: "Please try again later.",
+      });
+    } finally {
+      setCheckingUpdates(false);
+    }
   };
 
   if (!user) {
@@ -217,7 +270,7 @@ function ProfilePage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="firstName">First Name</Label>
+                <Label htmlFor={firstNameId}>First Name</Label>
                 <Input
                   id={firstNameId}
                   type="text"
@@ -227,7 +280,7 @@ function ProfilePage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="lastName">Last Name</Label>
+                <Label htmlFor={lastNameId}>Last Name</Label>
                 <Input
                   id={lastNameId}
                   type="text"
@@ -238,7 +291,7 @@ function ProfilePage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
+              <Label htmlFor={emailId}>Email Address</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -254,7 +307,51 @@ function ProfilePage() {
               </p>
             </div>
           </CardContent>
-        </Card>               
+        </Card>
+
+        {/* ✅ App Updates Card */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-blue-500/10 rounded-xl">
+                <Download className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <CardTitle>App Updates</CardTitle>
+                <CardDescription className="mt-1">
+                  Keep your app up to date with the latest features
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between p-4 rounded-lg border">
+              <div>
+                <p className="font-medium">Current Version</p>
+                <p className="text-sm text-muted-foreground">
+                  {currentVersion}
+                </p>
+              </div>
+              <Button 
+                variant="outline" 
+                onClick={handleCheckForUpdates}
+                disabled={checkingUpdates}
+              >
+                {checkingUpdates ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Checking...
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-4 w-4" />
+                    Check for Updates
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </Layout>
   );

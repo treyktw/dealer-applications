@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
+// src/lib/updates/UpdateManager.tsx
+import { useCallback, useEffect, useState } from "react";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { ask } from "@tauri-apps/plugin-dialog";
 import {
   Dialog,
   DialogContent,
@@ -35,29 +35,18 @@ export function UpdateManager() {
 
       if (update) {
         console.log("Update available:", update);
-        
-        // Ask user if they want to update
-        const shouldUpdate = await ask(
-          `Update available!\n\nCurrent version: ${update.currentVersion}\nNew version: ${update.version}\n\nWould you like to update now?`
-        );
-
-        if (shouldUpdate) {
-          setUpdateInfo({
-            version: update.version,
-            currentVersion: update.currentVersion,
-            body: update.body,
-            date: update.date,
-          });
-          setUpdateAvailable(true);
-        } else {
-          console.log("User declined update");
-        }
+        setUpdateInfo({
+          version: update.version,
+          currentVersion: update.currentVersion,
+          body: update.body,
+          date: update.date,
+        });
+        setUpdateAvailable(true);
       } else {
         console.log("No updates available");
       }
     } catch (error) {
       console.error("Failed to check for updates:", error);
-      setError("Failed to check for updates");
     }
   }, []);
 
@@ -70,6 +59,7 @@ export function UpdateManager() {
 
     try {
       setDownloading(true);
+      setError(null);
       const update = await check();
 
       if (update) {
@@ -110,7 +100,7 @@ export function UpdateManager() {
 
   function handleSkip() {
     setUpdateAvailable(false);
-    toast.info("Update skipped. Check Settings to update later.");
+    toast.info("Update skipped. You can check for updates in Settings.");
   }
 
   if (!updateAvailable || !updateInfo) {
@@ -215,4 +205,22 @@ export function UpdateManager() {
       </DialogContent>
     </Dialog>
   );
+}
+
+// ✅ Export function for manual update checks
+export async function checkForUpdatesManually() {
+  try {
+    const update = await check();
+    if (update) {
+      return {
+        available: true,
+        version: update.version,
+        currentVersion: update.currentVersion,
+      };
+    }
+    return { available: false };
+  } catch (error) {
+    console.error("Failed to check for updates:", error);
+    throw error;
+  }
 }
