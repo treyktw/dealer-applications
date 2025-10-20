@@ -60,14 +60,10 @@ export const getDeals = query({
     // Check subscription for deals management
     const subscriptionStatus = await ctx.runQuery(
       api.subscriptions.checkSubscriptionStatus,
-      {}
+      { token: args.token }
     );
+    
     if (!subscriptionStatus?.hasActiveSubscription) {
-      throw new Error("Premium subscription required for deal management");
-    }
-
-    if (!subscriptionStatus?.hasActiveSubscription) {
-      console.log("❌ No active subscription found");
       throw new Error("Premium subscription required for deal management");
     }
 
