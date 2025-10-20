@@ -1,24 +1,49 @@
-import { query, mutation, QueryCtx } from "./_generated/server";
+import { mutation, query, type QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { api } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 
-// Helper function to require authentication
-async function requireAuth(ctx: QueryCtx, token?: string): Promise<any> {
-  if (!token) {
-    throw new Error("Authentication token required");
+// Helper function to require authentication (supports desktop token or web identity)
+async function requireAuth(ctx: QueryCtx, token?: string): Promise<Doc<"users">> {
+  // Path 1: Desktop app auth via token
+  if (token) {
+    type SessionUser = { id?: string; email?: string };
+    
+    const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token });
+    if (!sessionData?.user) throw new Error("Invalid or expired session");
+    
+    const { id, email } = sessionData.user as SessionUser;
+    
+    let userDoc =
+      id
+        ? await ctx.db.query("users").withIndex("by_clerk_id", (q) => q.eq("clerkId", id)).first()
+        : null;
+    
+    if (!userDoc && email) {
+      userDoc = await ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", email)).first();
+    }
+    
+    if (!userDoc) throw new Error("User not found");
+    return userDoc;
   }
-
-  // Validate session using desktopAuth
-  const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, {
-    token,
-  });
-  if (!sessionData) {
-    throw new Error("Invalid or expired session");
+  
+  // Path 2: Web auth via Clerk identity
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error("Authentication required");
   }
-
-  return sessionData.user;
+  
+  const user = await ctx.db
+    .query("users")
+    .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+    .first();
+    
+  if (!user) {
+    throw new Error("User not found");
+  }
+  
+  return user;
 }
 
 export const getDeals = query({
@@ -29,15 +54,13 @@ export const getDeals = query({
     token: v.optional(v.string()), // For desktop app auth
   },
   handler: async (ctx, args) => {
-    // Use the new auth helper that supports both Clerk and email auth
+    // Require auth (desktop token or web identity)
     await requireAuth(ctx, args.token);
 
     // Check subscription for deals management
     const subscriptionStatus = await ctx.runQuery(
       api.subscriptions.checkSubscriptionStatus,
-      {
-        token: args.token,
-      }
+      {}
     );
     if (!subscriptionStatus?.hasActiveSubscription) {
       throw new Error("Premium subscription required for deal management");
@@ -204,7 +227,7 @@ export const createDeal = mutation({
     token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = (await requireAuth(ctx, args.token)) as Doc<"users">;
+    const user = await requireAuth(ctx, args.token);
     if (!user) {
       throw new Error("User not found");
     }
@@ -212,9 +235,7 @@ export const createDeal = mutation({
     // Check subscription for deals management
     const subscriptionStatus = await ctx.runQuery(
       api.subscriptions.checkSubscriptionStatus,
-      {
-        token: args.token,
-      }
+      {}
     );
     if (!subscriptionStatus?.hasActiveSubscription) {
       throw new Error("Premium subscription required for deal management");
@@ -364,9 +385,7 @@ export const getCompleteDealData = query({
     // Check subscription for deals management
     const subscriptionStatus = await ctx.runQuery(
       api.subscriptions.checkSubscriptionStatus,
-      {
-        token: args.token,
-      }
+      {}
     );
     if (!subscriptionStatus?.hasActiveSubscription) {
       throw new Error("Premium subscription required for deal management");

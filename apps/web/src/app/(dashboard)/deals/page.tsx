@@ -1,6 +1,6 @@
 // app/(dashboard)/deals/page.tsx
 import { Suspense } from "react";
-import { Metadata } from "next";
+import type { Metadata } from "next";
 import { DealsTable } from "./_components/DealsTable";
 import { DealsSkeleton } from "./_components/DealsSkeleton";
 import { FeatureGate } from "@/components/subscription/FeatureGate";

@@ -7,11 +7,11 @@ import {
   query,
   internalQuery,
 } from "./_generated/server";
+import type { QueryCtx } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
-import { Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
 import {
-  S3Client,
   CreateBucketCommand,
   PutBucketEncryptionCommand,
   PutPublicAccessBlockCommand,
@@ -20,18 +20,11 @@ import {
   HeadBucketCommand,
   PutObjectCommand,
   GetObjectCommand,
+  type BucketLocationConstraint,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { api } from "./_generated/api";
-
-// S3 Configuration
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION!,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
+import { s3Client } from "../apps/web/src/lib/s3-client";
 
 // Generate secure bucket name
 export function generateDealershipBucketName(dealershipId: string): string {
@@ -54,10 +47,16 @@ export const checkBucketExists = internalAction({
       );
       console.log(`Bucket ${args.bucketName} exists`);
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (
-        error.name === "NotFound" ||
-        error.$metadata?.httpStatusCode === 404
+        error &&
+        typeof error === "object" &&
+        ("name" in error && error.name === "NotFound" ||
+        "$metadata" in error && 
+        typeof error.$metadata === "object" &&
+        error.$metadata !== null &&
+        "httpStatusCode" in error.$metadata &&
+        error.$metadata.httpStatusCode === 404)
       ) {
         return false;
       }
@@ -94,14 +93,21 @@ export const createSecureDealershipBucket = internalAction({
       }
 
       // Step 1: Create bucket (basic creation first)
-      const createBucketParams: any = {
+      type CreateBucketParams = {
+        Bucket: string;
+        CreateBucketConfiguration?: {
+          LocationConstraint: BucketLocationConstraint;
+        };
+      };
+
+      const createBucketParams: CreateBucketParams = {
         Bucket: bucketName,
       };
 
       // Only add LocationConstraint if not in us-east-1
       if (process.env.AWS_REGION !== "us-east-1") {
         createBucketParams.CreateBucketConfiguration = {
-          LocationConstraint: process.env.AWS_REGION,
+          LocationConstraint: (process.env.AWS_REGION || "us-west-2") as BucketLocationConstraint,
         };
       }
 
@@ -249,7 +255,12 @@ export const getSecureUploadUrl = mutation({
     fileName: v.string(),
     fileType: v.string(),
     fileSize: v.number(),
-    category: v.union(v.literal("vehicles"), v.literal("logos"), v.literal("documents"), v.literal("profiles")),
+    category: v.union(
+      v.literal("vehicles"),
+      v.literal("logos"),
+      v.literal("documents"),
+      v.literal("profiles")
+    ),
   },
   handler: async (ctx, args) => {
     // Authentication and authorization
@@ -265,31 +276,37 @@ export const getSecureUploadUrl = mutation({
       .first();
 
     if (!user || user.dealershipId !== args.dealershipId) {
-      throw new ConvexError("Access denied: User not authorized for this dealership");
+      throw new ConvexError(
+        "Access denied: User not authorized for this dealership"
+      );
     }
 
     // File validation
     const allowedTypes = {
-      'vehicles': ['image/jpeg', 'image/png', 'image/webp'],
-      'documents': ['application/pdf', 'image/jpeg', 'image/png'],
-      'logos': ['image/jpeg', 'image/png', 'image/svg+xml'],
-      'profiles': ['image/jpeg', 'image/png'],
+      vehicles: ["image/jpeg", "image/png", "image/webp"],
+      documents: ["application/pdf", "image/jpeg", "image/png"],
+      logos: ["image/jpeg", "image/png", "image/svg+xml"],
+      profiles: ["image/jpeg", "image/png"],
     };
 
     if (!allowedTypes[args.category]?.includes(args.fileType)) {
-      throw new ConvexError(`File type ${args.fileType} not allowed for category ${args.category}`);
+      throw new ConvexError(
+        `File type ${args.fileType} not allowed for category ${args.category}`
+      );
     }
 
     // File size limits
     const sizeLimits = {
-      'vehicles': 10 * 1024 * 1024, // 10MB
-      'documents': 25 * 1024 * 1024, // 25MB  
-      'logos': 5 * 1024 * 1024, // 5MB
-      'profiles': 5 * 1024 * 1024, // 5MB
+      vehicles: 10 * 1024 * 1024, // 10MB
+      documents: 25 * 1024 * 1024, // 25MB
+      logos: 5 * 1024 * 1024, // 5MB
+      profiles: 5 * 1024 * 1024, // 5MB
     };
 
     if (args.fileSize > sizeLimits[args.category]) {
-      throw new ConvexError(`File size exceeds limit of ${sizeLimits[args.category] / (1024 * 1024)}MB`);
+      throw new ConvexError(
+        `File size exceeds limit of ${sizeLimits[args.category] / (1024 * 1024)}MB`
+      );
     }
 
     // Get dealership bucket
@@ -304,24 +321,28 @@ export const getSecureUploadUrl = mutation({
     const filePath = `${args.dealershipId}/${args.category}/${uniqueFileName}`;
 
     // Generate signed upload URL
-    const uploadUrl = await getSignedUrl(s3Client, new PutObjectCommand({
-      Bucket: dealership.s3BucketName,
-      Key: filePath,
-    }), { 
-      expiresIn: 900, // 15 minutes
-    });
+    const uploadUrl = await getSignedUrl(
+      s3Client,
+      new PutObjectCommand({
+        Bucket: dealership.s3BucketName,
+        Key: filePath,
+      }),
+      {
+        expiresIn: 900, // 15 minutes
+      }
+    );
 
     // Log for debugging
     console.log("Generated upload URL for:", filePath);
 
     // Log security event
     await ctx.db.insert("security_logs", {
-      action: 'upload_url_generated',
+      action: "upload_url_generated",
       dealershipId: args.dealershipId,
       userId: identity.subject,
       success: true,
       details: `Upload URL generated for ${args.category}/${sanitizedFileName}`,
-      ipAddress: 'server',
+      ipAddress: "server",
       timestamp: Date.now(),
     });
 
@@ -342,7 +363,12 @@ export const getSimpleUploadUrl = mutation({
     fileName: v.string(),
     fileType: v.string(),
     fileSize: v.number(),
-    category: v.union(v.literal("vehicles"), v.literal("logos"), v.literal("documents"), v.literal("profiles")),
+    category: v.union(
+      v.literal("vehicles"),
+      v.literal("logos"),
+      v.literal("documents"),
+      v.literal("profiles")
+    ),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -375,7 +401,7 @@ export const getSimpleUploadUrl = mutation({
       Key: filePath,
     });
 
-    const uploadUrl = await getSignedUrl(s3Client, command, { 
+    const uploadUrl = await getSignedUrl(s3Client, command, {
       expiresIn: 900,
     });
 
@@ -415,12 +441,16 @@ export const getImageUrl = mutation({
     }
 
     // Generate signed URL for reading (valid for 1 hour)
-    const imageUrl = await getSignedUrl(s3Client, new GetObjectCommand({
-      Bucket: dealership.s3BucketName,
-      Key: args.filePath,
-    }), { 
-      expiresIn: 3600, // 1 hour
-    });
+    const imageUrl = await getSignedUrl(
+      s3Client,
+      new GetObjectCommand({
+        Bucket: dealership.s3BucketName,
+        Key: args.filePath,
+      }),
+      {
+        expiresIn: 3600, // 1 hour
+      }
+    );
 
     return { imageUrl };
   },
@@ -455,12 +485,16 @@ export const getImageUrls = mutation({
     // Generate signed URLs for all images
     const imageUrls = await Promise.all(
       args.filePaths.map(async (filePath) => {
-        const imageUrl = await getSignedUrl(s3Client, new GetObjectCommand({
-          Bucket: dealership.s3BucketName,
-          Key: filePath,
-        }), { 
-          expiresIn: 3600, // 1 hour
-        });
+        const imageUrl = await getSignedUrl(
+          s3Client,
+          new GetObjectCommand({
+            Bucket: dealership.s3BucketName,
+            Key: filePath,
+          }),
+          {
+            expiresIn: 3600, // 1 hour
+          }
+        );
         return { filePath, imageUrl };
       })
     );
@@ -768,7 +802,7 @@ export const getDealershipBucketStatus = query({
   args: {
     dealershipId: v.id("dealerships"),
   },
-  handler: async (ctx: any, args: { dealershipId: Id<"dealerships"> }) => {
+  handler: async (ctx: QueryCtx, args: { dealershipId: Id<"dealerships"> }) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new ConvexError("Authentication required");
@@ -782,7 +816,7 @@ export const getDealershipBucketStatus = query({
     // Check if user has access to this dealership
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .first();
 
     if (
@@ -805,7 +839,7 @@ export const getDealershipBucketStatus = query({
 // Get bucket status for all dealerships (admin only)
 export const getAllDealershipsBucketStatus = query({
   args: {},
-  handler: async (ctx: any) => {
+  handler: async (ctx: QueryCtx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new ConvexError("Authentication required");
@@ -814,7 +848,7 @@ export const getAllDealershipsBucketStatus = query({
     // Check if user is admin
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .first();
 
     if (!user || user.role !== "admin") {
@@ -823,7 +857,16 @@ export const getAllDealershipsBucketStatus = query({
 
     const dealerships = await ctx.db.query("dealerships").collect();
 
-    const dealershipsWithStatus = dealerships.map((dealership: any) => ({
+    type DealershipStatus = {
+      dealershipId: Id<"dealerships">;
+      dealershipName: string;
+      hasBucket: boolean;
+      bucketName: string | null;
+      expectedBucketName: string;
+      createdAt: number;
+    };
+
+    const dealershipsWithStatus: DealershipStatus[] = dealerships.map((dealership) => ({
       dealershipId: dealership._id,
       dealershipName: dealership.name,
       hasBucket: !!dealership.s3BucketName,
@@ -834,8 +877,8 @@ export const getAllDealershipsBucketStatus = query({
 
     const stats = {
       total: dealerships.length,
-      withBuckets: dealershipsWithStatus.filter((d: any) => d.hasBucket).length,
-      withoutBuckets: dealershipsWithStatus.filter((d: any) => !d.hasBucket)
+      withBuckets: dealershipsWithStatus.filter((d) => d.hasBucket).length,
+      withoutBuckets: dealershipsWithStatus.filter((d) => !d.hasBucket)
         .length,
     };
 
@@ -940,7 +983,10 @@ export const updateBucketCors = action({
     dealershipId: v.id("dealerships"),
   },
   handler: async (ctx, _args) => {
-    const dealership = await ctx.runQuery(api.dealerships.getCurrentDealership, {});
+    const dealership = await ctx.runQuery(
+      api.dealerships.getCurrentDealership,
+      {}
+    );
     if (!dealership?.s3BucketName) {
       throw new ConvexError("Dealership S3 bucket not configured");
     }
@@ -987,5 +1033,59 @@ export const updateBucketCors = action({
         `Failed to update CORS: ${error instanceof Error ? error.message : String(error)}`
       );
     }
+  },
+});
+
+// Generate a presigned UPLOAD URL (internal use)
+export const generateUploadUrl = internalAction({
+  args: {
+    s3Key: v.string(),
+    contentType: v.string(),
+    expiresIn: v.number(),
+  },
+  handler: async (_ctx, args) => {
+    const bucketName = process.env.AWS_S3_BUCKET_NAME;
+    
+    if (!bucketName) {
+      throw new Error("AWS_S3_BUCKET_NAME not configured");
+    }
+
+    const command = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: args.s3Key,
+      ContentType: args.contentType,
+    });
+
+    const uploadUrl = await getSignedUrl(s3Client, command, {
+      expiresIn: args.expiresIn,
+    });
+
+    return { uploadUrl };
+  },
+});
+
+// Generate a presigned DOWNLOAD URL (internal use)
+export const generateDownloadUrl = internalAction({
+  args: {
+    s3Key: v.string(),
+    expiresIn: v.number(),
+  },
+  handler: async (_ctx, args) => {
+    const bucketName = process.env.AWS_S3_BUCKET_NAME;
+
+    if (!bucketName) {
+      throw new Error("AWS_S3_BUCKET_NAME not configured");
+    }
+
+    const command = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: args.s3Key,
+    });
+
+    const downloadUrl = await getSignedUrl(s3Client, command, {
+      expiresIn: args.expiresIn,
+    });
+
+    return { downloadUrl };
   },
 });

@@ -1,114 +1,122 @@
 // convex/public_api.ts - Public API queries for external dealer websites
-import { query } from "./_generated/server";
+import { query, action } from "./_generated/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 
 // Get vehicles by dealership with filtering and pagination
 export const getVehiclesByDealership = query({
   args: {
     dealershipId: v.string(),
-    page: v.optional(v.number()),
-    limit: v.optional(v.number()),
-    filters: v.optional(v.object({
-      make: v.optional(v.string()),
-      model: v.optional(v.string()),
-      minPrice: v.optional(v.number()),
-      maxPrice: v.optional(v.number()),
-      year: v.optional(v.number()),
-      status: v.optional(v.string()),
-    })),
+    page: v.number(),
+    limit: v.number(),
+    make: v.optional(v.string()),
+    model: v.optional(v.string()),
+    year: v.optional(v.number()),
+    minPrice: v.optional(v.number()),
+    maxPrice: v.optional(v.number()),
+    featured: v.optional(v.boolean()),
+    sortBy: v.optional(v.string()),
+    sortOrder: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const page = args.page || 1;
-    const limit = Math.min(args.limit || 20, 50); // Max 50 vehicles per request
-    const offset = (page - 1) * limit;
-
-    // Start with base query for the dealership
-    let query = ctx.db
+    // Note: This endpoint is protected by API key validation in Next.js
+    // No additional auth needed here
+    
+    const offset = (args.page - 1) * args.limit;
+    
+    // Base query - only AVAILABLE vehicles
+    let vehicles = await ctx.db
       .query("vehicles")
-      .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId));
-
-    // Only show available vehicles for public API
-    query = query.filter((q) => q.eq(q.field("status"), "AVAILABLE"));
-
-    // Get all matching vehicles first
-    let vehicles = await query.collect();
-
+      .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId))
+      .filter((q) => q.eq(q.field("status"), "AVAILABLE"))
+      .collect();
+    
     // Apply filters
-    if (args.filters) {
-      const filters = args.filters;
-      if (filters.make) {
-        vehicles = vehicles.filter(v => 
-          v.make.toLowerCase().includes(filters.make!.toLowerCase())
-        );
-      }
-      
-      if (filters.model) {
-        vehicles = vehicles.filter(v => 
-          v.model.toLowerCase().includes(filters.model!.toLowerCase())
-        );
-      }
-      
-      if (filters.minPrice) {
-        vehicles = vehicles.filter(v => v.price >= filters.minPrice!);
-      }
-      
-      if (filters.maxPrice) {
-        vehicles = vehicles.filter(v => v.price <= filters.maxPrice!);
-      }
-      
-      if (filters.year) {
-        vehicles = vehicles.filter(v => v.year === filters.year);
-      }
+    if (args.make) {
+      vehicles = vehicles.filter(v => 
+        v.make.toLowerCase() === args.make!.toLowerCase()
+      );
     }
-
-    // Sort by featured first, then by newest
+    
+    if (args.model) {
+      vehicles = vehicles.filter(v => 
+        v.model.toLowerCase() === args.model!.toLowerCase()
+      );
+    }
+    
+    if (args.year) {
+      vehicles = vehicles.filter(v => v.year === args.year);
+    }
+    
+    if (args.minPrice !== undefined) {
+      vehicles = vehicles.filter(v => v.price >= args.minPrice!);
+    }
+    
+    if (args.maxPrice !== undefined) {
+      vehicles = vehicles.filter(v => v.price <= args.maxPrice!);
+    }
+    
+    if (args.featured !== undefined) {
+      vehicles = vehicles.filter(v => v.featured === args.featured);
+    }
+    
+    // Sort
     vehicles.sort((a, b) => {
-      if (a.featured && !b.featured) return -1;
-      if (!a.featured && b.featured) return 1;
-      return b.createdAt - a.createdAt;
+      const sortBy = args.sortBy || 'createdAt';
+      const order = args.sortOrder === 'asc' ? 1 : -1;
+      
+      if (sortBy === 'price') return (a.price - b.price) * order;
+      if (sortBy === 'year') return (a.year - b.year) * order;
+      if (sortBy === 'mileage') return (a.mileage - b.mileage) * order;
+      return (a.createdAt - b.createdAt) * order;
     });
-
-    const totalVehicles = vehicles.length;
-    const totalPages = Math.ceil(totalVehicles / limit);
-
-    // Apply pagination
-    const paginatedVehicles = vehicles.slice(offset, offset + limit);
-
-    // Format vehicles for public consumption (remove sensitive data)
-    const publicVehicles = paginatedVehicles.map(vehicle => ({
-      id: vehicle.id,
-      stock: vehicle.stock,
-      make: vehicle.make,
-      model: vehicle.model,
-      year: vehicle.year,
-      trim: vehicle.trim,
-      mileage: vehicle.mileage,
-      price: vehicle.price,
-      exteriorColor: vehicle.exteriorColor,
-      interiorColor: vehicle.interiorColor,
-      fuelType: vehicle.fuelType,
-      transmission: vehicle.transmission,
-      engine: vehicle.engine,
-      description: vehicle.description,
-      featured: vehicle.featured,
-      features: vehicle.features,
-      images: vehicle.images || [],
-      // SEO fields
-      seoTitle: vehicle.seoTitle,
-      seoDescription: vehicle.seoDescription,
-      // Remove sensitive fields like costPrice, clientId, etc.
+    
+    const total = vehicles.length;
+    const totalPages = Math.ceil(total / args.limit);
+    
+    // Paginate
+    const paginatedVehicles = vehicles.slice(offset, offset + args.limit);
+    
+    // Transform to public schema (exclude sensitive fields)
+    const publicVehicles = paginatedVehicles.map(v => ({
+      id: v.id,
+      vin: v.vin,
+      stock: v.stock,
+      make: v.make,
+      model: v.model,
+      year: v.year,
+      trim: v.trim,
+      bodyType: v.bodyType,
+      condition: v.status === 'AVAILABLE' ? 'used' : 'new', // Adjust based on your logic
+      price: v.price,
+      featured: v.featured,
+      mileage: v.mileage,
+      exteriorColor: v.exteriorColor,
+      interiorColor: v.interiorColor,
+      engine: v.engine,
+      transmission: v.transmission,
+      drivetrain: v.drivetrain,
+      fuelType: v.fuelType,
+      features: v.features?.split(',').map(f => f.trim()),
+      images: v.images || [],
+      seoTitle: v.seoTitle,
+      seoDescription: v.seoDescription,
+      description: v.description,
+      createdAt: v.createdAt,
+      updatedAt: v.updatedAt,
+      // EXPLICITLY EXCLUDE: costPrice, profit, clientId, dealershipId (internal)
     }));
-
+    
     return {
       vehicles: publicVehicles,
       pagination: {
-        page,
-        limit,
-        totalItems: totalVehicles,
+        page: args.page,
+        limit: args.limit,
+        total,
         totalPages,
-        hasNextPage: page < totalPages,
-        hasPreviousPage: page > 1,
-      },
+        hasNext: args.page < totalPages,
+        hasPrev: args.page > 1,
+      }
     };
   },
 });
@@ -446,5 +454,27 @@ export const getInventoryStats = query({
       makeList,
       lastUpdated: Date.now(),
     };
+  },
+});
+
+// Public wrapper for rate limit checking
+export const checkRateLimit = action({
+  args: {
+    apiKeyId: v.id("api_keys"),
+    dealershipId: v.string(),
+  },
+  handler: async (ctx, args): Promise<{
+    limited: boolean;
+    remaining: number;
+    limit: number;
+    resetTime: number;
+    retryAfter: number;
+    shouldWait: boolean;
+    waitMs: number;
+  }> => {
+    return await ctx.runQuery(internal.internal.checkRateLimit, {
+      apiKeyId: args.apiKeyId,
+      dealershipId: args.dealershipId,
+    });
   },
 });
