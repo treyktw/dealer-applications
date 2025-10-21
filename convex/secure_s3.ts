@@ -356,6 +356,46 @@ export const getSecureUploadUrl = mutation({
   },
 });
 
+/**
+ * Delete file from S3 (internal action)
+ */
+export const deleteFile = internalAction({
+  args: {
+    s3Key: v.string(),
+    reason: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    try {
+      // Import AWS SDK components
+      const { DeleteObjectCommand } = await import("@aws-sdk/client-s3");
+      
+      // Get S3 client (you may need to adjust this import path)
+      const { s3Client } = await import("../apps/web/src/lib/s3-client");
+      
+      // Get bucket name from environment
+      const bucketName = process.env.AWS_S3_BUCKET_NAME;
+      if (!bucketName) {
+        throw new Error("AWS_S3_BUCKET_NAME environment variable not set");
+      }
+
+      // Delete the file from S3
+      const command = new DeleteObjectCommand({
+        Bucket: bucketName,
+        Key: args.s3Key,
+      });
+
+      await s3Client.send(command);
+      
+      console.log(`Successfully deleted S3 file: ${args.s3Key} (reason: ${args.reason || "unknown"})`);
+      
+      return { success: true };
+    } catch (error) {
+      console.error(`Failed to delete S3 file ${args.s3Key}:`, error);
+      throw new Error(`Failed to delete S3 file: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  },
+});
+
 // Alternative version with minimal required parameters
 export const getSimpleUploadUrl = mutation({
   args: {

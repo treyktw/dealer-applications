@@ -42,9 +42,9 @@ export const extractFieldsFromTemplate = internalAction({
     templateId: v.id("documentTemplates"),
   },
   handler: async (ctx, args) => {
-    // Get template
-    const template = await ctx.runQuery(
-      api.documents.templates.getTemplateById,
+    // Get template (using internal version since this is an internal action)
+    const template = await ctx.runMutation(
+      internal.documents.templates.getTemplateByIdInternal,
       { templateId: args.templateId }
     );
 
@@ -86,6 +86,7 @@ export const extractFieldsFromTemplate = internalAction({
         required: f.required,
         defaultValue: f.defaultValue,
         pdfFieldName: f.pdfFieldName,
+        page: 1, // Default to page 1 for now
       }));
 
       // Save extracted fields to template
@@ -394,6 +395,7 @@ export const saveExtractedFields = mutation({
         required: v.boolean(),
         defaultValue: v.optional(v.string()),
         pdfFieldName: v.string(),
+        page: v.number(),
       })
     ),
   },
@@ -404,7 +406,7 @@ export const saveExtractedFields = mutation({
     }
 
     await ctx.db.patch(args.templateId, {
-      fields: args.fields,
+      pdfFields: args.fields,
       updatedAt: Date.now(),
     });
 
@@ -459,18 +461,18 @@ export const updateFieldMapping = mutation({
     templateId: v.id("documentTemplates"),
     fields: v.array(
       v.object({
-        name: v.string(),
-        type: v.union(
-          v.literal("text"),
-          v.literal("number"),
-          v.literal("date"),
-          v.literal("checkbox"),
-          v.literal("signature")
-        ),
-        label: v.string(),
-        required: v.boolean(),
-        defaultValue: v.optional(v.string()),
         pdfFieldName: v.string(),
+        dataPath: v.string(),
+        transform: v.optional(v.union(
+          v.literal("date"),
+          v.literal("uppercase"),
+          v.literal("lowercase"),
+          v.literal("titlecase"),
+          v.literal("currency")
+        )),
+        defaultValue: v.optional(v.string()),
+        required: v.boolean(),
+        autoMapped: v.boolean(),
       })
     ),
   },
@@ -486,7 +488,7 @@ export const updateFieldMapping = mutation({
 
     // Update field mappings
     await ctx.db.patch(args.templateId, {
-      fields: args.fields,
+      fieldMappings: args.fields,
       updatedAt: Date.now(),
     });
 
@@ -523,7 +525,7 @@ export const getFieldMapping = mutation({
     await assertDealershipAccess(ctx, template.dealershipId);
 
     return {
-      fields: template.fields,
+      fields: template.fieldMappings,
       templateName: template.name,
       category: template.category,
     };
@@ -549,52 +551,56 @@ export const validateFieldData = mutation({
 
     const errors: Array<{ field: string; message: string }> = [];
 
-    // Check all required fields
-    for (const field of template.fields) {
+    // Check all required fields (from fieldMappings)
+    for (const field of template.fieldMappings) {
       if (field.required) {
-        const value = args.data[field.name];
+        const value = args.data[field.pdfFieldName];
         
         if (value === undefined || value === null || value === "") {
           errors.push({
-            field: field.name,
-            message: `${field.label} is required`,
+            field: field.pdfFieldName,
+            message: `${field.pdfFieldName} is required`,
           });
         }
       }
     }
 
-    // Type validation
-    for (const field of template.fields) {
-      const value = args.data[field.name];
+    // Type validation (from fieldMappings)
+    for (const field of template.fieldMappings) {
+      const value = args.data[field.pdfFieldName];
       
       if (value !== undefined && value !== null && value !== "") {
-        switch (field.type) {
-          case "number":
-            if (Number.isNaN(Number(value))) {
-              errors.push({
-                field: field.name,
-                message: `${field.label} must be a number`,
-              });
-            }
-            break;
+        // Get the field type from pdfFields
+        const pdfField = template.pdfFields.find(f => f.name === field.pdfFieldName);
+        if (pdfField) {
+          switch (pdfField.type) {
+            case "number":
+              if (Number.isNaN(Number(value))) {
+                errors.push({
+                  field: field.pdfFieldName,
+                  message: `${field.pdfFieldName} must be a number`,
+                });
+              }
+              break;
 
-          case "date":
-            if (Number.isNaN(Date.parse(value))) {
-              errors.push({
-                field: field.name,
-                message: `${field.label} must be a valid date`,
-              });
-            }
-            break;
+            case "date":
+              if (Number.isNaN(Date.parse(value))) {
+                errors.push({
+                  field: field.pdfFieldName,
+                  message: `${field.pdfFieldName} must be a valid date`,
+                });
+              }
+              break;
 
-          case "checkbox":
-            if (typeof value !== "boolean") {
-              errors.push({
-                field: field.name,
-                message: `${field.label} must be true or false`,
-              });
-            }
-            break;
+            case "checkbox":
+              if (typeof value !== "boolean") {
+                errors.push({
+                  field: field.pdfFieldName,
+                  message: `${field.pdfFieldName} must be true or false`,
+                });
+              }
+              break;
+          }
         }
       }
     }
@@ -643,13 +649,13 @@ export const getSuggestedMappings = mutation({
       dealer_address: { label: "Dealer Address", type: "text" },
     };
 
-    const suggestions = template.fields.map((field) => {
-      const normalizedName = field.pdfFieldName.toLowerCase().replace(/[-_\s]/g, "_");
+    const suggestions = template.pdfFields.map((field) => {
+      const normalizedName = field.name.toLowerCase().replace(/[-_\s]/g, "_");
       const pattern = patterns[normalizedName];
 
       return {
-        pdfFieldName: field.pdfFieldName,
-        suggestedLabel: pattern?.label || field.pdfFieldName,
+        pdfFieldName: field.name,
+        suggestedLabel: pattern?.label || field.name,
         suggestedType: pattern?.type || "text",
         confidence: pattern ? "high" : "low",
       };

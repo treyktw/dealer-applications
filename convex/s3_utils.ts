@@ -5,7 +5,7 @@ import {
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { s3Client, BUCKET_NAME } from "../apps/web/src/lib/s3-client";
+import { BUCKET_NAME, s3Client } from "../apps/web/src/lib/s3-client";
 
 /**
  * S3 Path Structure:

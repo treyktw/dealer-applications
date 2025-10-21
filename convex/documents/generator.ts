@@ -71,6 +71,10 @@ export const createDocumentInstance = mutation({
       dealId: args.dealId,
       data: args.data as DocumentData,
       status: "DRAFT",
+      name: template.name,
+      documentType: template.category,
+      requiredSignatures: template.pdfFields.filter((field) => field.type === "signature").map((field) => field.name),
+      signaturesCollected: [],
       audit: {
         createdBy: user._id,
         createdAt: Date.now(),
@@ -194,7 +198,7 @@ export const generateDocument = action({
       // Fill PDF with data
       const filledPdfBuffer = await fillPDFTemplate(
         templateBuffer,
-        template.fields,
+        template.pdfFields,
         document.data
       );
 
@@ -251,7 +255,13 @@ export const generateDocument = action({
  */
 async function fillPDFTemplate(
   templateBuffer: ArrayBuffer,
-  fields: TemplateFieldConfig[],
+  fields: Array<{ 
+    name: string; 
+    type: string; 
+    page: number; 
+    rect?: number[];
+    pdfFieldName?: string;  // ← This should already be in the type
+  }>,
   data: DocumentData
 ): Promise<ArrayBuffer> {
   try {
@@ -260,6 +270,11 @@ async function fillPDFTemplate(
     const form = pdfDoc.getForm();
 
     console.log(`Filling ${fields.length} fields in PDF`);
+
+    // ⚠️ ADD THIS: Get all available PDF field names for debugging
+    const pdfFields = form.getFields();
+    const availableFieldNames = pdfFields.map(f => f.getName());
+    console.log('Available PDF fields:', availableFieldNames.join(', '));
 
     let fieldsFilledCount = 0;
     let fieldsSkippedCount = 0;
@@ -272,24 +287,51 @@ async function fillPDFTemplate(
         // Skip if no value provided (unless it's a checkbox)
         if (value === undefined || value === null) {
           if (field.type !== 'checkbox') {
-            console.log(`No value for field: ${field.name}, skipping`);
             fieldsSkippedCount++;
             continue;
           }
         }
 
-        // Get the PDF form field
-        const pdfField = form.getField(field.pdfFieldName);
+        // ⚠️ CRITICAL FIX: Use pdfFieldName (exact case) instead of field.name (lowercase)
+        const pdfFieldName = field.pdfFieldName || field.name;
+        
+        // Try to get the PDF form field
+        let pdfField;
+        try {
+          pdfField = form.getField(pdfFieldName);
+        } catch (e) {
+          // If not found, try case-insensitive search as fallback
+          const matchingField = availableFieldNames.find(
+            name => name.toLowerCase() === pdfFieldName.toLowerCase()
+          );
+          
+          if (matchingField) {
+            console.log(`Case mismatch found: ${pdfFieldName} -> ${matchingField}`);
+            pdfField = form.getField(matchingField);
+          } else {
+            console.error(`Field not found: ${pdfFieldName}`);
+            console.log('Available fields:', availableFieldNames.slice(0, 10).join(', '), '...');
+            fieldsSkippedCount++;
+            continue;
+          }
+        }
 
         // Fill based on field type (cast to our union type)
-        const filled = await fillField(pdfField as PDFField, field, value);
+        const filled = await fillField(
+          pdfField as PDFField, 
+          { 
+            name: field.name, 
+            type: field.type as TemplateFieldType, 
+            pdfFieldName: pdfFieldName 
+          }, 
+          value
+        );
         
         if (filled) {
           fieldsFilledCount++;
-          console.log(`Filled field: ${field.name} = ${value}`);
+          console.log(`✓ ${pdfFieldName} = ${value}`);
         } else {
           fieldsSkippedCount++;
-          console.log(`Could not fill field: ${field.name}`);
         }
       } catch (fieldError) {
         console.error(`Error filling field ${field.name}:`, fieldError);
@@ -298,7 +340,7 @@ async function fillPDFTemplate(
       }
     }
 
-    console.log(`Filled ${fieldsFilledCount} fields, skipped ${fieldsSkippedCount} fields`);
+    console.log(`PDF filled: ${fieldsFilledCount} fields filled, ${fieldsSkippedCount} skipped`);
 
     // Flatten the form (make fields non-editable)
     // This prevents users from editing the filled PDF
@@ -313,6 +355,8 @@ async function fillPDFTemplate(
     throw new Error(`Failed to fill PDF template: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
+
+
 
 /**
  * Fill a single PDF field based on its type

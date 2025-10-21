@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 
 export const checkRateLimit = internalQuery({
@@ -134,7 +135,7 @@ export const trackApiUsage = internalMutation({
 export const purgeCacheForVehicle = internalMutation({
   args: {
     dealershipId: v.string(),
-    vehicleId: v.string(),
+    vehicleId: v.optional(v.string()),
   },
   handler: async (_ctx, args) => {
     // Call Vercel purge API if VERCEL_TOKEN is set
@@ -145,24 +146,101 @@ export const purgeCacheForVehicle = internalMutation({
     }
     
     try {
+      const tags = [`dealership:${args.dealershipId}`];
+      if (args.vehicleId) {
+        tags.push(`vehicle:${args.vehicleId}`);
+      }
+      
       await fetch('https://api.vercel.com/v1/purge', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${vercelToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          tags: [
-            `dealership:${args.dealershipId}`,
-            `vehicle:${args.vehicleId}`
-          ]
-        })
+        body: JSON.stringify({ tags })
       });
       
-      console.log(`Cache purged for vehicle ${args.vehicleId}`);
+      console.log(`Cache purged for ${args.vehicleId ? `vehicle ${args.vehicleId}` : 'all dealership inventory'}`);
     } catch (error) {
       console.error('Failed to purge cache:', error);
     }
+  },
+});
+
+// Public mutation wrapper for manual cache purging
+export const manualPurgeCache = mutation({
+  args: {
+    dealershipId: v.string(),
+    vehicleId: v.optional(v.id("vehicles")),
+  },
+  handler: async (ctx, args) => {
+    // Require authentication
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthorized");
+    }
+    
+    // Verify user has access to this dealership
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .first();
+    
+    if (!user || user.dealershipId !== args.dealershipId) {
+      throw new Error("Unauthorized");
+    }
+    
+    // Call internal mutation
+    await ctx.scheduler.runAfter(0, internal.internal.purgeCacheForVehicle, {
+      dealershipId: args.dealershipId,
+      vehicleId: args.vehicleId,
+    });
+    
+    return { success: true };
+  },
+});
+
+export const getApiUsageLogs = query({
+  args: {
+    dealershipId: v.id("dealerships"),
+    startDate: v.number(),
+    endDate: v.number(),
+  },
+  handler: async (ctx, args) => {
+    // Require admin access
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user || user.dealershipId !== args.dealershipId) {
+      throw new Error("Access denied");
+    }
+
+    // Fetch security logs for API requests
+    const logs = await ctx.db
+      .query("security_logs")
+      .withIndex("by_dealership_timestamp", (q) =>
+        q
+          .eq("dealershipId", args.dealershipId)
+          .gte("timestamp", args.startDate)
+          .lte("timestamp", args.endDate)
+      )
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("action"), "public_api_request"),
+          q.eq(q.field("action"), "public_api_access"),
+          q.eq(q.field("action"), "public_api_rate_limited")
+        )
+      )
+      .collect();
+
+    return logs;
   },
 });
 

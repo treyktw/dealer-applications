@@ -8,10 +8,10 @@ import { validateApiKey } from '@/lib/api-auth';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { dealershipId: string } }
+  { params }: { params: Promise<{ dealershipId: string }> }
 ) {
   try {
-    const { dealershipId } = params;
+    const { dealershipId } = await params;
     
     // 1. Validate API Key
     const apiKey = request.headers.get('x-api-key');

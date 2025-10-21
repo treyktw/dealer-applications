@@ -12,14 +12,24 @@ export async function getCurrentUser(ctx: QueryCtx | MutationCtx) {
     throw new ConvexError("Not authenticated");
   }
 
+  // console.log("getCurrentUser: Looking for user with clerkId:", identity.subject);
+
   const user = await ctx.db
     .query("users")
     .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
     .first();
 
   if (!user) {
+    console.error("getCurrentUser: No user found for clerkId:", identity.subject);
     throw new ConvexError("User not found");
   }
+
+  // console.log("getCurrentUser: Found user:", {
+  //   userId: user._id,
+  //   clerkId: user.clerkId,
+  //   dealershipId: user.dealershipId,
+  //   role: user.role
+  // });
 
   return user;
 }
@@ -84,6 +94,7 @@ export async function requireOrg(ctx: QueryCtx | MutationCtx, orgId: Id<"orgs">)
   }
 
   // TODO: Check if dealership.orgId === orgId when org system is implemented
+  console.log("requireOrg: Checking org access for orgId:", orgId, "user:", user._id);
   
   return user;
 }
@@ -158,8 +169,22 @@ export async function canAccessDealership(
 ): Promise<boolean> {
   try {
     const user = await getCurrentUser(ctx);
-    return user.dealershipId === dealershipId;
-  } catch {
+    
+    // Debug logging to help troubleshoot
+    console.log("canAccessDealership check:", {
+      userDealershipId: user.dealershipId,
+      requestedDealershipId: dealershipId,
+      types: {
+        userType: typeof user.dealershipId,
+        requestedType: typeof dealershipId
+      }
+    });
+    
+    // Handle both string and Id types for dealershipId
+    const userDealershipId = user.dealershipId as Id<"dealerships">;
+    return userDealershipId === dealershipId;
+  } catch (error) {
+    console.error("canAccessDealership error:", error);
     return false;
   }
 }
@@ -171,9 +196,29 @@ export async function assertDealershipAccess(
   ctx: QueryCtx | MutationCtx,
   dealershipId: Id<"dealerships">
 ) {
-  const hasAccess = await canAccessDealership(ctx, dealershipId);
-  
-  if (!hasAccess) {
+  try {
+    const user = await getCurrentUser(ctx);
+    
+    if (!user.dealershipId) {
+      throw new ConvexError("User not associated with any dealership");
+    }
+    
+    const userDealershipId = user.dealershipId as Id<"dealerships">;
+    
+    if (userDealershipId !== dealershipId) {
+      console.log("Dealership access denied:", {
+        userDealershipId,
+        requestedDealershipId: dealershipId,
+        userId: user._id,
+        userRole: user.role
+      });
+      throw new ConvexError(`Access denied: User belongs to dealership ${userDealershipId}, but requested ${dealershipId}`);
+    }
+  } catch (error) {
+    if (error instanceof ConvexError) {
+      throw error;
+    }
+    console.error("assertDealershipAccess error:", error);
     throw new ConvexError("Access denied to this dealership resource");
   }
 }

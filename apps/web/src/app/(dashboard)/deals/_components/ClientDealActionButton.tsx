@@ -27,7 +27,7 @@ export function ClientDealButton({ clientId }: ClientDealButtonProps) {
 
   return (
     <Button onClick={handleClick}>
-      <FileText className="mr-2 h-4 w-4" />
+      <FileText className="mr-2 w-4 h-4" />
       Create Deal Documents
     </Button>
   );

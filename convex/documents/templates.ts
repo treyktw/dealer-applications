@@ -1,9 +1,13 @@
 // convex/documents/templates.ts - Template CRUD Operations
 import { v } from "convex/values";
-import { mutation, query, action } from "../_generated/server";
+import { mutation, query, action, internalMutation } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
-import { requireAuth, requireDealership, assertDealershipAccess } from "../guards";
+import {
+  requireAuth,
+  requireDealership,
+  assertDealershipAccess,
+} from "../guards";
 
 /**
  * Create a new document template
@@ -61,7 +65,7 @@ export const createTemplate = mutation({
     const sanitizedFileName = args.fileName
       .replace(/[^a-zA-Z0-9.-]/g, "-")
       .toLowerCase();
-    
+
     const s3Key = `org/${orgId}/docs/templates/${args.category}/v${version}-${timestamp}-${sanitizedFileName}`;
 
     // Create template record (initially inactive until PDF is uploaded)
@@ -75,7 +79,8 @@ export const createTemplate = mutation({
       isActive: false, // Will be activated after successful upload
       s3Key,
       fileSize: args.fileSize,
-      fields: [], // Will be populated by field extraction
+      pdfFields: [], // Will be populated by field extraction
+      fieldMappings: [], // Will be populated by field extraction
       uploadedBy: user._id,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -114,9 +119,12 @@ export const getTemplateUploadUrl = action({
     args
   ): Promise<{ uploadUrl: string; s3Key: string; expiresIn: number }> => {
     // Fetch via query API (actions do not have direct DB access)
-    const template = await ctx.runQuery(api.documents.templates.getTemplateById, {
-      templateId: args.templateId,
-    });
+    const template = await ctx.runQuery(
+      api.documents.templates.getTemplateById,
+      {
+        templateId: args.templateId,
+      }
+    );
 
     if (!template) {
       throw new Error("Template not found");
@@ -133,11 +141,14 @@ export const getTemplateUploadUrl = action({
     }
 
     // Generate presigned URL using secure_s3
-    const { uploadUrl } = await ctx.runAction(internal.secure_s3.generateUploadUrl, {
-      s3Key: template.s3Key,
-      contentType: args.contentType,
-      expiresIn: 900,
-    });
+    const { uploadUrl } = await ctx.runAction(
+      internal.secure_s3.generateUploadUrl,
+      {
+        s3Key: template.s3Key,
+        contentType: args.contentType,
+        expiresIn: 900,
+      }
+    );
 
     return {
       uploadUrl,
@@ -170,9 +181,13 @@ export const completeTemplateUpload = mutation({
     });
 
     // Trigger field extraction (async)
-    await ctx.scheduler.runAfter(0, internal.documents.fields.extractFieldsFromTemplate, {
-      templateId: args.templateId,
-    });
+    await ctx.scheduler.runAfter(
+      0,
+      internal.documents.fields.extractFieldsFromTemplate,
+      {
+        templateId: args.templateId,
+      }
+    );
 
     // Log security event
     await ctx.db.insert("security_logs", {
@@ -190,6 +205,108 @@ export const completeTemplateUpload = mutation({
 });
 
 /**
+ * Update template field mappings
+ */
+export const updateFieldMappings = mutation({
+  args: {
+    templateId: v.id("documentTemplates"),
+    fieldMappings: v.array(
+      v.object({
+        pdfFieldName: v.string(),
+        dataPath: v.string(),
+        transform: v.optional(v.union(
+          v.literal("date"),
+          v.literal("uppercase"),
+          v.literal("lowercase"),
+          v.literal("titlecase"),
+          v.literal("currency")
+        )),
+        defaultValue: v.optional(v.string()),
+        required: v.boolean(),
+        autoMapped: v.boolean(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuth(ctx);
+
+    const template = await ctx.db.get(args.templateId);
+    if (!template) {
+      throw new Error("Template not found");
+    }
+
+    await assertDealershipAccess(ctx, template.dealershipId);
+
+    await ctx.db.patch(args.templateId, {
+      fieldMappings: args.fieldMappings,
+      updatedAt: Date.now(),
+    });
+
+    // Log security event
+    await ctx.db.insert("security_logs", {
+      dealershipId: template.dealershipId,
+      action: "template_field_mappings_updated",
+      userId: user._id.toString(),
+      ipAddress: "server",
+      success: true,
+      details: `Field mappings updated for template: ${template.name} v${template.version}; mappings count: ${args.fieldMappings.length}`,
+      timestamp: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Get document setup progress
+ */
+export const getSetupProgress = query({
+  args: {
+    dealershipId: v.id("dealerships"),
+  },
+  handler: async (ctx, args) => {
+    await requireDealership(ctx, args.dealershipId);
+
+    const templates = await ctx.db
+      .query("documentTemplates")
+      .withIndex("by_dealership", (q) =>
+        q.eq("dealershipId", args.dealershipId)
+      )
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    const categories = templates.map((t) => t.category);
+    const hasBillOfSale = categories.includes("bill_of_sale");
+
+    const RECOMMENDED_CATEGORIES = [
+      "bill_of_sale",
+      "buyers_guide",
+      "odometer_disclosure",
+      "power_of_attorney",
+      "trade_in",
+      "finance_contract",
+      "warranty",
+    ];
+
+    const missingRecommended = RECOMMENDED_CATEGORIES.filter(
+      (cat) => !(categories as string[]).includes(cat)
+    );
+
+    return {
+      hasRequired: hasBillOfSale,
+      uploadedCount: templates.length,
+      totalRecommended: RECOMMENDED_CATEGORIES.length,
+      progress: Math.round(
+        (templates.length / RECOMMENDED_CATEGORIES.length) * 100
+      ),
+      missingRequired: hasBillOfSale ? [] : ["Bill of Sale"],
+      missingRecommended,
+      uploadedCategories: categories,
+    };
+  },
+});
+
+/**
  * Get all templates for a dealership
  */
 export const getTemplates = query({
@@ -203,7 +320,9 @@ export const getTemplates = query({
 
     var query = ctx.db
       .query("documentTemplates")
-      .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId));
+      .withIndex("by_dealership", (q) =>
+        q.eq("dealershipId", args.dealershipId)
+      );
 
     let templates = await query.collect();
 
@@ -260,6 +379,32 @@ export const getTemplateById = query({
 
     await assertDealershipAccess(ctx, template.dealershipId);
 
+    // Get the user who uploaded the template
+    const uploadedByUser = await ctx.db.get(template.uploadedBy);
+
+    return {
+      ...template,
+      uploadedByUser: uploadedByUser ? {
+        name: uploadedByUser.name,
+        email: uploadedByUser.email,
+      } : null,
+    };
+  },
+});
+
+/**
+ * Get template by ID without authentication (for internal use)
+ */
+export const getTemplateByIdInternal = internalMutation({
+  args: {
+    templateId: v.id("documentTemplates"),
+  },
+  handler: async (ctx, args) => {
+    const template = await ctx.db.get(args.templateId);
+    if (!template) {
+      throw new Error("Template not found");
+    }
+
     return template;
   },
 });
@@ -296,6 +441,32 @@ export const getActiveTemplate = query({
   },
 });
 
+
+/**
+ * Get only active templates for a dealership
+ * Wrapper around getTemplates for cleaner API
+ */
+export const getActiveTemplates = query({
+  args: {
+    dealershipId: v.id("dealerships"),
+  },
+  handler: async (ctx, args) => {
+    // Get all templates for dealership
+    const templates = await ctx.db
+      .query("documentTemplates")
+      .withIndex("by_dealership", (q) =>
+        q.eq("dealershipId", args.dealershipId)
+      )
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    // Sort by category
+    templates.sort((a, b) => a.category.localeCompare(b.category));
+
+    return templates;
+  },
+});
+
 /**
  * Activate a template version (deactivates others in same category)
  */
@@ -317,7 +488,9 @@ export const activateTemplate = mutation({
     const otherTemplates = await ctx.db
       .query("documentTemplates")
       .withIndex("by_dealership_and_category", (q) =>
-        q.eq("dealershipId", template.dealershipId).eq("category", template.category)
+        q
+          .eq("dealershipId", template.dealershipId)
+          .eq("category", template.category)
       )
       .collect();
 
@@ -441,8 +614,8 @@ export const updateTemplate = mutation({
 });
 
 /**
- * Soft delete template (set isActive to false)
- * Hard delete not recommended due to audit trail
+ * Delete template completely (removes from Convex and S3)
+ * This is a hard delete - use with caution
  */
 export const deleteTemplate = mutation({
   args: {
@@ -470,11 +643,25 @@ export const deleteTemplate = mutation({
       );
     }
 
-    // Soft delete by deactivating
-    await ctx.db.patch(args.templateId, {
-      isActive: false,
-      updatedAt: Date.now(),
-    });
+    // Store template info for logging before deletion
+    const templateInfo = {
+      name: template.name,
+      version: template.version,
+      s3Key: template.s3Key,
+    };
+
+    // Delete the template record from Convex
+    await ctx.db.delete(args.templateId);
+
+    // Schedule S3 file deletion
+    await ctx.scheduler.runAfter(
+      0,
+      internal.secure_s3.deleteFile,
+      {
+        s3Key: template.s3Key,
+        reason: "template_deleted",
+      }
+    );
 
     // Log security event
     await ctx.db.insert("security_logs", {
@@ -483,8 +670,9 @@ export const deleteTemplate = mutation({
       userId: user._id.toString(),
       ipAddress: "server",
       success: true,
-      details: `Template deleted: ${template.name} v${template.version}`,
+      details: `Template permanently deleted: ${templateInfo.name} v${templateInfo.version} (S3: ${templateInfo.s3Key})`,
       timestamp: Date.now(),
+      severity: "high",
     });
 
     return { success: true };
@@ -502,17 +690,23 @@ export const getTemplateDownloadUrl = action({
     ctx,
     args
   ): Promise<{ downloadUrl: string; expiresIn: number }> => {
-    const template = await ctx.runQuery(api.documents.templates.getTemplateById, {
-      templateId: args.templateId,
-    });
+    const template = await ctx.runQuery(
+      api.documents.templates.getTemplateById,
+      {
+        templateId: args.templateId,
+      }
+    );
 
     if (!template) {
       throw new Error("Template not found");
     }
-    const { downloadUrl } = await ctx.runAction(internal.secure_s3.generateDownloadUrl, {
-      expiresIn: 300,
-      s3Key: template.s3Key,
-    })
+    const { downloadUrl } = await ctx.runAction(
+      internal.secure_s3.generateDownloadUrl,
+      {
+        expiresIn: 300,
+        s3Key: template.s3Key,
+      }
+    );
 
     return {
       downloadUrl,
@@ -520,4 +714,3 @@ export const getTemplateDownloadUrl = action({
     };
   },
 });
-

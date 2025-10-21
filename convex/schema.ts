@@ -367,6 +367,15 @@ export default defineSchema({
     // SEO
     seoTitle: v.optional(v.string()),
     seoDescription: v.optional(v.string()),
+
+    condition: v.optional(
+      v.union(
+        v.literal("new"),
+        v.literal("used"),
+        v.literal("certified_pre_owned")
+      )
+    ),
+
     // Timestamps
     createdAt: v.float64(),
     updatedAt: v.float64(),
@@ -487,6 +496,7 @@ export default defineSchema({
     financedAmount: v.optional(v.number()),
     documentPackId: v.optional(v.id("document_packs")),
     buyerData: v.optional(v.any()), // Cached buyer info
+    dealData: v.optional(v.any()), // Additional custom deal data
     documentStatus: v.optional(v.string()), // "none", "in_progress", "complete"
   })
     .index("by_dealership", ["dealershipId"])
@@ -1059,22 +1069,45 @@ export default defineSchema({
     s3Key: v.string(), // Path to PDF template in S3
     fileSize: v.number(),
 
-    // Field mapping (extracted PDF form fields)
-    fields: v.array(
+    // PDF form fields (extracted from PDF)
+    pdfFields: v.array(
       v.object({
-        name: v.string(),
+        name: v.string(), // PDF field name (e.g., "buyer_name")
         type: v.union(
           v.literal("text"),
           v.literal("number"),
           v.literal("date"),
           v.literal("checkbox"),
-          v.literal("signature")
+          v.literal("signature"),
+          v.literal("radio"),
+          v.literal("dropdown")
         ),
-        label: v.string(),
-        required: v.boolean(),
+        label: v.string(), // Human-readable label
+        required: v.boolean(), // Whether field is required
+        defaultValue: v.optional(v.string()), // Default value
+        pdfFieldName: v.string(), // Original PDF field name
+        page: v.number(), // Which page the field is on
+        rect: v.optional(v.array(v.number())), // [x, y, width, height]
+      })
+    ),
+
+    // Field mappings (maps PDF fields to data schema)
+    fieldMappings: v.array(
+      v.object({
+        pdfFieldName: v.string(), // "buyer_name"
+        dataPath: v.string(), // "client.firstName + ' ' + client.lastName"
+        transform: v.optional(
+          v.union(
+            v.literal("uppercase"),
+            v.literal("lowercase"),
+            v.literal("titlecase"),
+            v.literal("currency"),
+            v.literal("date")
+          )
+        ),
         defaultValue: v.optional(v.string()),
-        // Maps to PDF form field name
-        pdfFieldName: v.string(),
+        required: v.boolean(),
+        autoMapped: v.boolean(), // Was this auto-detected or manual?
       })
     ),
 
@@ -1085,7 +1118,7 @@ export default defineSchema({
   })
     .index("by_dealership", ["dealershipId"])
     .index("by_dealership_and_category", ["dealershipId", "category"])
-    .index("by_active", ["isActive"])
+    .index("by_dealership_active", ["dealershipId", "isActive"])
     .index("by_org", ["orgId"]),
 
   documentInstances: defineTable({
@@ -1096,20 +1129,35 @@ export default defineSchema({
     templateId: v.id("documentTemplates"),
     dealId: v.id("deals"),
 
+    // Document info
+    documentType: v.string(), // "bill_of_sale", etc. (from template.category)
+    name: v.string(), // "Bill of Sale - John Doe"
+
     // Document data
-    data: v.any(), // Filled form data (JSON)
+    data: v.any(), // Filled form data (JSON snapshot)
 
     // Status machine
     status: v.union(
-      v.literal("DRAFT"),
-      v.literal("READY"),
-      v.literal("SIGNED"),
-      v.literal("VOID")
+      v.literal("DRAFT"), // Being created
+      v.literal("READY"), // Generated, ready to sign
+      v.literal("SIGNED"), // All signatures collected
+      v.literal("VOID") // Voided/cancelled
     ),
 
-    // S3 storage for generated PDF
-    s3Key: v.optional(v.string()), // Filled PDF in S3
+    // S3 storage
+    s3Key: v.optional(v.string()), // Generated PDF (unsigned)
+    signedS3Key: v.optional(v.string()), // Final PDF (with signatures embedded)
     fileSize: v.optional(v.number()),
+
+    // NEW: Signature tracking (moved from generatedDocuments)
+    requiredSignatures: v.array(v.string()), // ["buyer", "seller", "notary"]
+    signaturesCollected: v.array(
+      v.object({
+        role: v.string(),
+        signatureId: v.id("signatures"),
+        signedAt: v.number(),
+      })
+    ),
 
     // Audit trail
     audit: v.object({
@@ -1124,10 +1172,162 @@ export default defineSchema({
 
     // Metadata
     updatedAt: v.number(),
+
+    // NEW: Link to final archived version
+    generatedDocumentId: v.optional(v.id("generatedDocuments")),
   })
     .index("by_dealership", ["dealershipId"])
     .index("by_deal", ["dealId"])
     .index("by_template", ["templateId"])
     .index("by_status", ["status"])
-    .index("by_org", ["orgId"]),
+    .index("by_org", ["orgId"])
+    .index("by_dealership_status", ["dealershipId", "status"]),
+
+  signatureSessions: defineTable({
+    // Session Info
+    sessionToken: v.string(), // Unique token for QR URL
+    dealId: v.id("deals"),
+    documentId: v.id("documentInstances"),
+    dealershipId: v.id("dealerships"),
+
+    // Signer Info
+    signerRole: v.string(), // "buyer" | "seller" | "notary"
+    signerName: v.string(), // Expected signer name
+    signerEmail: v.optional(v.string()),
+
+    // Status
+    status: v.string(), // "pending" | "signed" | "expired" | "cancelled"
+
+    // Signature Data (once captured)
+    signatureS3Key: v.optional(v.string()),
+    signedAt: v.optional(v.number()),
+    ipAddress: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
+    geolocation: v.optional(
+      v.object({
+        latitude: v.number(),
+        longitude: v.number(),
+      })
+    ),
+
+    // Consent
+    consentGiven: v.boolean(),
+    consentTimestamp: v.optional(v.number()),
+    consentText: v.string(), // What they agreed to
+
+    // Security
+    createdBy: v.id("users"), // Dealer who initiated
+    expiresAt: v.number(), // Auto-expire after 15 minutes
+    createdAt: v.number(),
+  })
+    .index("by_token", ["sessionToken"])
+    .index("by_deal", ["dealId"])
+    .index("by_status_expires", ["status", "expiresAt"])
+    .index("by_dealership", ["dealershipId"]),
+
+  // Signature Records (permanent audit trail)
+  signatures: defineTable({
+    dealershipId: v.id("dealerships"),
+    dealId: v.id("deals"),
+    documentId: v.id("documentInstances"),
+
+    // Signer Info
+    signerRole: v.string(), // "buyer" | "seller" | "notary"
+    signerName: v.string(),
+    signerEmail: v.optional(v.string()),
+
+    // Signature Data
+    s3Key: v.string(), // Path to signature image in S3
+    imageDataUrl: v.optional(v.string()), // Base64 preview (deleted after 24hrs)
+    width: v.optional(v.number()),
+    height: v.optional(v.number()),
+
+    // Metadata
+    ipAddress: v.string(),
+    userAgent: v.string(),
+    geolocation: v.optional(
+      v.object({
+        latitude: v.number(),
+        longitude: v.number(),
+      })
+    ),
+
+    // Consent
+    consentGiven: v.boolean(),
+    consentText: v.string(),
+    consentTimestamp: v.number(),
+
+    // Audit
+    createdAt: v.number(),
+    scheduledDeletionAt: v.number(), // Auto-delete after 30 days
+    deletedAt: v.optional(v.number()), // When actually deleted
+  })
+    .index("by_deal", ["dealId"])
+    .index("by_document", ["documentId"])
+    .index("by_dealership_created", ["dealershipId", "createdAt"])
+    .index("by_scheduled_deletion", ["scheduledDeletionAt"])
+    .index("by_role_deal", ["dealId", "signerRole"]),
+
+  // E-Signature Consent Records
+  eSignatureConsents: defineTable({
+    dealershipId: v.id("dealerships"),
+    clientId: v.optional(v.id("clients")),
+    dealId: v.id("deals"),
+
+    // Consent Details
+    consentGiven: v.boolean(),
+    consentText: v.string(), // Full legal text
+    consentVersion: v.string(), // v1.0, v2.0, etc.
+
+    // Metadata
+    ipAddress: v.string(),
+    userAgent: v.string(),
+    timestamp: v.number(),
+
+    // Revocation
+    revoked: v.boolean(),
+    revokedAt: v.optional(v.number()),
+    revokedReason: v.optional(v.string()),
+  })
+    .index("by_client", ["clientId"])
+    .index("by_deal", ["dealId"])
+    .index("by_dealership", ["dealershipId"]),
+
+  generatedDocuments: defineTable({
+    dealershipId: v.id("dealerships"),
+    dealId: v.id("deals"),
+    templateId: v.id("documentTemplates"),
+    documentType: v.string(),
+
+    // Generation Data
+    generatedData: v.any(), // Snapshot of data used to fill
+    s3Key: v.string(), // Filled PDF location
+    fileSize: v.number(),
+
+    // Status
+    status: v.string(), // "draft" | "ready_to_sign" | "partially_signed" | "fully_signed" | "void"
+
+    // Required Signatures
+    requiredSignatures: v.array(v.string()), // ["buyer", "seller", "notary"]
+
+    // Signature Status
+    signaturesCollected: v.array(
+      v.object({
+        role: v.string(),
+        signatureId: v.id("signatures"),
+        signedAt: v.number(),
+      })
+    ),
+
+    // Audit Trail
+    generatedBy: v.id("users"),
+    generatedAt: v.number(),
+    lastModifiedAt: v.number(),
+    voidedAt: v.optional(v.number()),
+    voidedBy: v.optional(v.id("users")),
+    voidReason: v.optional(v.string()),
+  })
+    .index("by_deal", ["dealId"])
+    .index("by_dealership_status", ["dealershipId", "status"])
+    .index("by_template", ["templateId"]),
 });

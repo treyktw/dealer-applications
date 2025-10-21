@@ -17,6 +17,7 @@ export const getVehiclesByDealership = query({
     featured: v.optional(v.boolean()),
     sortBy: v.optional(v.string()),
     sortOrder: v.optional(v.string()),
+    condition: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Note: This endpoint is protected by API key validation in Next.js
@@ -60,6 +61,10 @@ export const getVehiclesByDealership = query({
       vehicles = vehicles.filter(v => v.featured === args.featured);
     }
     
+    if (args.condition) {
+      vehicles = vehicles.filter(v => v.condition === args.condition);
+    }
+    
     // Sort
     vehicles.sort((a, b) => {
       const sortBy = args.sortBy || 'createdAt';
@@ -87,7 +92,7 @@ export const getVehiclesByDealership = query({
       year: v.year,
       trim: v.trim,
       bodyType: v.bodyType,
-      condition: v.status === 'AVAILABLE' ? 'used' : 'new', // Adjust based on your logic
+      condition: v.condition,
       price: v.price,
       featured: v.featured,
       mileage: v.mileage,
@@ -270,6 +275,7 @@ export const searchVehicles = query({
       fuelType: vehicle.fuelType,
       transmission: vehicle.transmission,
       engine: vehicle.engine,
+      condition: vehicle.condition,
       description: vehicle.description,
       featured: vehicle.featured,
       features: vehicle.features,
@@ -398,6 +404,7 @@ export const getFeaturedVehicles = query({
       fuelType: vehicle.fuelType,
       transmission: vehicle.transmission,
       engine: vehicle.engine,
+      condition: vehicle.condition,
       description: vehicle.description,
       featured: vehicle.featured,
       features: vehicle.features,

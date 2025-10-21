@@ -105,7 +105,7 @@ export function DocumentGenerator({ clientId, onBack }: DocumentGeneratorProps) 
     if (client === undefined) {
       return (
         <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       );
     }
@@ -120,10 +120,10 @@ export function DocumentGenerator({ clientId, onBack }: DocumentGeneratorProps) 
               Select a vehicle to create deal documents for this client
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Car className="h-16 w-16 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No Vehicle Selected</h3>
-            <p className="text-muted-foreground text-center max-w-md mb-6">
+          <CardContent className="flex flex-col justify-center items-center py-12">
+            <Car className="mb-4 w-16 h-16 text-muted-foreground" />
+            <h3 className="mb-2 text-lg font-semibold">No Vehicle Selected</h3>
+            <p className="mb-6 max-w-md text-center text-muted-foreground">
               To generate deal documents, you need to select a vehicle from your inventory
               that this client is interested in purchasing.
             </p>
@@ -131,9 +131,9 @@ export function DocumentGenerator({ clientId, onBack }: DocumentGeneratorProps) 
               Select Vehicle
             </Button>
           </CardContent>
-          <CardFooter className="border-t p-4 flex justify-start">
+          <CardFooter className="flex justify-start p-4 border-t">
             <Button variant="outline" onClick={onBack}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
+              <ArrowLeft className="mr-2 w-4 h-4" />
               Back to Client
             </Button>
           </CardFooter>
@@ -144,13 +144,13 @@ export function DocumentGenerator({ clientId, onBack }: DocumentGeneratorProps) 
     // If both client and vehicle are loaded, show deal form
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex justify-between items-center">
           <Button variant="outline" onClick={onBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
+            <ArrowLeft className="mr-2 w-4 h-4" />
             Back to Client
           </Button>
           <div className="flex items-center">
-            <Check className="h-5 w-5 text-green-500 mr-2" />
+            <Check className="mr-2 w-5 h-5 text-green-500" />
             <span className="text-sm">Vehicle Selected: {vehicle?.year} {vehicle?.make} {vehicle?.model}</span>
             <Button 
               variant="ghost" 
