@@ -147,8 +147,9 @@ function ProfilePage() {
       }
     } catch (error) {
       console.error("Update check failed:", error);
-      toast.error("Failed to check for updates", {
-        description: "Please try again later.",
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error("Update check failed", {
+        description: errorMessage || "Please try again later.",
       });
     } finally {
       setCheckingUpdates(false);

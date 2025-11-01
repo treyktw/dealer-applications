@@ -4,17 +4,23 @@
 mod encryption;
 mod file_permissions;
 mod security;
+mod file_operations;
 
 use encryption::{decrypt_data, encrypt_data, generate_encryption_key};
 use file_permissions::{check_file_permissions, get_storage_file_path, set_file_permissions};
+use file_operations::{
+    batch_print_pdfs, cleanup_temp_print_dir, create_temp_print_dir, get_documents_dir,
+    get_downloads_dir, open_file_with_default_app, print_pdf, reveal_in_explorer,
+    write_file_to_path,
+};
+use log::{error, info};
 use security::{remove_secure, retrieve_secure, store_secure};
 use tauri::{Emitter, Manager};
-use log::{info, error};
 
 fn main() {
     info!("🚀 Tauri app starting...");
 
-    let mut builder = tauri::Builder::default();
+    let mut builder = tauri::Builder::default().plugin(tauri_plugin_fs::init());
 
     // Single instance plugin (must be first)
     #[cfg(desktop)]
@@ -27,12 +33,12 @@ fn main() {
 
     // Initialize plugins in correct order
     builder = builder
-        .plugin(tauri_plugin_updater::Builder::new().build()) // ✅ Updater plugin (only once!)
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_deep_link::init())
-        .plugin(tauri_plugin_store::Builder::default().build()) // ✅ For encrypted storage file
+        .plugin(tauri_plugin_store::Builder::default().build())
         .setup(|app| {
             info!("🔗 Setting up deep link handler...");
 
@@ -115,6 +121,16 @@ fn main() {
             set_file_permissions,
             check_file_permissions,
             get_storage_file_path,
+            // File operations
+            get_downloads_dir,
+            get_documents_dir,
+            open_file_with_default_app,
+            print_pdf,
+            batch_print_pdfs,
+            create_temp_print_dir,
+            cleanup_temp_print_dir,
+            reveal_in_explorer,
+            write_file_to_path,
         ]);
 
     info!("🚀 Starting Tauri runtime...");

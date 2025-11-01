@@ -1,7 +1,8 @@
 // convex/guards.ts - Security Guards & Helpers
 import type { QueryCtx, MutationCtx } from "./_generated/server";
 import { ConvexError } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Id, Doc } from "./_generated/dataModel";
+import { api } from "./_generated/api";
 
 /**
  * Get current authenticated user with full context
@@ -194,10 +195,41 @@ export async function canAccessDealership(
  */
 export async function assertDealershipAccess(
   ctx: QueryCtx | MutationCtx,
-  dealershipId: Id<"dealerships">
+  dealershipId: Id<"dealerships">,
+  token?: string
 ) {
   try {
-    const user = await getCurrentUser(ctx);
+    let user: Doc<"users">;
+    
+    // Support both web and desktop authentication
+    if (token) {
+      // Desktop app authentication
+      const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token });
+      if (!sessionData?.user) {
+        throw new ConvexError("Invalid or expired session");
+      }
+      
+      const { id, email } = sessionData.user as { id?: string; email?: string };
+      
+      // Try to find user by Clerk ID
+      let foundUser = id
+        ? await ctx.db.query("users").withIndex("by_clerk_id", (q) => q.eq("clerkId", id)).first()
+        : null;
+      
+      // Fallback to email if Clerk ID not found
+      if (!foundUser && email) {
+        foundUser = await ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", email)).first();
+      }
+      
+      if (!foundUser) {
+        throw new ConvexError("User not found in database");
+      }
+      
+      user = foundUser;
+    } else {
+      // Web app authentication
+      user = await getCurrentUser(ctx);
+    }
     
     if (!user.dealershipId) {
       throw new ConvexError("User not associated with any dealership");

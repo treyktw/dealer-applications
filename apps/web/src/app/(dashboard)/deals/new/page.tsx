@@ -98,8 +98,9 @@ export default function NewDealPage() {
     const sale = parseFloat(saleAmount) || 0;
     const tax = parseFloat(salesTax) || 0;
     const fee = parseFloat(docFee) || 0;
+    const down = parseFloat(downPayment) || 0;
     const trade = parseFloat(tradeInValue) || 0;
-    return sale + tax + fee - trade;
+    return sale + tax + fee - trade - down;
   };
 
   // Handle create deal
@@ -495,6 +496,12 @@ export default function NewDealPage() {
                   <span className="text-muted-foreground">Doc Fee:</span>
                   <span className="font-medium">{formatCurrency(parseFloat(docFee) || 0)}</span>
                 </div>
+                {parseFloat(downPayment) > 0 && (
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-muted-foreground">Down Payment:</span>
+                    <span className="font-medium text-green-600">-{formatCurrency(parseFloat(downPayment))}</span>
+                  </div>
+                )}
                 {parseFloat(tradeInValue) > 0 && (
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-muted-foreground">Trade-In:</span>
@@ -562,6 +569,12 @@ export default function NewDealPage() {
                     <span className="text-muted-foreground">Sale Amount:</span>
                     <span className="font-medium">{formatCurrency(parseFloat(saleAmount))}</span>
                   </div>
+                  {parseFloat(downPayment) > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Down Payment:</span>
+                      <span className="font-medium text-green-600">-{formatCurrency(parseFloat(downPayment))}</span>
+                    </div>
+                  )}
                   <div className="pt-2 mt-2 border-t">
                     <div className="flex justify-between">
                       <span className="font-semibold">Total:</span>

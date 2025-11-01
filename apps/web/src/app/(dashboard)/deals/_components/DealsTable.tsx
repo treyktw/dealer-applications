@@ -405,9 +405,9 @@ export function DealsTable() {
               Are you sure you want to delete this deal? This action cannot be undone.
               {dealToDelete && (
                 <div className="p-3 mt-2 rounded-md bg-muted">
-                  <div className="font-medium">
+                  <span className="font-medium">
                     Deal #{String(dealToDelete._id).substring(0, 8)}
-                  </div>
+                  </span>
                   {dealToDelete.client && (
                     <div className="text-sm text-muted-foreground">
                       Client: {dealToDelete.client.firstName} {dealToDelete.client.lastName}

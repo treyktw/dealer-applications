@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation, internalAction } from "./_generated/server";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { internal, api } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 
 // ============================================================================
@@ -35,7 +35,34 @@ If you do not agree to these terms, please do not sign electronically.
 // HELPER FUNCTIONS
 // ============================================================================
 
-async function requireAuth(ctx: QueryCtx | MutationCtx): Promise<Doc<"users">> {
+async function requireAuth(ctx: QueryCtx | MutationCtx, token?: string): Promise<Doc<"users">> {
+  // Path 1: Desktop app authentication (with token)
+  if (token) {
+    // For mutations, we can't use runQuery, so query the session directly
+    const session = await ctx.db
+      .query("auth_sessions")
+      .withIndex("by_token", (q) => q.eq("token", token))
+      .first();
+    
+    if (!session) {
+      throw new Error("Invalid or expired session");
+    }
+    
+    // Check if session is expired
+    if (Date.now() > session.expiresAt) {
+      throw new Error("Session expired");
+    }
+    
+    // Get user from session
+    const userDoc = await ctx.db.get(session.userId);
+    if (!userDoc) {
+      throw new Error("User not found in database");
+    }
+    
+    return userDoc;
+  }
+  
+  // Path 2: Web app authentication (with Clerk identity)
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) {
     throw new Error("Authentication required");
@@ -65,7 +92,7 @@ function generateSecureToken(): string {
 // ============================================================================
 
 /**
- * Create a signature session (called from desktop app)
+ * Create a signature session (called from desktop app or web)
  */
 export const createSignatureSession = mutation({
   args: {
@@ -78,9 +105,10 @@ export const createSignatureSession = mutation({
     ),
     signerName: v.string(),
     signerEmail: v.optional(v.string()),
+    sessionToken: v.optional(v.string()), // Desktop app session token
   },
   handler: async (ctx, args) => {
-    const user = await requireAuth(ctx);
+    const user = await requireAuth(ctx, args.sessionToken);
 
     if (!user.dealershipId) {
       throw new Error("User not associated with a dealership");
@@ -165,7 +193,7 @@ export const createSignatureSession = mutation({
       dealershipId: user.dealershipId,
       action: "signature_session_created",
       userId: user._id,
-      ipAddress: "system", // TODO: Get from request context
+      ipAddress: "system", // Desktop app context doesn't expose IP, could be passed as optional parameter
       success: true,
       details: JSON.stringify({
         sessionId,
@@ -269,9 +297,10 @@ export const checkSessionStatus = query({
 export const cancelSignatureSession = mutation({
   args: {
     sessionToken: v.string(),
+    authToken: v.optional(v.string()), // Desktop app session token
   },
   handler: async (ctx, args) => {
-    const user = await requireAuth(ctx);
+    const user = await requireAuth(ctx, args.authToken);
 
     const session = await ctx.db
       .query("signatureSessions")
@@ -309,7 +338,7 @@ export const cancelSignatureSession = mutation({
 export const submitSignature = mutation({
   args: {
     sessionToken: v.string(),
-    signatureData: v.string(), // Base64 PNG data URL
+    signatureData: v.string(), // Base64 data URL (PNG or SVG)
     consentGiven: v.boolean(),
     ipAddress: v.string(),
     userAgent: v.string(),
@@ -349,12 +378,15 @@ export const submitSignature = mutation({
       throw new Error("Consent is required to submit electronic signature");
     }
 
-    // Validate signature data
-    if (!args.signatureData.startsWith("data:image/png;base64,")) {
-      throw new Error("Invalid signature data format");
+    // Validate signature data format (accept PNG or SVG)
+    const isPng = args.signatureData.startsWith("data:image/png;base64,");
+    const isSvg = args.signatureData.startsWith("data:image/svg+xml;base64,");
+    
+    if (!isPng && !isSvg) {
+      throw new Error("Invalid signature data format. Expected PNG or SVG data URL.");
     }
 
-    // Trigger S3 upload action
+    // Trigger S3 upload action (will handle SVG to PNG conversion)
     await ctx.scheduler.runAfter(
       0,
       internal.signatures.uploadSignatureToS3,
@@ -364,13 +396,15 @@ export const submitSignature = mutation({
         documentId: session.documentId,
         signerRole: session.signerRole,
         signatureData: args.signatureData,
+        isSvg,
       }
     );
 
     // The action will return the S3 key, but we need to wait for it
-    // For now, generate a predictable key
+    // For now, generate a predictable key with correct extension
     const timestamp = Date.now();
-    const s3Key = `signatures/${session.dealershipId}/${session.dealId}/${session.signerRole}-${timestamp}.png`;
+    const extension = isSvg ? 'svg' : 'png';
+    const s3Key = `signatures/${session.dealershipId}/${session.dealId}/${session.signerRole}-${timestamp}.${extension}`;
 
     // Create permanent signature record
     const signatureId = await ctx.db.insert("signatures", {
@@ -381,7 +415,7 @@ export const submitSignature = mutation({
       signerName: session.signerName,
       signerEmail: session.signerEmail,
       s3Key,
-      imageDataUrl: args.signatureData, // Keep for 24hrs for preview
+      imageDataUrl: args.signatureData, // Keep for 24hrs for preview (stored as-is, PNG or SVG)
       ipAddress: args.ipAddress,
       userAgent: args.userAgent,
       geolocation: args.geolocation,
@@ -427,21 +461,49 @@ export const submitSignature = mutation({
     const document = await ctx.db.get(session.documentId);
     if (document) {
       const existingSignatures = document.signaturesCollected || [];
-      const allSignaturesCollected = existingSignatures.length + 1 >= (document.requiredSignatures?.length || 1);
+      const requiredSignatures = document.requiredSignatures || [];
+      const newSignaturesCollected = [
+        ...existingSignatures,
+        {
+          role: session.signerRole,
+          signatureId,
+          signedAt: Date.now(),
+        },
+      ];
+      
+      // Check if all required signatures are now collected
+      const collectedRoles = new Set(newSignaturesCollected.map((s) => s.role));
+      const allSignaturesCollected = requiredSignatures.every((role) =>
+        collectedRoles.has(role)
+      );
       
       await ctx.db.patch(session.documentId, {
-        signaturesCollected: [
-          ...existingSignatures,
-          {
-            role: session.signerRole,
-            signatureId,
-            signedAt: Date.now(),
-          },
-        ],
+        signaturesCollected: newSignaturesCollected,
         updatedAt: Date.now(),
         // Update status if all signatures collected
         status: allSignaturesCollected ? "SIGNED" : "READY",
       });
+
+      // Immediately trigger PDF embedding after each signature
+      await ctx.scheduler.runAfter(
+        0,
+        api.documents.generator.embedSignaturesIntoPDF,
+        {
+          documentId: session.documentId,
+        }
+      );
+
+      // If all signatures collected, do a batch check to ensure all are embedded
+      if (allSignaturesCollected) {
+        // Schedule a final check after a short delay to catch any missed signatures
+        await ctx.scheduler.runAfter(
+          2000, // 2 second delay
+          api.documents.generator.embedSignaturesIntoPDF,
+          {
+            documentId: session.documentId,
+          }
+        );
+      }
     }
 
     // Log to security
@@ -540,41 +602,69 @@ export const uploadSignatureToS3 = internalAction({
     documentId: v.id("documentInstances"),
     signerRole: v.string(),
     signatureData: v.string(),
+    isSvg: v.optional(v.boolean()),
   },
   handler: async (_ctx, args) => {
-    // Remove data URL prefix
-    const base64Data = args.signatureData.replace(
-      /^data:image\/png;base64,/,
-      ""
-    );
+    let imageBuffer: Buffer;
+    let contentType: string;
+    let extension: string;
 
-    // TODO: Implement actual S3 upload
-    // For now, just generate the key
+    if (args.isSvg) {
+      // Extract SVG from data URL
+      const svgBase64 = args.signatureData.replace(/^data:image\/svg\+xml;base64,/, "");
+      
+      // Store SVG as-is for now (will be converted when embedding into PDF)
+      // PDF-lib can handle SVG rendering directly, so this is acceptable
+      imageBuffer = Buffer.from(svgBase64, 'base64');
+      contentType = 'image/svg+xml';
+      extension = 'svg';
+    } else {
+      // PNG data
+      const base64Data = args.signatureData.replace(/^data:image\/png;base64,/, "");
+      imageBuffer = Buffer.from(base64Data, 'base64');
+      contentType = 'image/png';
+      extension = 'png';
+    }
+
+    // Generate S3 key
     const timestamp = Date.now();
-    const s3Key = `signatures/${args.dealershipId}/${args.dealId}/${args.signerRole}-${timestamp}.png`;
+    const s3Key = `signatures/${args.dealershipId}/${args.dealId}/${args.signerRole}-${timestamp}.${extension}`;
 
-    // In production, you would:
-    // 1. Convert base64 to buffer
-    // 2. Upload to S3 with encryption
-    // 3. Return the S3 key
+    // Upload to S3 using secure_s3 utilities
+    const bucketName = process.env.AWS_S3_BUCKET_NAME;
+    if (!bucketName) {
+      throw new Error("AWS_S3_BUCKET_NAME not configured");
+    }
 
-    /*
-    const buffer = Buffer.from(base64Data, 'base64');
-    
-    await s3Client.putObject({
-      Bucket: process.env.S3_SIGNATURES_BUCKET,
+    // Import S3 client
+    const { PutObjectCommand } = await import("@aws-sdk/client-s3");
+    const { s3Client } = await import("../apps/web/src/lib/s3-client");
+
+    // Convert Uint8Array to Buffer for S3 (Node.js environment in Convex actions supports Buffer)
+    // If Buffer is not available, use the Uint8Array directly - AWS SDK should handle it
+    const bodyBuffer = typeof Buffer !== 'undefined' 
+      ? Buffer.from(imageBuffer) 
+      : imageBuffer;
+
+    // Upload signature to S3 with encryption
+    const command = new PutObjectCommand({
+      Bucket: bucketName,
       Key: s3Key,
-      Body: buffer,
-      ContentType: 'image/png',
+      Body: bodyBuffer,
+      ContentType: contentType,
       ServerSideEncryption: 'AES256',
       Metadata: {
         dealershipId: args.dealershipId,
         dealId: args.dealId,
+        documentId: args.documentId,
         signerRole: args.signerRole,
         uploadedAt: new Date().toISOString(),
+        signatureType: args.isSvg ? 'svg' : 'png',
       },
     });
-    */
+
+    await s3Client.send(command);
+    console.log(`Signature uploaded to S3: ${s3Key}`);
 
     return { s3Key };
   },
@@ -639,8 +729,22 @@ export const cleanupSignatureData = internalMutation({
     );
 
     for (const sig of signaturesForDeletion) {
-      // TODO: Delete from S3
-      // await deleteFromS3(sig.s3Key);
+      // Delete from S3
+      if (sig.s3Key) {
+        try {
+          await ctx.scheduler.runAfter(
+            0,
+            internal.secure_s3.deleteFile,
+            {
+              s3Key: sig.s3Key,
+              reason: "Signature retention period expired",
+            }
+          );
+        } catch (deleteError) {
+          console.error(`Failed to delete signature ${sig._id} from S3:`, deleteError);
+          // Continue with soft delete even if S3 deletion fails
+        }
+      }
 
       // Mark as deleted (soft delete for audit trail)
       await ctx.db.patch(sig._id, {
@@ -664,9 +768,10 @@ export const revokeESignatureConsent = mutation({
   args: {
     consentId: v.id("eSignatureConsents"),
     reason: v.string(),
+    authToken: v.optional(v.string()), // Desktop app session token
   },
   handler: async (ctx, args) => {
-    const user = await requireAuth(ctx);
+    const user = await requireAuth(ctx, args.authToken);
 
     const consent = await ctx.db.get(args.consentId);
     if (!consent) {

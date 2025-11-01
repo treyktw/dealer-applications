@@ -1,11 +1,11 @@
 // app/(dashboard)/deals/[id]/page.tsx
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "convex/react";
+import { useQuery, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import {
   Card,
   CardContent,
@@ -29,19 +29,25 @@ import {
   MapPin,
   Phone,
   Mail,
+  ExternalLink,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { GenerateDocumentsButton } from "./GenerateDocumentButtons";
-import { DocumentsList } from "./DocumentsList";
+import { DocumentsList } from "../_components/DocumentsList";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface DealDetailPageProps {
   params: Promise<{ id: string }>;
 }
 
+// Check if running in production
+const isProduction = process.env.NODE_ENV === "production";
+
 export default function DealDetailPage({ params }: DealDetailPageProps) {
   const { id: dealId } = use(params);
   const router = useRouter();
+  const [generatingLink, setGeneratingLink] = useState(false);
 
   // Fetch deal data
   const deal = useQuery(api.deals.getDeal, { 
@@ -52,6 +58,30 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
   const docStatus = useQuery(api.documents.deal_generator.getDealGenerationStatus, {
     dealId: dealId as Id<"deals">
   });
+
+  // Generate deep link action
+  const generateDeepLink = useAction(api.deeplink.generateDeepLinkToken);
+
+  // Handle opening in desktop app
+  const handleOpenInDesktop = async () => {
+    setGeneratingLink(true);
+    try {
+      const result = await generateDeepLink({
+        dealId: dealId as Id<"deals">,
+      });
+
+      if (result?.deepLink) {
+        // Open the deep link - OS will handle it
+        window.location.href = result.deepLink;
+        toast.success("Opening in Desktop App...");
+      }
+    } catch (error) {
+      console.error("Failed to generate deep-link:", error);
+      toast.error("Failed to open in desktop app");
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
 
   if (deal === undefined || docStatus === undefined) {
     return (
@@ -77,13 +107,20 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
     );
   }
 
-  const client = deal.client;
-  const vehicle = deal.vehicle;
+  // Allow related records when present in API response
+  type DealWithRelations = Doc<"deals"> & {
+    client?: Doc<"clients"> | null;
+    vehicle?: Doc<"vehicles"> | null;
+  };
+
+  const client = (deal as DealWithRelations).client;
+  const vehicle = (deal as DealWithRelations).vehicle;
   const dealStatus = deal.status || "draft";
 
   // Check if we should show generate button
   const canGenerateDocs = dealStatus === "draft" || dealStatus === "on_hold";
   const hasDocuments = docStatus.total > 0;
+  const docsAreReady = docStatus.ready > 0 || docStatus.signed > 0;
 
   // Get status badge
   const getStatusBadge = (status: string) => {
@@ -268,15 +305,23 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Sales Tax</span>
                 <span className="font-medium">
-                  {formatCurrency(deal.salesTax || 0)}
+                  {formatCurrency(deal.salesTax)}
                 </span>
               </div>
-            )}  
+            )}
             {deal.docFee && deal.docFee > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Doc Fee</span>
                 <span className="font-medium">
-                  {formatCurrency(deal.docFee || 0)}
+                  {formatCurrency(deal.docFee)}
+                </span>
+              </div>
+            )}
+            {deal.downPayment && deal.downPayment > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Down Payment</span>
+                <span className="font-medium text-green-600">
+                  -{formatCurrency(deal.downPayment)}
                 </span>
               </div>
             )}
@@ -284,7 +329,7 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Trade-In</span>
                 <span className="font-medium text-green-600">
-                  -{formatCurrency(deal.tradeInValue || 0)}
+                  -{formatCurrency(deal.tradeInValue)}
                 </span>
               </div>
             )}
@@ -296,7 +341,8 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
                   (deal.saleAmount || 0) + 
                   (deal.salesTax || 0) + 
                   (deal.docFee || 0) - 
-                  (deal.tradeInValue || 0)
+                  (deal.tradeInValue || 0) -
+                  (deal.downPayment || 0)
                 )}
               </span>
             </div>
@@ -304,7 +350,7 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
         </Card>
       </div>
 
-      {/* Document Generation Section - ALWAYS show for draft/on_hold */}
+      {/* Document Generation Section - Show for draft/on_hold */}
       {canGenerateDocs && (
         <Card className="bg-primary/5 border-primary/50">
           <CardHeader>
@@ -322,7 +368,6 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
             <GenerateDocumentsButton 
               dealId={dealId as Id<"deals">}
               onSuccess={() => {
-                // Optionally refresh the page or show success
                 window.location.reload();
               }}
             />
@@ -331,6 +376,44 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
                 Note: Regenerating will create new document versions
               </p>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Open in Desktop - Show when documents are ready */}
+      {docsAreReady && (
+        <Card className="bg-blue-50 border-blue-200 dark:bg-slate-950 dark:border-slate-800">
+          <CardHeader>
+            <CardTitle className="flex gap-2 items-center text-blue-900 dark:text-blue-100">
+              <ExternalLink className="w-5 h-5" />
+              Ready for Signatures
+            </CardTitle>
+            <CardDescription className="text-blue-700 dark:text-blue-300">
+              Documents have been generated and are ready for signing in the desktop app
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button 
+              size="lg" 
+              onClick={handleOpenInDesktop}
+              disabled={generatingLink}
+              className="w-full sm:w-auto"
+            >
+              {generatingLink ? (
+                <>
+                  <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                  Opening...
+                </>
+              ) : (
+                <>
+                  <ExternalLink className="mr-2 w-4 h-4" />
+                  Open in Desktop App
+                </>
+              )}
+            </Button>
+            <p className="mt-3 text-sm text-blue-700 dark:text-blue-300">
+              💡 The desktop app allows you to review documents, collect signatures, and make final corrections
+            </p>
           </CardContent>
         </Card>
       )}
@@ -389,8 +472,8 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
         </Card>
       )}
 
-      {/* Documents List - Show if docs exist */}
-      {hasDocuments && (
+      {/* Documents List - Show if docs exist (dev only or conditional) */}
+      {hasDocuments && !isProduction && (
         <DocumentsList dealId={dealId as Id<"deals">} />
       )}
 
@@ -415,9 +498,19 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
               <ArrowLeft className="mr-2 w-4 h-4" />
               Back to Deals
             </Button>
-            {dealStatus === "ready_for_signatures" && (
-              <Button size="lg">
-                Request Signatures
+            {docsAreReady && (
+              <Button size="lg" onClick={handleOpenInDesktop} disabled={generatingLink}>
+                {generatingLink ? (
+                  <>
+                    <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                    Opening...
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink className="mr-2 w-4 h-4" />
+                    Open in Desktop
+                  </>
+                )}
               </Button>
             )}
           </div>

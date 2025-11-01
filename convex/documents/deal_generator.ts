@@ -352,7 +352,12 @@ export const generateSingleDocument = action({
 
     // Generate S3 key for filled document
     const orgId = (deal as { orgId?: Id<"orgs"> }).orgId || (deal.dealershipId as unknown as Id<"dealerships">);
-    const s3Key = `org/${orgId}/deals/${args.dealId}/documents/${documentId}.pdf`;
+    const s3Key = `org/${orgId}/deals/${args.dealId}/documents/${documentId.documentId}.pdf`;
+
+    // Log S3 key generation
+    console.log("Generated S3 key (deal_generator):", s3Key);
+    console.log("S3 key length:", s3Key.length);
+    console.log("S3 key ends with .pdf:", s3Key.endsWith('.pdf'));
 
     // Get upload URL
     const { uploadUrl } = await ctx.runAction(
@@ -447,8 +452,8 @@ async function fillPdfWithMappedData(
 
   console.log(`PDF filled: ${filledCount} fields filled, ${skippedCount} skipped`);
 
-  // Flatten form (make non-editable)
-  form.flatten();
+  // DON'T flatten form - keep fields editable for later editing
+  // form.flatten(); // Commented out to preserve form fields
 
   // Save and return
   const pdfBytes = await pdfDoc.save();
@@ -474,9 +479,14 @@ export const updateDocumentWithGeneration = mutation({
       throw new Error("Document not found");
     }
 
+    // Log S3 key before storing
+    console.log("Storing S3 key (deal_generator):", args.s3Key);
+    console.log("S3 key length:", args.s3Key.length);
+    console.log("S3 key ends with .pdf:", args.s3Key.endsWith('.pdf'));
+
     await ctx.db.patch(args.documentId, {
       status: "READY",
-      s3Key: args.s3Key,
+      s3Key: args.s3Key.trim(), // Add trim() to remove any whitespace
       fileSize: args.fileSize,
       documentType: args.documentType,
       name: args.name,

@@ -370,6 +370,7 @@ export const getTemplates = query({
 export const getTemplateById = query({
   args: {
     templateId: v.id("documentTemplates"),
+    token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const template = await ctx.db.get(args.templateId);
@@ -377,7 +378,7 @@ export const getTemplateById = query({
       throw new Error("Template not found");
     }
 
-    await assertDealershipAccess(ctx, template.dealershipId);
+    await assertDealershipAccess(ctx, template.dealershipId, args.token);
 
     // Get the user who uploaded the template
     const uploadedByUser = await ctx.db.get(template.uploadedBy);

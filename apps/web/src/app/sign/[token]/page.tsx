@@ -46,6 +46,9 @@ export default function SignaturePage() {
   const [hasDrawn, setHasDrawn] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState<string>("");
 
+  // Fetch session data
+  const session = useQuery(api.signatures.getSignatureSession, { token });
+
   // Calculate progress based on completed steps
   const calculateProgress = () => {
     if (!session) return 0;
@@ -59,9 +62,6 @@ export default function SignaturePage() {
   };
 
   const progress = calculateProgress();
-
-  // Fetch session data
-  const session = useQuery(api.signatures.getSignatureSession, { token });
   const submitSignature = useMutation(api.signatures.submitSignature);
 
   // Get user's IP address
@@ -108,6 +108,7 @@ export default function SignaturePage() {
 
   // Track if user has drawn on canvas
   const handleCanvasChange = useCallback(() => {
+    console.log("Canvas changed - signature drawn");
     setHasDrawn(true);
   }, []);
 
@@ -122,19 +123,25 @@ export default function SignaturePage() {
       return;
     }
 
-    if (!hasDrawn) {
-      setError("Please provide your signature");
-      return;
-    }
-
+    // Check signature directly from ref instead of relying on hasDrawn state
     const svgElement = signatureRef.current?.svg;
     if (!svgElement) {
-      setError("Failed to capture signature");
+      setError("Please draw your signature on the canvas");
       return;
     }
     
-    // Convert SVG element to string and then to data URL
+    // Convert SVG element to string first to check content and use for data URL
     const svgString = new XMLSerializer().serializeToString(svgElement);
+    
+    // Verify SVG has actual drawing content
+    const hasDrawing = svgString.includes('<path') && svgString.includes('d=');
+    
+    if (!hasDrawing) {
+      setError("Please draw your signature on the canvas");
+      return;
+    }
+    
+    // Convert to data URL
     const signatureData = `data:image/svg+xml;base64,${btoa(svgString)}`;
 
     setIsSubmitting(true);
@@ -173,7 +180,6 @@ export default function SignaturePage() {
     }
   }, [
     consentGiven,
-    hasDrawn,
     submitSignature,
     token,
     ipAddress,
@@ -183,7 +189,7 @@ export default function SignaturePage() {
   // Loading state
   if (!session) {
     return (
-      <div className="flex justify-center items-center p-4 min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="flex justify-center items-center p-4 min-h-screen bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-900 dark:to-zinc-800">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6 space-y-4 text-center">
             <Loader2 className="mx-auto w-12 h-12 animate-spin text-primary" />
@@ -200,15 +206,15 @@ export default function SignaturePage() {
   // Expired state
   if (isExpired) {
     return (
-      <div className="flex justify-center items-center p-4 min-h-screen bg-gradient-to-br from-red-50 to-orange-50">
-        <Card className="w-full max-w-md border-red-200">
+      <div className="flex justify-center items-center p-4 min-h-screen bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-950 dark:to-orange-950">
+        <Card className="w-full max-w-md border-red-200 dark:border-red-800">
           <CardHeader>
             <div className="flex gap-3 items-center">
-              <div className="p-3 bg-red-100 rounded-full">
-                <AlertCircle className="w-6 h-6 text-red-600" />
+              <div className="p-3 bg-red-100 dark:bg-red-900/50 rounded-full">
+                <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
               </div>
               <div>
-                <CardTitle className="text-red-900">Session Expired</CardTitle>
+                <CardTitle className="text-red-900 dark:text-red-100">Session Expired</CardTitle>
                 <CardDescription>
                   This signature request has timed out
                 </CardDescription>
@@ -237,15 +243,15 @@ export default function SignaturePage() {
   // Already signed state
   if (session.status === "signed") {
     return (
-      <div className="flex justify-center items-center p-4 min-h-screen bg-gradient-to-br from-green-50 to-emerald-50">
-        <Card className="w-full max-w-md border-green-200">
+      <div className="flex justify-center items-center p-4 min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950">
+        <Card className="w-full max-w-md border-green-200 dark:border-green-800">
           <CardHeader>
             <div className="flex gap-3 items-center">
-              <div className="p-3 bg-green-100 rounded-full">
-                <CheckCircle className="w-6 h-6 text-green-600" />
+              <div className="p-3 bg-green-100 dark:bg-green-900/50 rounded-full">
+                <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
               </div>
               <div>
-                <CardTitle className="text-green-900">Already Signed</CardTitle>
+                <CardTitle className="text-green-900 dark:text-green-100">Already Signed</CardTitle>
                 <CardDescription>This document has been signed</CardDescription>
               </div>
             </div>
@@ -262,10 +268,10 @@ export default function SignaturePage() {
             {/* Completion Progress */}
             <div className="space-y-2">
               <div className="flex justify-between items-center text-sm">
-                <span className="text-green-700">Complete</span>
-                <span className="font-medium text-green-800">100%</span>
+                <span className="text-green-700 dark:text-green-300">Complete</span>
+                <span className="font-medium text-green-800 dark:text-green-200">100%</span>
               </div>
-              <Progress value={100} className="h-2 bg-green-100" />
+              <Progress value={100} className="h-2 bg-green-100 dark:bg-green-900/50" />
             </div>
             
             <div className="text-xs text-center text-muted-foreground">
@@ -280,18 +286,18 @@ export default function SignaturePage() {
   // Success state
   if (success) {
     return (
-      <div className="flex justify-center items-center p-4 min-h-screen bg-gradient-to-br from-green-50 to-emerald-100">
-        <Card className="w-full max-w-md border-green-200 shadow-xl">
+      <div className="flex justify-center items-center p-4 min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-950 dark:to-emerald-950">
+        <Card className="w-full max-w-md border-green-200 dark:border-green-800 shadow-xl">
           <CardContent className="pt-12 pb-8 space-y-6 text-center">
             <div className="relative">
               <div className="flex absolute inset-0 justify-center items-center">
-                <div className="w-24 h-24 bg-green-100 rounded-full opacity-25 animate-ping" />
+                <div className="w-24 h-24 bg-green-100 dark:bg-green-900/50 rounded-full opacity-25 animate-ping" />
               </div>
-              <CheckCircle className="relative z-10 mx-auto w-24 h-24 text-green-600" />
+              <CheckCircle className="relative z-10 mx-auto w-24 h-24 text-green-600 dark:text-green-400" />
             </div>
 
             <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-green-900">
+              <h2 className="text-2xl font-bold text-green-900 dark:text-green-100">
                 Signature Submitted!
               </h2>
               <p className="text-muted-foreground">
@@ -301,26 +307,26 @@ export default function SignaturePage() {
               {/* Completion Progress */}
               <div className="space-y-2">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-green-700">Complete</span>
-                  <span className="font-medium text-green-800">100%</span>
+                  <span className="text-green-700 dark:text-green-300">Complete</span>
+                  <span className="font-medium text-green-800 dark:text-green-200">100%</span>
                 </div>
-                <Progress value={100} className="h-2 bg-green-100" />
+                <Progress value={100} className="h-2 bg-green-100 dark:bg-green-900/50" />
               </div>
             </div>
 
-            <div className="p-4 space-y-2 bg-green-50 rounded-lg">
-              <div className="flex gap-2 justify-center items-center text-sm text-green-800">
+            <div className="p-4 space-y-2 bg-green-50 dark:bg-green-900/30 rounded-lg">
+              <div className="flex gap-2 justify-center items-center text-sm text-green-800 dark:text-green-200">
                 <Shield className="w-4 h-4" />
                 <span>Encrypted and secure</span>
               </div>
-              <p className="text-xs text-green-700">
+              <p className="text-xs text-green-700 dark:text-green-300">
                 Your signature is encrypted and will be automatically deleted after
                 30 days.
               </p>
             </div>
 
             <div
-              id="close-message"
+              id={`close-message-${Math.random().toString(36).substring(2, 15)}`}
               style={{ display: "none" }}
               className="text-sm text-muted-foreground animate-fade-in"
             >
@@ -334,14 +340,14 @@ export default function SignaturePage() {
 
   // Main signature capture UI
   return (
-    <div className="p-4 py-8 min-h-screen bg-gradient-to-br via-blue-50 from-slate-50 to-slate-100">
+    <div className="p-4 py-8 min-h-screen bg-gradient-to-br via-blue-50 from-zinc-50 to-zinc-100 dark:via-zinc-900 dark:from-zinc-950 dark:to-zinc-800">
       <div className="mx-auto space-y-6 max-w-2xl">
         {/* Header */}
         <div className="space-y-4 text-center">
-          <div className="inline-flex justify-center items-center p-3 mb-2 rounded-full bg-primary/10">
+          <div className="inline-flex justify-center items-center p-3 mb-2 rounded-full bg-primary/10 dark:bg-primary/20">
             <PenTool className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-3xl font-bold tracking-tight dark:text-white">
             Electronic Signature Required
           </h1>
           <p className="text-muted-foreground">
@@ -367,7 +373,7 @@ export default function SignaturePage() {
         </div>
 
         {/* Session Info Card */}
-        <Card className="shadow-md border-primary/20">
+        <Card className="shadow-md border-primary/20 dark:border-primary/30">
           <CardHeader className="pb-4">
             <div className="flex justify-between items-center">
               <CardTitle className="text-lg">Signature Details</CardTitle>
@@ -381,8 +387,8 @@ export default function SignaturePage() {
             {/* Document Info */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="flex gap-3 items-start">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <User className="w-4 h-4 text-blue-600" />
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                  <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-muted-foreground">Signing as</p>
@@ -396,8 +402,8 @@ export default function SignaturePage() {
               </div>
 
               <div className="flex gap-3 items-start">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <FileText className="w-4 h-4 text-purple-600" />
+                <div className="p-2 bg-purple-100 dark:bg-purple-900/50 rounded-lg">
+                  <FileText className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-muted-foreground">Document Type</p>
@@ -419,8 +425,8 @@ export default function SignaturePage() {
             {/* Dealership Info */}
             {session.dealership && (
               <div className="flex gap-3 items-start">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Building className="w-4 h-4 text-green-600" />
+                <div className="p-2 bg-green-100 dark:bg-green-900/50 rounded-lg">
+                  <Building className="w-4 h-4 text-green-600 dark:text-green-400" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-muted-foreground">Dealership</p>
@@ -435,9 +441,9 @@ export default function SignaturePage() {
             )}
 
             {/* Security Notice */}
-            <Alert className="bg-blue-50 border-blue-200">
-              <Shield className="w-4 h-4 text-blue-600" />
-              <AlertDescription className="text-xs text-blue-900">
+            <Alert className="bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800">
+              <Shield className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <AlertDescription className="text-xs text-blue-900 dark:text-blue-100">
                 This is a secure session. Your signature will be encrypted and
                 stored securely for 30 days before automatic deletion.
               </AlertDescription>
@@ -470,14 +476,14 @@ export default function SignaturePage() {
             {/* Canvas Container */}
             <div
               className={cn(
-                "relative bg-white rounded-xl border-2 border-dashed shadow-inner transition-colors",
-                hasDrawn ? "border-primary" : "border-muted-foreground/25"
+                "relative bg-white dark:bg-slate-900 rounded-xl border-2 border-dashed shadow-inner transition-colors",
+                hasDrawn ? "border-primary" : "border-muted-foreground/25 dark:border-muted-foreground/50"
               )}
             >
               {/* Hint overlay when canvas is empty */}
               {!hasDrawn && (
                 <div className="flex absolute inset-0 z-10 justify-center items-center pointer-events-none">
-                  <div className="space-y-2 text-center text-muted-foreground/50">
+                  <div className="space-y-2 text-center text-muted-foreground/50 dark:text-muted-foreground/70">
                     <PenTool className="mx-auto w-8 h-8" />
                     <p className="text-sm font-medium">Sign here</p>
                   </div>
@@ -496,7 +502,32 @@ export default function SignaturePage() {
                   width: "100%",
                   height: "300px",
                 }}
-                onChange={handleCanvasChange}
+                onChange={(dataUrl) => {
+                  // onChange is called with the data URL whenever the canvas changes
+                  // Check if signature actually has content by looking for path elements
+                  if (!dataUrl || typeof dataUrl !== 'string') {
+                    return;
+                  }
+                  
+                  // Explicitly type after the guard to help TypeScript
+                  const urlStr = dataUrl as string;
+                  
+                  try {
+                    // Decode base64 to check content
+                    const base64Match = urlStr.match(/base64,(.+)/);
+                    if (base64Match?.[1]) {
+                      const decoded = atob(base64Match[1]);
+                      // Check if SVG contains path elements (actual drawing)
+                      const hasPath = decoded.includes('<path') && decoded.includes('d=');
+                      if (hasPath && !hasDrawn) {
+                        console.log("Signature detected - enabling submit");
+                        handleCanvasChange();
+                      }
+                    }
+                  } catch (e) {
+                    console.error("Error checking signature:", e);
+                  }
+                }}
               />
             </div>
 
@@ -517,7 +548,7 @@ export default function SignaturePage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Scrollable consent text */}
-            <div className="overflow-y-auto p-4 space-y-3 max-h-48 text-sm rounded-lg border bg-muted/50">
+            <div className="overflow-y-auto p-4 space-y-3 max-h-48 text-sm rounded-lg border bg-muted/50 dark:bg-muted/30">
               <p className="font-medium">Electronic Signature Consent</p>
               <p className="leading-relaxed text-muted-foreground">
                 By signing electronically, you agree that your electronic signature
@@ -546,9 +577,9 @@ export default function SignaturePage() {
             </div>
 
             {/* Consent checkbox */}
-            <div className="flex gap-3 items-start p-4 bg-amber-50 rounded-lg border border-amber-200">
+            <div className="flex gap-3 items-start p-4 bg-amber-50 dark:bg-amber-950/50 rounded-lg border border-amber-200 dark:border-amber-800">
               <Checkbox
-                id="consent"
+                id={`consent-${Math.random().toString(36).substring(2, 15)}`}
                 checked={consentGiven}
                 onCheckedChange={(checked) => setConsentGiven(checked === true)}
                 className="mt-1"
@@ -557,10 +588,10 @@ export default function SignaturePage() {
                 htmlFor="consent"
                 className="flex-1 text-sm leading-relaxed cursor-pointer"
               >
-                <span className="font-medium text-amber-900">
+                <span className="font-medium text-amber-900 dark:text-amber-200">
                   I have read and agree to the electronic signature terms above.
                 </span>{" "}
-                <span className="text-amber-800">
+                <span className="text-amber-800 dark:text-amber-300">
                   I understand that my signature will be legally binding and securely
                   stored for 30 days.
                 </span>
@@ -579,11 +610,11 @@ export default function SignaturePage() {
         )}
 
         {/* Submit Button */}
-        <Card className="shadow-md border-primary/20">
+        <Card className="shadow-md border-primary/20 dark:border-primary/30">
           <CardContent className="pt-6 space-y-4">
             <Button
               onClick={handleSubmit}
-              disabled={!consentGiven || !hasDrawn || isSubmitting}
+              disabled={!consentGiven || isSubmitting}
               className="w-full h-14 text-lg font-semibold"
               size="lg"
             >
@@ -599,6 +630,13 @@ export default function SignaturePage() {
                 </>
               )}
             </Button>
+            
+            {/* Debug info - remove in production */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="mt-2 p-2 text-xs bg-muted rounded">
+                <p>Debug: hasDrawn={hasDrawn ? 'true' : 'false'}, consentGiven={consentGiven ? 'true' : 'false'}</p>
+              </div>
+            )}
 
             {/* Requirements checklist */}
             <div className="space-y-2">
@@ -610,7 +648,7 @@ export default function SignaturePage() {
                   className={cn(
                     "flex gap-2 items-center p-2 text-xs rounded-md transition-colors",
                     hasDrawn
-                      ? "text-green-700 bg-green-50"
+                      ? "text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30"
                       : "bg-muted text-muted-foreground"
                   )}
                 >
@@ -625,7 +663,7 @@ export default function SignaturePage() {
                   className={cn(
                     "flex gap-2 items-center p-2 text-xs rounded-md transition-colors",
                     consentGiven
-                      ? "text-green-700 bg-green-50"
+                      ? "text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30"
                       : "bg-muted text-muted-foreground"
                   )}
                 >

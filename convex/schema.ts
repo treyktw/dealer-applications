@@ -1141,7 +1141,9 @@ export default defineSchema({
       v.literal("DRAFT"), // Being created
       v.literal("READY"), // Generated, ready to sign
       v.literal("SIGNED"), // All signatures collected
-      v.literal("VOID") // Voided/cancelled
+      v.literal("VOID"), // Voided/cancelled
+      v.literal("FINALIZING"), // Finalizing
+      v.literal("FINALIZED") // Finalized
     ),
 
     // S3 storage
@@ -1172,6 +1174,21 @@ export default defineSchema({
 
     // Metadata
     updatedAt: v.number(),
+    finalizedAt: v.optional(v.number()),
+    finalizedBy: v.optional(v.id("users")),
+    
+    // Notarization
+    notarized: v.optional(v.boolean()),
+    notarizedAt: v.optional(v.number()),
+    notarizedBy: v.optional(v.id("users")),
+    
+    metadata: v.optional(
+      v.object({
+        lastFieldValues: v.optional(v.any()), // 🆕 Add this
+        lastFieldUpdate: v.optional(v.number()), // 🆕 Add this
+        // ... other metadata
+      })
+    ),
 
     // NEW: Link to final archived version
     generatedDocumentId: v.optional(v.id("generatedDocuments")),
