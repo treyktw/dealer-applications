@@ -268,14 +268,54 @@ export const getCurrentDealership = query({
 export const getDealershipById = query({
   args: {
     dealershipId: v.id("dealerships"),
+    token: v.optional(v.string()), // Add this parameter
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx, args.dealershipId);
+    // Support both web and wardesktop authentication
+    let user;
+    if (args.token) {
+      // Desktop app authentication
+      console.log('🔐 Authenticating via desktop token');
+      const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token: args.token });
+      if (!sessionData?.user) {
+        throw new Error("Invalid or expired session");
+      }
+      
+      const { id, email } = sessionData.user as { id?: string; email?: string };
+      
+      // Try to find user by Clerk ID
+      user = id
+        ? await ctx.db.query("users").withIndex("by_clerk_id", (q) => q.eq("clerkId", id)).first()
+        : null;
+      
+      // Fallback to email if Clerk ID not found
+      if (!user && email) {
+        user = await ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", email)).first();
+      }
+      
+      console.log('✅ Desktop authentication successful');
+    } else {
+      // Web app authentication
+      const identity = await ctx.auth.getUserIdentity();
+      if (!identity) {
+        throw new Error("Not authenticated");
+      }
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+        .first();
+    }
 
-    const dealership = await ctx.db.get(args.dealershipId);
-    if (!dealership) throw new Error("Dealership not found");
+    if (!user) {
+      throw new Error("User not found");
+    }
 
-    return dealership;
+    // Verify user has access to this dealership
+    if (user.dealershipId !== args.dealershipId) {
+      throw new Error("Access denied: User not authorized for this dealership");
+    }
+
+    return await ctx.db.get(args.dealershipId);
   },
 });
 

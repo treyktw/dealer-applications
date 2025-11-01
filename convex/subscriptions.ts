@@ -359,6 +359,10 @@ export const checkSubscriptionStatus = query({
       }
     }
 
+    if(!user) {
+      return { hasActiveSubscription: false, subscriptionStatus: "none" };
+    }
+
     // If user has no dealership, they need to complete onboarding first
     if (!user.dealershipId) {
       console.log("User needs to complete onboarding first");

@@ -15,6 +15,17 @@ import { Progress } from "@/components/ui/progress";
 import { Shield, Sparkles, Download, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
+// Add toast import check - fallback if sonner toast isn't available
+const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
+  try {
+    if (type === "success") toast.success(message);
+    else if (type === "error") toast.error(message);
+    else toast.info(message);
+  } catch {
+    console.log(`[${type.toUpperCase()}] ${message}`);
+  }
+};
+
 interface UpdateInfo {
   version: string;
   currentVersion: string;
@@ -29,7 +40,7 @@ export function UpdateManager() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  const checkForUpdates = useCallback(async () => {
+  const checkForUpdates = useCallback(async (showErrors = false) => {
     try {
       const update = await check();
 
@@ -44,14 +55,30 @@ export function UpdateManager() {
         setUpdateAvailable(true);
       } else {
         console.log("No updates available");
+        if (showErrors) {
+          showToast("You're using the latest version", "success");
+        }
       }
     } catch (error) {
-      console.error("Failed to check for updates:", error);
+      // Silently handle update check failures (endpoint might not exist yet)
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.warn("Update check failed (this is normal if releases aren't set up yet):", errorMessage);
+      
+      // Only show errors if user manually requested update check
+      if (showErrors) {
+        if (errorMessage.includes("release JSON") || errorMessage.includes("404")) {
+          showToast("Update server not configured yet. Updates will be available when releases are published.", "info");
+        } else {
+          showToast("Failed to check for updates", "error");
+        }
+        setError(errorMessage);
+      }
     }
   }, []);
 
   useEffect(() => {
-    checkForUpdates();
+    // Silent background check on mount (won't show errors)
+    checkForUpdates(false);
   }, [checkForUpdates]);
 
   async function installUpdate() {
@@ -220,7 +247,13 @@ export async function checkForUpdatesManually() {
     }
     return { available: false };
   } catch (error) {
-    console.error("Failed to check for updates:", error);
-    throw error;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.warn("Manual update check failed:", errorMessage);
+    
+    // Return a user-friendly error instead of throwing
+    if (errorMessage.includes("release JSON") || errorMessage.includes("404")) {
+      throw new Error("Update server not configured. Releases must be published with a latest.json file.");
+    }
+    throw new Error(`Failed to check for updates: ${errorMessage}`);
   }
 }

@@ -13,7 +13,7 @@ import { ClientNotesCard } from "@/app/(dashboard)/clients/_components/notes-car
 import { ClientVehiclesTab } from "@/app/(dashboard)/clients/_components/client-vehicles-tab";
 import { ClientActivityTab } from "@/app/(dashboard)/clients/_components/activity-tab";
 import { AddNoteDialog } from "@/app/(dashboard)/clients/_components/add-note-dialog";
-import { ClientDealButton } from "./ClientDealActionButton";
+
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
@@ -117,18 +117,18 @@ export default function ClientDetailView({ clientId: clientIdParam }: ClientDeta
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   };
 
   if (error || !client) {
     return (
-      <div className="flex flex-col items-center justify-center h-64">
-        <h2 className="text-xl font-semibold mb-2">
+      <div className="flex flex-col justify-center items-center h-64">
+        <h2 className="mb-2 text-xl font-semibold">
           {error === "Client not found" ? "Client Not Found" : "Error Loading Client"}
         </h2>
-        <p className="text-muted-foreground mb-4">
+        <p className="mb-4 text-muted-foreground">
           {error === "Client not found"
             ? "The client you're looking for doesn't exist or has been removed."
             : `There was a problem loading this client: ${error}`}
@@ -147,11 +147,11 @@ export default function ClientDetailView({ clientId: clientIdParam }: ClientDeta
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex gap-2 items-center">
           <Button variant="outline" size="icon" asChild>
             <Link href="/clients">
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft className="w-4 h-4" />
             </Link>
           </Button>
 
@@ -159,21 +159,21 @@ export default function ClientDetailView({ clientId: clientIdParam }: ClientDeta
             <h1 className="text-3xl font-bold tracking-tight">
               {client.firstName} {client.lastName}
             </h1>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex gap-2 items-center mt-1">
               <Badge variant={client.status === "CUSTOMER" ? "default" : "outline"}>
                 {client.status.charAt(0) + client.status.slice(1).toLowerCase()}
               </Badge>
-              <span className="text-muted-foreground text-sm">
+              <span className="text-sm text-muted-foreground">
                 Since {formatDate(client.createdAt)}
               </span>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex gap-2 items-center">
           <Button variant="outline" asChild>
             <Link href={`/clients/${clientId}/edit`}>
-              <Edit className="mr-2 h-4 w-4" />
+              <Edit className="mr-2 w-4 h-4" />
               Edit
             </Link>
           </Button>
@@ -184,12 +184,12 @@ export default function ClientDetailView({ clientId: clientIdParam }: ClientDeta
           >
             {isDeleting ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 w-4 h-4 animate-spin" />
                 Deleting...
               </>
             ) : (
               <>
-                <Trash2 className="mr-2 h-4 w-4" />
+                <Trash2 className="mr-2 w-4 h-4" />
                 Delete
               </>
             )}
@@ -222,7 +222,6 @@ export default function ClientDetailView({ clientId: clientIdParam }: ClientDeta
               notes={client.notes ?? null}
             />
           </div>
-          <ClientDealButton clientId={clientId} />
         </TabsContent>
 
         <TabsContent value="vehicles" className="space-y-4">

@@ -1,5 +1,5 @@
-import { api } from "./_generated/api";
-import { Id } from "./_generated/dataModel";
+import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { query, mutation, action } from "./_generated/server";
 import { v } from "convex/values";
 
@@ -373,7 +373,12 @@ export const updateVehicle = mutation({
       // Don't include dealershipId in the patch since it shouldn't change
     });
 
-    return { id: args.id };
+    await ctx.scheduler.runAfter(0, internal.internal.purgeCacheForVehicle, {
+      dealershipId: vehicle.dealershipId,
+      vehicleId: args.id,
+    });
+
+    return { id: args.id, success: true };
   },
 });
 
@@ -608,12 +613,12 @@ export const importVehicles = action({
           const year = parseInt(yearStr);
           const price = parseFloat(priceStr.replace(/[$,]/g, ""));
           
-          if (isNaN(year) || year < 1900 || year > new Date().getFullYear() + 2) {
+          if (Number.isNaN(year) || year < 1900 || year > new Date().getFullYear() + 2) {
             errors.push(`Row ${i}: Invalid year: ${yearStr}`);
             continue;
           }
           
-          if (isNaN(price) || price <= 0) {
+          if (Number.isNaN(price) || price <= 0) {
             errors.push(`Row ${i}: Invalid price: ${priceStr}`);
             continue;
           }

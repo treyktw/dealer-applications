@@ -1,8 +1,8 @@
 // app/(dashboard)/deals/[id]/page.tsx
 import { Suspense } from "react";
-import { Metadata } from "next";
-import { DealDetailPage } from "@/components/dashboard/client/DealDetailPageComponent";
+import type { Metadata } from "next";
 import { DealDetailSkeleton } from "../_components/DealDetailsSkeleton";
+import DealDetailPage  from "../_components/DealDetailPageComponent";
 
 
 export const metadata: Metadata = {
@@ -17,7 +17,7 @@ export default async function DealPage({
 }) {
   return (
     <Suspense fallback={<DealDetailSkeleton />}>
-      <DealDetailPage dealId={(await params).id} />
+      <DealDetailPage params={params} />
     </Suspense>
   );
 }

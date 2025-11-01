@@ -1,6 +1,6 @@
 // src-tauri/src/security.rs - FIXED: Accept dynamic key names
 use keyring::Entry;
-use log::{info, error};
+use log::{error, info};
 
 use std::sync::Mutex;
 

@@ -379,23 +379,42 @@ export const validateSession = query({
     token: v.string(),
   },
   handler: async (ctx, args) => {
+    // console.log("validateSession: Starting validation for token:", args.token.substring(0, 10) + "...");
+    // console.log("validateSession: Full token:", args.token);
+    
     const session = await ctx.db
       .query("auth_sessions")
       .withIndex("by_token", (q) => q.eq("token", args.token))
       .first();
 
+    // console.log("validateSession: Session found:", !!session);
     if (!session) {
+      console.log("validateSession: No session found for token");
+      
+      // Debug: Check what sessions exist
+      const allSessions = await ctx.db.query("auth_sessions").collect();
+      // console.log("validateSession: Total sessions in DB:", allSessions.length);
+      if (allSessions.length > 0) {
+        // console.log("validateSession: Sample session token:", allSessions[0].token.substring(0, 10) + "...");
+        // console.log("validateSession: Looking for token:", args.token.substring(0, 10) + "...");
+      }
+      
       return null;
     }
 
     // Check if expired
-    if (Date.now() > session.expiresAt) {
+    const now = Date.now();
+    const isExpired = now > session.expiresAt;
+    // console.log("validateSession: Session expired:", isExpired, "expiresAt:", new Date(session.expiresAt).toISOString());
+    if (isExpired) {
       return null;
     }
 
     // Get user
     const user = await ctx.db.get(session.userId);
+    // console.log("validateSession: User found:", !!user, "isActive:", user?.isActive);
     if (!user || user.isActive === false) {
+      console.log("validateSession: User not found or inactive");
       return null;
     }
 
@@ -404,6 +423,9 @@ export const validateSession = query({
       ? await ctx.db.get(user.dealershipId as Id<"dealerships">)
       : null;
 
+    // console.log("validateSession: Dealership found:", !!dealership);
+    // console.log("validateSession: Returning valid session data");
+    
     return {
       session: {
         id: session._id,

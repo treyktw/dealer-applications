@@ -1,24 +1,49 @@
-import { query, mutation, QueryCtx } from "./_generated/server";
+import { mutation, query, type QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { api } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 
-// Helper function to require authentication
-async function requireAuth(ctx: QueryCtx, token?: string): Promise<any> {
-  if (!token) {
-    throw new Error("Authentication token required");
+// Helper function to require authentication (supports desktop token or web identity)
+async function requireAuth(ctx: QueryCtx, token?: string): Promise<Doc<"users">> {
+  // Path 1: Desktop app auth via token
+  if (token) {
+    type SessionUser = { id?: string; email?: string };
+    
+    const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token });
+    if (!sessionData?.user) throw new Error("Invalid or expired session");
+    
+    const { id, email } = sessionData.user as SessionUser;
+    
+    let userDoc =
+      id
+        ? await ctx.db.query("users").withIndex("by_clerk_id", (q) => q.eq("clerkId", id)).first()
+        : null;
+    
+    if (!userDoc && email) {
+      userDoc = await ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", email)).first();
+    }
+    
+    if (!userDoc) throw new Error("User not found");
+    return userDoc;
   }
-
-  // Validate session using desktopAuth
-  const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, {
-    token,
-  });
-  if (!sessionData) {
-    throw new Error("Invalid or expired session");
+  
+  // Path 2: Web auth via Clerk identity
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error("Authentication required");
   }
-
-  return sessionData.user;
+  
+  const user = await ctx.db
+    .query("users")
+    .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+    .first();
+    
+  if (!user) {
+    throw new Error("User not found");
+  }
+  
+  return user;
 }
 
 export const getDeals = query({
@@ -29,22 +54,16 @@ export const getDeals = query({
     token: v.optional(v.string()), // For desktop app auth
   },
   handler: async (ctx, args) => {
-    // Use the new auth helper that supports both Clerk and email auth
+    // Require auth (desktop token or web identity)
     await requireAuth(ctx, args.token);
 
     // Check subscription for deals management
     const subscriptionStatus = await ctx.runQuery(
       api.subscriptions.checkSubscriptionStatus,
-      {
-        token: args.token,
-      }
+      { token: args.token }
     );
+    
     if (!subscriptionStatus?.hasActiveSubscription) {
-      throw new Error("Premium subscription required for deal management");
-    }
-
-    if (!subscriptionStatus?.hasActiveSubscription) {
-      console.log("❌ No active subscription found");
       throw new Error("Premium subscription required for deal management");
     }
 
@@ -104,10 +123,22 @@ export const getDeal = query({
     return {
       ...deal,
       id: deal._id,
-      clientEmail: client?.email,
-      clientPhone: client?.phone,
-      vin: vehicle?.vin,
-      stockNumber: vehicle?.stock,
+      client: client
+        ? {
+            id: client._id,
+            firstName: client.firstName,
+            lastName: client.lastName,
+            email: client.email,
+            phone: client.phone,
+            address: client.address,
+            city: client.city,
+            state: client.state,
+            zipCode: client.zipCode,
+            driversLicense: client.driversLicense,
+            ssn: client.ssn,
+            creditScore: client.creditScore,
+          }
+        : null,
       vehicle: vehicle
         ? {
             id: vehicle.id,
@@ -142,25 +173,75 @@ export const getDeal = query({
 export const updateDealStatus = mutation({
   args: {
     dealId: v.id("deals"),
-    status: v.string(),
-    token: v.optional(v.string()),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("pending_documents"),
+      v.literal("ready_for_signatures"),
+      v.literal("partially_signed"),
+      v.literal("ready_to_finalize"),
+      v.literal("completed"),
+      v.literal("cancelled"),
+      v.literal("on_hold")
+    ),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx, args.token);
-
     const deal = await ctx.db.get(args.dealId);
     if (!deal) {
       throw new Error("Deal not found");
     }
 
+    // Update status
     await ctx.db.patch(args.dealId, {
       status: args.status,
       updatedAt: Date.now(),
-      ...(args.status === "COMPLETED" && { completedAt: Date.now() }),
-      ...(args.status === "CANCELLED" && { cancelledAt: Date.now() }),
     });
 
-    return { success: true };
+    // Log status change
+    await ctx.db.insert("security_logs", {
+      dealershipId: deal.dealershipId as Id<"dealerships">,
+      action: "deal_status_updated",
+      userId: "system",
+      ipAddress: "server",
+      success: true,
+      details: `Deal status changed to ${args.status}`,
+      timestamp: Date.now(),
+    });
+
+    return { success: true, newStatus: args.status };
+  },
+});
+
+export const getDealForGeneration = query({
+  args: {
+    dealId: v.id("deals"),
+  },
+  handler: async (ctx, args) => {
+    const deal = await ctx.db.get(args.dealId);
+    if (!deal) {
+      return null;
+    }
+
+    // Get client with all fields
+    const client = deal.clientId ? await ctx.db.get(deal.clientId) : null;
+    
+    // Get vehicle with all fields
+    const vehicle = deal.vehicleId ? await ctx.db.get(deal.vehicleId) : null;
+    
+    // Get dealership
+    const dealership = deal.dealershipId
+      ? await ctx.db.get(deal.dealershipId as Id<"dealerships">)
+      : null;
+
+    return {
+      ...deal,
+      id: deal._id,
+      client,
+      vehicle,
+      dealership,
+      clientName: client
+        ? `${client.firstName} ${client.lastName}`
+        : "Unknown Client",
+    };
   },
 });
 
@@ -194,128 +275,78 @@ export const markDocumentSigned = mutation({
 
 export const createDeal = mutation({
   args: {
-    type: v.string(),
-    clientFirstName: v.optional(v.string()),
-    clientLastName: v.optional(v.string()),
-    clientEmail: v.optional(v.string()),
-    clientPhone: v.optional(v.string()),
-    vin: v.optional(v.string()),
-    stockNumber: v.optional(v.string()),
-    token: v.optional(v.string()),
+    clientId: v.id("clients"),
+    vehicleId: v.id("vehicles"),
+    dealershipId: v.string(),
+    type: v.union(
+      v.literal("cash"),
+      v.literal("finance"),
+      v.literal("lease")
+    ),
+    saleAmount: v.number(),
+    salesTax: v.number(),
+    docFee: v.number(),
+    tradeInValue: v.optional(v.number()),
+    downPayment: v.optional(v.number()),
+    financedAmount: v.optional(v.number()),
+    totalAmount: v.number(),
+    saleDate: v.number(),
+    dealData: v.optional(v.any()), // Additional custom data
   },
   handler: async (ctx, args) => {
-    const user = (await requireAuth(ctx, args.token)) as Doc<"users">;
-    if (!user) {
-      throw new Error("User not found");
+    // Verify client exists
+    const client = await ctx.db.get(args.clientId);
+    if (!client) {
+      throw new Error("Client not found");
     }
 
-    // Check subscription for deals management
-    const subscriptionStatus = await ctx.runQuery(
-      api.subscriptions.checkSubscriptionStatus,
-      {
-        token: args.token,
-      }
-    );
-    if (!subscriptionStatus?.hasActiveSubscription) {
-      throw new Error("Premium subscription required for deal management");
+    // Verify vehicle exists
+    const vehicle = await ctx.db.get(args.vehicleId);
+    if (!vehicle) {
+      throw new Error("Vehicle not found");
     }
 
-    const hasDealsManagement =
-      subscriptionStatus.subscription?.features?.includes("deals_management");
-    if (!hasDealsManagement) {
-      throw new Error("Premium subscription with deals management required");
-    }
-
-    if (!user.dealershipId) {
-      throw new Error("User not associated with a dealership");
-    }
-
-    // Create or find client
-    let clientId = null;
-    if (args.clientFirstName && args.clientLastName) {
-      // Check if client exists
-      const existingClient = await ctx.db
-        .query("clients")
-        .withIndex("by_dealership", (q) =>
-          q.eq("dealershipId", user.dealershipId as Id<"dealerships">)
-        )
-        .filter((q) =>
-          q.and(
-            q.eq(q.field("firstName"), args.clientFirstName),
-            q.eq(q.field("lastName"), args.clientLastName)
-          )
-        )
-        .first();
-
-      if (existingClient) {
-        clientId = existingClient._id;
-      } else {
-        // Create new client
-        clientId = await ctx.db.insert("clients", {
-          client_id: `CLIENT-${Date.now()}`,
-          firstName: args.clientFirstName,
-          lastName: args.clientLastName,
-          email: args.clientEmail,
-          phone: args.clientPhone,
-          status: "LEAD",
-          dealershipId: user.dealershipId,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        });
-      }
-    }
-
-    // Create or find vehicle if VIN provided
-    let vehicleId: Id<"vehicles"> | undefined;
-    if (args.vin) {
-      const existingVehicle = await ctx.db
-        .query("vehicles")
-        .withIndex("by_vehicle_id", (q) => q.eq("id", args.vin as string))
-        .filter((q) => q.eq(q.field("dealershipId"), user.dealershipId))
-        .first();
-
-      if (existingVehicle) {
-        vehicleId = existingVehicle._id;
-      } else {
-        vehicleId = await ctx.db.insert("vehicles", {
-          id: args.vin,
-          vin: args.vin,
-          stock: args.stockNumber || "",
-          make: "Unknown",
-          model: "Unknown",
-          year: new Date().getFullYear(),
-          mileage: 0,
-          price: 0,
-          status: "AVAILABLE",
-          featured: false,
-          dealershipId: user.dealershipId,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        });
-      }
-    }
-
-    // Create the deal
+    // Create deal
     const dealId = await ctx.db.insert("deals", {
+      clientId: args.clientId,
+      vehicleId: args.vehicleId,
+      dealershipId: args.dealershipId,
       type: args.type,
-      clientId: clientId as Id<"clients">,
-      vehicleId: vehicleId as Id<"vehicles">, // Will be set later if needed
+      status: "draft",
+      saleAmount: args.saleAmount,
+      salesTax: args.salesTax,
+      docFee: args.docFee,
+      tradeInValue: args.tradeInValue,
+      downPayment: args.downPayment,
+      financedAmount: args.financedAmount,
+      totalAmount: args.totalAmount,
+      saleDate: args.saleDate,
+      vin: vehicle.vin,
+      stockNumber: vehicle.stock,
+      clientEmail: client.email,
+      clientPhone: client.phone,
+      dealData: args.dealData,
       generated: false,
       clientSigned: false,
       dealerSigned: false,
       notarized: false,
-      status: "draft",
-      totalAmount: 0,
-      dealershipId: user.dealershipId,
-      clientEmail: args.clientEmail,
-      clientPhone: args.clientPhone,
-      vin: args.vin,
-      stockNumber: args.stockNumber,
+      documentStatus: "none",
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
 
-    return dealId;
+    // Log creation
+    await ctx.db.insert("security_logs", {
+      dealershipId: args.dealershipId as Id<"dealerships">,
+      action: "deal_created",
+      userId: "system",
+      ipAddress: "server",
+      success: true,
+      details: `Deal created for client ${client.firstName} ${client.lastName}`,
+      timestamp: Date.now(),
+    });
+
+    return { dealId };
   },
 });
 
@@ -364,9 +395,7 @@ export const getCompleteDealData = query({
     // Check subscription for deals management
     const subscriptionStatus = await ctx.runQuery(
       api.subscriptions.checkSubscriptionStatus,
-      {
-        token: args.token,
-      }
+      {}
     );
     if (!subscriptionStatus?.hasActiveSubscription) {
       throw new Error("Premium subscription required for deal management");
@@ -421,5 +450,29 @@ export const getCompleteDealData = query({
       // Metadata
       lastUpdated: Date.now(),
     };
+  },
+});
+
+/**
+ * Update deal document status
+ * Used to track document generation progress
+ */
+export const updateDocumentStatus = mutation({
+  args: {
+    dealId: v.id("deals"),
+    documentStatus: v.union(
+      v.literal("none"),
+      v.literal("generating"),
+      v.literal("ready"),
+      v.literal("complete")
+    ),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.dealId, {
+      documentStatus: args.documentStatus,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
   },
 });
