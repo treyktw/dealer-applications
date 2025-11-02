@@ -1,0 +1,18 @@
+/convex/deals.ts ✅ (already provided)
+/convex/documents.ts
+/convex/schema.ts
+/lib/documents/fields.ts
+/lib/documents/generator.ts
+/lib/documents/templates.ts
+/apps/web/src/app/(dashboard)/deals/page.tsx
+/apps/web/src/app/(dashboard)/deals/[id]/page.tsx
+/apps/desktop/src/routes/deals/$dealsId/documents.tsx
+/apps/desktop/src/components/documents/DocumentList.tsx
+/apps/desktop/src/components/documents/BuyerDataForm.tsx
+```
+
+### **Medium Priority (Helpful):**
+```
+/apps/web/src/app/(dashboard)/settings/general/page.tsx (if exists)
+/convex/subscriptions.ts (to check feature flags)
+/apps/desktop/src/lib/deeplink-listener.ts

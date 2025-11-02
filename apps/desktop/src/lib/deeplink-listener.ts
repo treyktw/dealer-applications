@@ -1,6 +1,15 @@
-// src/lib/deeplink-listener.ts - Deep link handling for desktop app
+// src/lib/deeplink-listener.ts - Fixed Deep link handling for desktop app
 import { listen } from '@tauri-apps/api/event';
 
+/**
+ * Setup deep link listener for desktop app
+ * 
+ * Handles:
+ * - Auth callbacks from web
+ * - Deal deep links (dealer-sign://open?dealId=xxx&token=xxx)
+ * 
+ * Fixed: Now navigates to deal page on FIRST open (not just second)
+ */
 export async function setupDeepLinkListener() {
   console.log('🔗 Setting up deep link listener...');
   
@@ -51,19 +60,57 @@ export async function setupDeepLinkListener() {
           const token = url.searchParams.get('token');
           
           if (dealId && token) {
-            console.log('Deal ID:', dealId);
-            const dealUrl = `/deals/${dealId}?token=${encodeURIComponent(token)}`;
+            console.log('Deal ID:', dealId, 'Token:', token.substring(0, 10) + '...');
             
+            // ⚠️ FIX: Use proper router navigation
+            const dealUrl = `/deals/${dealId}/documents?token=${encodeURIComponent(token)}`;
+            
+            // Try multiple navigation methods to ensure it works
             try {
-              window.location.href = dealUrl;
-              console.log('✅ Navigated to deal page');
+              // Method 1: Check if router is available
+              if (typeof window !== 'undefined' && (window as any).__router) {
+                console.log('✅ Using router navigation');
+                (window as any).__router.navigate({ 
+                  to: '/deals/$dealsId/documents',
+                  params: { dealsId: dealId },
+                  search: { token }
+                });
+              } 
+              // Method 2: Use window.location with hash for SPA
+              else if (window.location.hash) {
+                console.log('✅ Using hash navigation');
+                window.location.hash = dealUrl;
+              }
+              // Method 3: Direct navigation (fallback)
+              else {
+                console.log('✅ Using direct navigation');
+                window.history.pushState({ dealId, token }, '', dealUrl);
+                
+                // Dispatch custom event that App.tsx can listen for
+                window.dispatchEvent(new CustomEvent('navigate-to-deal', {
+                  detail: { dealId, token, url: dealUrl }
+                }));
+                
+                // Force reload if nothing else works
+                setTimeout(() => {
+                  if (window.location.pathname === '/') {
+                    console.log('🔄 Forcing navigation...');
+                    window.location.href = dealUrl;
+                  }
+                }, 100);
+              }
+              
+              console.log('✅ Navigated to deal page:', dealUrl);
             } catch (navError) {
               console.error('❌ Navigation failed:', navError);
-              window.history.pushState(null, '', dealUrl);
-              window.location.reload();
+              
+              // Last resort: full reload to the URL
+              console.log('🔄 Using fallback: full page load');
+              window.location.href = dealUrl;
             }
           } else {
             console.warn('⚠️ Deal deep link missing parameters');
+            console.log('Received:', { dealId, token });
           }
           return;
         }
@@ -104,5 +151,16 @@ export async function setupDeepLinkListener() {
   } catch (error) {
     console.error('❌ Failed to setup deep link listener:', error);
     throw error;
+  }
+}
+
+/**
+ * Helper: Expose router to window for deep link navigation
+ * Call this from your App.tsx or router setup
+ */
+export function exposeRouterForDeepLinks(router: any) {
+  if (typeof window !== 'undefined') {
+    (window as any).__router = router;
+    console.log('✅ Router exposed for deep link navigation');
   }
 }

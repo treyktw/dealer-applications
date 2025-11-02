@@ -12,9 +12,10 @@ export const Route = createFileRoute('/deals/$dealsId/')({
       navigate({ 
         to: '/deals/$dealsId/documents', 
         params: { dealsId },
+        search: { token: undefined },
         replace: true 
       });
-    }, [dealsId]);
+    }, [dealsId, navigate]);
     
     return null;
   },

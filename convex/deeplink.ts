@@ -1,7 +1,7 @@
 // convex/deeplink.ts (single file)
 import { action, query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { api } from "./_generated/api";
 
 // Store token mutation
@@ -131,8 +131,8 @@ export const exchangeDeepLinkToken = action({
   handler: async (ctx, args): Promise<{
     success: boolean;
     error: string | null;
-    deal: any | null;
-    templates: any[] | null;
+    deal: Doc<"deals"> | null;
+    templates: Doc<"documentTemplates">[] | null;
     dealershipId: string | null;
   }> => {
     try {
@@ -245,7 +245,7 @@ export const exchangeDeepLinkToken = action({
       return {
         success: true,
         error: null,
-        deal: completeDealData,
+        deal: completeDealData?.deal as Doc<"deals">,
         templates: [],
         dealershipId: user.dealershipId || null,
       };

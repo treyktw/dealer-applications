@@ -74,6 +74,42 @@ export const SubscriptionFeatures = {
   ],
 } as const;
 
+export const OrgRole = {
+  OWNER: "OWNER",
+  ADMIN: "ADMIN",
+  MEMBER: "MEMBER",
+} as const;
+
+export const DomainVerificationType = {
+  DNS_TXT: "dns_txt",
+  HTTP_FILE: "http_file",
+} as const;
+
+export const DomainStatus = {
+  PENDING: "pending",
+  VERIFIED: "verified",
+  FAILED: "failed",
+  REVOKED: "revoked",
+} as const;
+
+export const DocumentStatus = {
+  DRAFT: "DRAFT",
+  READY: "READY",
+  SIGNED: "SIGNED",
+  VOID: "VOID",
+} as const;
+
+export const TemplateCategory = {
+  BILL_OF_SALE: "bill_of_sale",
+  ODOMETER_DISCLOSURE: "odometer_disclosure",
+  BUYERS_GUIDE: "buyers_guide",
+  POWER_OF_ATTORNEY: "power_of_attorney",
+  TRADE_IN: "trade_in",
+  FINANCE_CONTRACT: "finance_contract",
+  WARRANTY: "warranty",
+  CUSTOM: "custom",
+} as const;
+
 export default defineSchema({
   // Core tables
   users: defineTable({
@@ -92,16 +128,18 @@ export default defineSchema({
     subscriptionStatus: v.optional(v.string()),
     subscriptionId: v.optional(v.id("subscriptions")),
     // User settings
-    settings: v.optional(v.object({
-      emailNotifications: v.boolean(),
-      pushNotifications: v.boolean(),
-      dealUpdates: v.boolean(),
-      marketingEmails: v.boolean(),
-      theme: v.string(),
-      language: v.string(),
-      profileVisibility: v.string(),
-      activityTracking: v.boolean(),
-    })),
+    settings: v.optional(
+      v.object({
+        emailNotifications: v.boolean(),
+        pushNotifications: v.boolean(),
+        dealUpdates: v.boolean(),
+        marketingEmails: v.boolean(),
+        theme: v.string(),
+        language: v.string(),
+        profileVisibility: v.string(),
+        activityTracking: v.boolean(),
+      })
+    ),
     // Security fields
     failedLoginAttempts: v.optional(v.number()),
     lastFailedLogin: v.optional(v.number()),
@@ -126,16 +164,23 @@ export default defineSchema({
     logo: v.optional(v.string()),
     primaryColor: v.optional(v.string()),
     secondaryColor: v.optional(v.string()),
+
+    // NEW: Link to parent org
+    orgId: v.optional(v.id("orgs")),
+
     // S3 Configuration
     s3BucketName: v.optional(v.string()),
     s3Region: v.optional(v.string()),
     s3AccessKeyId: v.optional(v.string()), // Encrypted
     s3SecretKey: v.optional(v.string()), // Encrypted
+
     // Business info
     taxId: v.optional(v.string()), // Encrypted
     businessHours: v.optional(v.string()),
+
     // Subscription
     subscriptionId: v.optional(v.id("subscriptions")),
+
     // Billing
     billingEmail: v.optional(v.string()),
     billingAddress: v.optional(v.string()),
@@ -144,14 +189,16 @@ export default defineSchema({
     billingZipCode: v.optional(v.string()),
     billingCountry: v.optional(v.string()),
     stripeCustomerId: v.optional(v.string()),
+
     // Security settings
     allowedDomains: v.optional(v.array(v.string())),
     apiKeysEnabled: v.optional(v.boolean()),
     ipWhitelist: v.optional(v.array(v.string())),
+
     // Timestamps
     createdAt: v.number(),
     updatedAt: v.number(),
-  }),
+  }).index("by_org", ["orgId"]), // NEW INDEX
 
   // Security tables
   security_logs: defineTable({
@@ -189,23 +236,49 @@ export default defineSchema({
 
   api_keys: defineTable({
     dealershipId: v.id("dealerships"),
+    orgId: v.optional(v.id("orgs")), // NEW
+
     name: v.string(),
     keyHash: v.string(), // SHA-256 hash of the key
     keyPrefix: v.string(), // First 8 chars for identification
-    permissions: v.array(v.string()),
+
+    // Permissions/Scopes
+    permissions: v.array(v.string()), // Keep for backward compatibility
+    scopes: v.optional(v.array(v.string())), // NEW: e.g., ["inventory:read", "vehicles:read"]
+
+    // Status
+    isActive: v.boolean(),
+    status: v.optional(
+      v.union(
+        // NEW
+        v.literal("active"),
+        v.literal("revoked"),
+        v.literal("expired")
+      )
+    ),
+
+    // Usage tracking
     lastUsed: v.optional(v.number()),
     usageCount: v.optional(v.number()),
-    expiresAt: v.optional(v.number()),
-    isActive: v.boolean(),
-    // Rate limiting for this key
+    requestCount: v.optional(v.number()), // NEW
+    lastUsedAt: v.optional(v.number()), // NEW (duplicate of lastUsed, consolidate later)
+
+    // Rate limiting
     rateLimit: v.optional(
       v.object({
         requests: v.number(),
         window: v.number(), // in milliseconds
       })
     ),
+    rateLimitPerHour: v.optional(v.number()), // NEW
+    rateLimitPerDay: v.optional(v.number()), // NEW
+
     // IP restrictions
     allowedIps: v.optional(v.array(v.string())),
+
+    // Expiration
+    expiresAt: v.optional(v.number()),
+
     // Timestamps
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -213,7 +286,8 @@ export default defineSchema({
   })
     .index("by_dealership", ["dealershipId"])
     .index("by_key_hash", ["keyHash"])
-    .index("by_active", ["isActive"]),
+    .index("by_active", ["isActive"])
+    .index("by_org", ["orgId"]),
 
   // File management
   file_uploads: defineTable({
@@ -256,6 +330,7 @@ export default defineSchema({
     model: v.string(),
     year: v.number(),
     trim: v.optional(v.string()),
+    bodyType: v.optional(v.string()),
     mileage: v.number(),
     price: v.number(),
     images: v.optional(
@@ -272,6 +347,7 @@ export default defineSchema({
     interiorColor: v.optional(v.string()),
     fuelType: v.optional(v.string()),
     transmission: v.optional(v.string()),
+    drivetrain: v.optional(v.string()),
     engine: v.optional(v.string()),
     description: v.optional(v.string()),
     status: v.union(
@@ -291,6 +367,15 @@ export default defineSchema({
     // SEO
     seoTitle: v.optional(v.string()),
     seoDescription: v.optional(v.string()),
+
+    condition: v.optional(
+      v.union(
+        v.literal("new"),
+        v.literal("used"),
+        v.literal("certified_pre_owned")
+      )
+    ),
+
     // Timestamps
     createdAt: v.float64(),
     updatedAt: v.float64(),
@@ -411,6 +496,7 @@ export default defineSchema({
     financedAmount: v.optional(v.number()),
     documentPackId: v.optional(v.id("document_packs")),
     buyerData: v.optional(v.any()), // Cached buyer info
+    dealData: v.optional(v.any()), // Additional custom deal data
     documentStatus: v.optional(v.string()), // "none", "in_progress", "complete"
   })
     .index("by_dealership", ["dealershipId"])
@@ -855,4 +941,410 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_expiry", ["expiresAt"]),
 
+  orgs: defineTable({
+    name: v.string(),
+    slug: v.string(), // unique identifier for URLs
+    status: v.union(
+      v.literal("active"),
+      v.literal("suspended"),
+      v.literal("pending")
+    ),
+
+    // Billing at org level
+    stripeCustomerId: v.optional(v.string()),
+    billingEmail: v.optional(v.string()),
+
+    // Settings
+    settings: v.optional(
+      v.object({
+        allowMultipleDealerships: v.optional(v.boolean()),
+        masterAdminEmails: v.optional(v.array(v.string())),
+      })
+    ),
+
+    // Metadata
+    createdBy: v.string(), // userId who created the org
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_stripe_customer", ["stripeCustomerId"])
+    .index("by_status", ["status"]),
+
+  orgMembers: defineTable({
+    orgId: v.id("orgs"),
+    userId: v.id("users"),
+
+    // Role within the organization
+    role: v.union(
+      v.literal("OWNER"), // Full control, can't be removed
+      v.literal("ADMIN"), // Can manage everything except billing
+      v.literal("MEMBER") // Can access dealerships they're assigned to
+    ),
+
+    // Granular permissions (overrides role defaults)
+    customPermissions: v.optional(v.array(v.string())),
+
+    // Invitation tracking
+    invitedBy: v.optional(v.id("users")),
+    invitationAcceptedAt: v.optional(v.number()),
+
+    // Status
+    status: v.union(
+      v.literal("active"),
+      v.literal("invited"),
+      v.literal("suspended")
+    ),
+
+    // Metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_org", ["orgId"])
+    .index("by_user", ["userId"])
+    .index("by_org_and_user", ["orgId", "userId"])
+    .index("by_status", ["status"]),
+
+  verifiedDomains: defineTable({
+    dealershipId: v.id("dealerships"),
+    orgId: v.optional(v.id("orgs")),
+
+    domain: v.string(), // e.g., "example-dealership.com"
+
+    // Verification method
+    verificationType: v.union(v.literal("dns_txt"), v.literal("http_file")),
+    verificationToken: v.string(), // Token to verify ownership
+
+    // Status
+    status: v.union(
+      v.literal("pending"),
+      v.literal("verified"),
+      v.literal("failed"),
+      v.literal("revoked")
+    ),
+
+    // Verification details
+    verifiedAt: v.optional(v.number()),
+    lastCheckedAt: v.optional(v.number()),
+    verificationAttempts: v.number(),
+
+    // Usage tracking
+    apiCallsToday: v.optional(v.number()),
+    apiCallsThisMonth: v.optional(v.number()),
+    lastApiCallAt: v.optional(v.number()),
+
+    // Metadata
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_dealership", ["dealershipId"])
+    .index("by_domain", ["domain"])
+    .index("by_status", ["status"])
+    .index("by_org", ["orgId"]),
+
+  documentTemplates: defineTable({
+    dealershipId: v.id("dealerships"),
+    orgId: v.optional(v.id("orgs")),
+
+    // Template info
+    name: v.string(),
+    category: v.union(
+      v.literal("bill_of_sale"),
+      v.literal("odometer_disclosure"),
+      v.literal("buyers_guide"),
+      v.literal("power_of_attorney"),
+      v.literal("trade_in"),
+      v.literal("finance_contract"),
+      v.literal("warranty"),
+      v.literal("custom")
+    ),
+    description: v.optional(v.string()),
+
+    // Version control
+    version: v.number(),
+    isActive: v.boolean(), // Only one version active per category
+
+    // S3 storage
+    s3Key: v.string(), // Path to PDF template in S3
+    fileSize: v.number(),
+
+    // PDF form fields (extracted from PDF)
+    pdfFields: v.array(
+      v.object({
+        name: v.string(), // PDF field name (e.g., "buyer_name")
+        type: v.union(
+          v.literal("text"),
+          v.literal("number"),
+          v.literal("date"),
+          v.literal("checkbox"),
+          v.literal("signature"),
+          v.literal("radio"),
+          v.literal("dropdown")
+        ),
+        label: v.string(), // Human-readable label
+        required: v.boolean(), // Whether field is required
+        defaultValue: v.optional(v.string()), // Default value
+        pdfFieldName: v.string(), // Original PDF field name
+        page: v.number(), // Which page the field is on
+        rect: v.optional(v.array(v.number())), // [x, y, width, height]
+      })
+    ),
+
+    // Field mappings (maps PDF fields to data schema)
+    fieldMappings: v.array(
+      v.object({
+        pdfFieldName: v.string(), // "buyer_name"
+        dataPath: v.string(), // "client.firstName + ' ' + client.lastName"
+        transform: v.optional(
+          v.union(
+            v.literal("uppercase"),
+            v.literal("lowercase"),
+            v.literal("titlecase"),
+            v.literal("currency"),
+            v.literal("date")
+          )
+        ),
+        defaultValue: v.optional(v.string()),
+        required: v.boolean(),
+        autoMapped: v.boolean(), // Was this auto-detected or manual?
+      })
+    ),
+
+    // Metadata
+    uploadedBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_dealership", ["dealershipId"])
+    .index("by_dealership_and_category", ["dealershipId", "category"])
+    .index("by_dealership_active", ["dealershipId", "isActive"])
+    .index("by_org", ["orgId"]),
+
+  documentInstances: defineTable({
+    dealershipId: v.id("dealerships"),
+    orgId: v.optional(v.id("orgs")),
+
+    // Links
+    templateId: v.id("documentTemplates"),
+    dealId: v.id("deals"),
+
+    // Document info
+    documentType: v.string(), // "bill_of_sale", etc. (from template.category)
+    name: v.string(), // "Bill of Sale - John Doe"
+
+    // Document data
+    data: v.any(), // Filled form data (JSON snapshot)
+
+    // Status machine
+    status: v.union(
+      v.literal("DRAFT"), // Being created
+      v.literal("READY"), // Generated, ready to sign
+      v.literal("SIGNED"), // All signatures collected
+      v.literal("VOID"), // Voided/cancelled
+      v.literal("FINALIZING"), // Finalizing
+      v.literal("FINALIZED") // Finalized
+    ),
+
+    // S3 storage
+    s3Key: v.optional(v.string()), // Generated PDF (unsigned)
+    signedS3Key: v.optional(v.string()), // Final PDF (with signatures embedded)
+    fileSize: v.optional(v.number()),
+
+    // NEW: Signature tracking (moved from generatedDocuments)
+    requiredSignatures: v.array(v.string()), // ["buyer", "seller", "notary"]
+    signaturesCollected: v.array(
+      v.object({
+        role: v.string(),
+        signatureId: v.id("signatures"),
+        signedAt: v.number(),
+      })
+    ),
+
+    // Audit trail
+    audit: v.object({
+      createdBy: v.id("users"),
+      createdAt: v.number(),
+      signedBy: v.optional(v.id("users")),
+      signedAt: v.optional(v.number()),
+      voidedBy: v.optional(v.id("users")),
+      voidedAt: v.optional(v.number()),
+      voidReason: v.optional(v.string()),
+    }),
+
+    // Metadata
+    updatedAt: v.number(),
+    finalizedAt: v.optional(v.number()),
+    finalizedBy: v.optional(v.id("users")),
+    
+    // Notarization
+    notarized: v.optional(v.boolean()),
+    notarizedAt: v.optional(v.number()),
+    notarizedBy: v.optional(v.id("users")),
+    
+    metadata: v.optional(
+      v.object({
+        lastFieldValues: v.optional(v.any()), // 🆕 Add this
+        lastFieldUpdate: v.optional(v.number()), // 🆕 Add this
+        // ... other metadata
+      })
+    ),
+
+    // NEW: Link to final archived version
+    generatedDocumentId: v.optional(v.id("generatedDocuments")),
+  })
+    .index("by_dealership", ["dealershipId"])
+    .index("by_deal", ["dealId"])
+    .index("by_template", ["templateId"])
+    .index("by_status", ["status"])
+    .index("by_org", ["orgId"])
+    .index("by_dealership_status", ["dealershipId", "status"]),
+
+  signatureSessions: defineTable({
+    // Session Info
+    sessionToken: v.string(), // Unique token for QR URL
+    dealId: v.id("deals"),
+    documentId: v.id("documentInstances"),
+    dealershipId: v.id("dealerships"),
+
+    // Signer Info
+    signerRole: v.string(), // "buyer" | "seller" | "notary"
+    signerName: v.string(), // Expected signer name
+    signerEmail: v.optional(v.string()),
+
+    // Status
+    status: v.string(), // "pending" | "signed" | "expired" | "cancelled"
+
+    // Signature Data (once captured)
+    signatureS3Key: v.optional(v.string()),
+    signedAt: v.optional(v.number()),
+    ipAddress: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
+    geolocation: v.optional(
+      v.object({
+        latitude: v.number(),
+        longitude: v.number(),
+      })
+    ),
+
+    // Consent
+    consentGiven: v.boolean(),
+    consentTimestamp: v.optional(v.number()),
+    consentText: v.string(), // What they agreed to
+
+    // Security
+    createdBy: v.id("users"), // Dealer who initiated
+    expiresAt: v.number(), // Auto-expire after 15 minutes
+    createdAt: v.number(),
+  })
+    .index("by_token", ["sessionToken"])
+    .index("by_deal", ["dealId"])
+    .index("by_status_expires", ["status", "expiresAt"])
+    .index("by_dealership", ["dealershipId"]),
+
+  // Signature Records (permanent audit trail)
+  signatures: defineTable({
+    dealershipId: v.id("dealerships"),
+    dealId: v.id("deals"),
+    documentId: v.id("documentInstances"),
+
+    // Signer Info
+    signerRole: v.string(), // "buyer" | "seller" | "notary"
+    signerName: v.string(),
+    signerEmail: v.optional(v.string()),
+
+    // Signature Data
+    s3Key: v.string(), // Path to signature image in S3
+    imageDataUrl: v.optional(v.string()), // Base64 preview (deleted after 24hrs)
+    width: v.optional(v.number()),
+    height: v.optional(v.number()),
+
+    // Metadata
+    ipAddress: v.string(),
+    userAgent: v.string(),
+    geolocation: v.optional(
+      v.object({
+        latitude: v.number(),
+        longitude: v.number(),
+      })
+    ),
+
+    // Consent
+    consentGiven: v.boolean(),
+    consentText: v.string(),
+    consentTimestamp: v.number(),
+
+    // Audit
+    createdAt: v.number(),
+    scheduledDeletionAt: v.number(), // Auto-delete after 30 days
+    deletedAt: v.optional(v.number()), // When actually deleted
+  })
+    .index("by_deal", ["dealId"])
+    .index("by_document", ["documentId"])
+    .index("by_dealership_created", ["dealershipId", "createdAt"])
+    .index("by_scheduled_deletion", ["scheduledDeletionAt"])
+    .index("by_role_deal", ["dealId", "signerRole"]),
+
+  // E-Signature Consent Records
+  eSignatureConsents: defineTable({
+    dealershipId: v.id("dealerships"),
+    clientId: v.optional(v.id("clients")),
+    dealId: v.id("deals"),
+
+    // Consent Details
+    consentGiven: v.boolean(),
+    consentText: v.string(), // Full legal text
+    consentVersion: v.string(), // v1.0, v2.0, etc.
+
+    // Metadata
+    ipAddress: v.string(),
+    userAgent: v.string(),
+    timestamp: v.number(),
+
+    // Revocation
+    revoked: v.boolean(),
+    revokedAt: v.optional(v.number()),
+    revokedReason: v.optional(v.string()),
+  })
+    .index("by_client", ["clientId"])
+    .index("by_deal", ["dealId"])
+    .index("by_dealership", ["dealershipId"]),
+
+  generatedDocuments: defineTable({
+    dealershipId: v.id("dealerships"),
+    dealId: v.id("deals"),
+    templateId: v.id("documentTemplates"),
+    documentType: v.string(),
+
+    // Generation Data
+    generatedData: v.any(), // Snapshot of data used to fill
+    s3Key: v.string(), // Filled PDF location
+    fileSize: v.number(),
+
+    // Status
+    status: v.string(), // "draft" | "ready_to_sign" | "partially_signed" | "fully_signed" | "void"
+
+    // Required Signatures
+    requiredSignatures: v.array(v.string()), // ["buyer", "seller", "notary"]
+
+    // Signature Status
+    signaturesCollected: v.array(
+      v.object({
+        role: v.string(),
+        signatureId: v.id("signatures"),
+        signedAt: v.number(),
+      })
+    ),
+
+    // Audit Trail
+    generatedBy: v.id("users"),
+    generatedAt: v.number(),
+    lastModifiedAt: v.number(),
+    voidedAt: v.optional(v.number()),
+    voidedBy: v.optional(v.id("users")),
+    voidReason: v.optional(v.string()),
+  })
+    .index("by_deal", ["dealId"])
+    .index("by_dealership_status", ["dealershipId", "status"])
+    .index("by_template", ["templateId"]),
 });

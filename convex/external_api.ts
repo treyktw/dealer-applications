@@ -107,13 +107,11 @@ export const getVehicles = httpAction(async (ctx, request) => {
       dealershipId: toDealershipId(dealershipId),
       page,
       limit,
-      filters: {
-        make: make ? sanitizeString(make) : undefined,
-        model: model ? sanitizeString(model) : undefined,
-        minPrice: minPrice ? parseInt(minPrice) : undefined,
-        maxPrice: maxPrice ? parseInt(maxPrice) : undefined,
-        year: year ? parseInt(year) : undefined,
-      }
+      make: make ? sanitizeString(make) : undefined,
+      model: model ? sanitizeString(model) : undefined,
+      minPrice: minPrice ? parseInt(minPrice) : undefined,
+      maxPrice: maxPrice ? parseInt(maxPrice) : undefined,
+      year: year ? parseInt(year) : undefined,
     });
 
     // 5. Log API usage
