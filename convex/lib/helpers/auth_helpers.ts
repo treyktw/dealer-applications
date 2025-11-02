@@ -16,7 +16,7 @@ export const getUserByToken = query({
   args: {
     token: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, _args) => {
     // The token is the Clerk/auth token
     // We need to verify the current session and get the user
     

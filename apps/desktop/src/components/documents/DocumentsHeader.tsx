@@ -19,7 +19,7 @@ interface DocumentsHeaderProps {
   onViewInWebApp: () => void;
 }
 
-export function DocumentsHeader({ dealDetails, dealsId, onViewInWebApp }: DocumentsHeaderProps) {
+export function DocumentsHeader({ dealDetails, dealsId: _dealsId, onViewInWebApp }: DocumentsHeaderProps) {
   return (
     <div className="p-6 border-b">
       <div className="flex justify-between items-start">

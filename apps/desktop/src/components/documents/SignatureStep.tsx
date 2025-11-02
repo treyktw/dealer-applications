@@ -36,13 +36,12 @@ export function SignatureStep({
   dealsId, 
   documents, 
   dealDetails,
-  sessionToken,
+  sessionToken: _sessionToken,
   onBack, 
   onContinue 
 }: SignatureStepProps) {
   const authData = useAuth();
   const session = authData.session;
-  const user = authData.user;
   const { openWebApp, openLink } = useOpenLink();
   const [creatingSession, setCreatingSession] = useState<string | null>(null);
 

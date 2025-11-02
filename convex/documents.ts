@@ -526,15 +526,12 @@ export const generateCustomDocumentViewUrl = action({
       const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token: args.token });
       if (!sessionData?.user) throw new Error("Invalid or expired session");
       
-      const { id, email } = sessionData.user as { id?: string; email?: string };
+      const { id } = sessionData.user as { id?: string; email?: string };
       
       // Try to find user by Clerk ID
       user = id
         ? await ctx.runQuery(api.users.getUserByClerkId, { clerkId: id })
         : null;
-      
-      // Fallback to email if Clerk ID not found
-      
     } else {
       const identity = await ctx.auth.getUserIdentity();
       if (!identity) {

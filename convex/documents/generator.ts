@@ -4,7 +4,7 @@ import { mutation, query, action, type QueryCtx } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import { requireDealership, assertDealershipAccess } from "../guards";
-import { PDFDocument, PDFTextField, PDFCheckBox, PDFDropdown, PDFRadioGroup, rgb } from 'pdf-lib';
+import { PDFDocument, PDFTextField, PDFCheckBox, PDFDropdown, PDFRadioGroup } from 'pdf-lib';
 
 /**
  * Authentication helper that works for both desktop and web apps

@@ -37,7 +37,6 @@ function DocumentsPage() {
 
   // State
   const [currentStep, setCurrentStep] = useState<Step>("review");
-  const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
 
   // Data fetching
   const {
@@ -107,8 +106,7 @@ function DocumentsPage() {
     downloadDocument.mutate(documentId);
   };
 
-  const handleSelectDocument = (documentId: string) => {
-    setSelectedDocument(documentId);
+  const handleSelectDocument = (_documentId: string) => {
     toast.success("Opening document editor...");
   };
 
@@ -252,7 +250,6 @@ function DocumentsPage() {
               <NotarizeStep
                 dealsId={dealsId}
                 documents={documents}
-                sessionToken={sessionToken}
                 onBack={() => setCurrentStep("sign")}
                 onContinue={() => setCurrentStep("finalize")}
               />

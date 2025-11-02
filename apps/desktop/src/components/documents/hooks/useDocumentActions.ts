@@ -65,7 +65,7 @@ export function useDocumentActions(refetchDocuments?: () => void) {
       toast.success("Document deleted successfully");
       refetchDocuments?.();
     },
-    onError: (error) => {
+    onError: (_error) => {
       toast.error("Failed to delete document");
     },
   });

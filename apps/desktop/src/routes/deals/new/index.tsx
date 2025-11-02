@@ -1,7 +1,7 @@
 // src/routes/deals/new/index.tsx
 
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { convexMutation } from '@/lib/convex';
 import { api } from '@dealer/convex';
@@ -24,7 +24,8 @@ function NewDealPage() {
   const createDeal = useMutation({
     mutationFn: async (data: any) => {
       // Create the deal
-      const dealsId = await convexMutation(api.api.deals.createDeal, data);
+      const result = await convexMutation(api.api.deals.createDeal, data);
+      const dealsId = result.dealId;
       
       // Create document pack immediately
       await convexMutation(api.api.documentPacks.createDocumentPack, {
@@ -39,7 +40,10 @@ function NewDealPage() {
       toast.success('Deal created successfully');
       navigate({ 
         to: '/deals/$dealsId/documents', 
-        params: { dealsId } 
+        params: { dealsId: dealsId as string },
+        search: {
+          token: undefined,
+        },
       });
     },
     onError: (error) => {
@@ -107,22 +111,22 @@ function NewDealPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="firstName">First Name</Label>
-                    <Input id="firstName" name="firstName" required />
+                    <Input id={useId()} name="firstName" required />
                   </div>
                   <div>
                     <Label htmlFor="lastName">Last Name</Label>
-                    <Input id="lastName" name="lastName" required />
+                    <Input id={useId()} name="lastName" required />
                   </div>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="email">Email</Label>
-                    <Input id="email" name="email" type="email" />
+                    <Input id={useId()} name="email" type="email" />
                   </div>
                   <div>
                     <Label htmlFor="phone">Phone</Label>
-                    <Input id="phone" name="phone" type="tel" />
+                    <Input id={useId()} name="phone" type="tel" />
                   </div>
                 </div>
 
@@ -134,11 +138,11 @@ function NewDealPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="vin">VIN</Label>
-                      <Input id="vin" name="vin" />
+                      <Input id={useId()} name="vin" />
                     </div>
                     <div>
                       <Label htmlFor="stockNumber">Stock Number</Label>
-                      <Input id="stockNumber" name="stockNumber" />
+                      <Input id={useId()} name="stockNumber" />
                     </div>
                   </div>
                 </div>

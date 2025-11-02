@@ -21,7 +21,6 @@ import { convexClient } from "@/lib/convex";
 import { LivePDFPreview } from "@/components/documents/edit/LivePDFPreview";
 import { useDocumentEditor } from "@/hooks/useDocumentEditor";
 import { cn } from "@/lib/utils";
-import { PDFFieldInspector } from "@/components/PDFFieldInspector";
 
 export const Route = createFileRoute(
   "/deals/$dealsId/documents/edit/$documentId"

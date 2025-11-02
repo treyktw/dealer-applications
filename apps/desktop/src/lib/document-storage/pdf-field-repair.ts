@@ -24,7 +24,6 @@ export async function repairPDFFieldAppearances(
 
   for (const field of fields) {
     try {
-      const fieldName = field.getName();
       const acroField = (field as any).acroField;
       const widgets = acroField?.getWidgets() || [];
 
