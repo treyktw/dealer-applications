@@ -1,73 +1,95 @@
 // convex/documents/generator.ts - PDF Generation & Filling
 import { v } from "convex/values";
-import { mutation, query, action, type QueryCtx } from "../_generated/server";
+import {
+  mutation,
+  query,
+  action,
+  type QueryCtx,
+  internalAction,
+} from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import { requireDealership, assertDealershipAccess } from "../guards";
-import { PDFDocument, PDFTextField, PDFCheckBox, PDFDropdown, PDFRadioGroup } from 'pdf-lib';
+import {
+  PDFDocument,
+  PDFTextField,
+  PDFCheckBox,
+  PDFDropdown,
+  PDFRadioGroup,
+} from "pdf-lib";
 
 /**
  * Authentication helper that works for both desktop and web apps
- * 
+ *
  * @param ctx - Query context
  * @param token - Optional session token (for desktop app)
  * @returns User document from database
  * @throws Error if not authenticated
  */
-async function requireAuth(ctx: QueryCtx, token?: string): Promise<Doc<"users">> {
+async function requireAuth(
+  ctx: QueryCtx,
+  token?: string
+): Promise<Doc<"users">> {
   // Path 1: Desktop app authentication (with token)
   if (token) {
     // console.log("🔐 Authenticating via desktop token");
-    
+
     type SessionUser = { id?: string; email?: string; dealershipId?: string };
-    
+
     // Validate session token
-    const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token });
+    const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, {
+      token,
+    });
     if (!sessionData?.user) {
       throw new Error("Invalid or expired session");
     }
-    
+
     const { id, email } = sessionData.user as SessionUser;
-    
+
     // Try to find user by Clerk ID
     let userDoc = id
-      ? await ctx.db.query("users").withIndex("by_clerk_id", (q) => q.eq("clerkId", id)).first()
+      ? await ctx.db
+          .query("users")
+          .withIndex("by_clerk_id", (q) => q.eq("clerkId", id))
+          .first()
       : null;
-    
+
     // Fallback to email if Clerk ID not found
     if (!userDoc && email) {
-      userDoc = await ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", email)).first();
+      userDoc = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", email))
+        .first();
     }
-    
+
     if (!userDoc) {
       throw new Error("User not found in database");
     }
-    
+
     // console.log("✅ Desktop authentication successful");
     return userDoc;
   }
-  
+
   // Path 2: Web app authentication (with Clerk identity)
   // console.log("🔐 Authenticating via Clerk identity");
-  
+
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) {
     throw new Error("Authentication required");
   }
-  
+
   const user = await ctx.db
     .query("users")
     .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
     .first();
-    
+
   if (!user) {
     throw new Error("User not found in database");
   }
-  
+
   // console.log("✅ Web authentication successful");
   return user;
 }
-
 
 // Strong types used across this module
 type TemplateFieldType = "text" | "number" | "date" | "checkbox" | "signature";
@@ -136,7 +158,9 @@ export const createDocumentInstance = mutation({
       status: "DRAFT",
       name: template.name,
       documentType: template.category,
-      requiredSignatures: template.pdfFields.filter((field) => field.type === "signature").map((field) => field.name),
+      requiredSignatures: template.pdfFields
+        .filter((field) => field.type === "signature")
+        .map((field) => field.name),
       signaturesCollected: [],
       audit: {
         createdBy: user._id,
@@ -198,6 +222,39 @@ export const updateDocumentData = mutation({
 });
 
 /**
+ * Update document status (DRAFT | READY | COMPLETED | VOID)
+ */
+export const updateDocumentStatus = mutation({
+  args: {
+    documentId: v.id("documentInstances"),
+    status: v.union(
+      v.literal("DRAFT"),
+      v.literal("READY"),
+      v.literal("SIGNED"),
+      v.literal("VOID"),
+      v.literal("FINALIZING"),
+      v.literal("FINALIZED"),
+    ),
+    token: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireAuth(ctx, args.token);
+
+    const document = await ctx.db.get(args.documentId);
+    if (!document) throw new Error("Document not found");
+
+    await assertDealershipAccess(ctx, document.dealershipId);
+
+    await ctx.db.patch(args.documentId, {
+      status: args.status,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true, status: args.status };
+  },
+});
+
+/**
  * Generate PDF from document instance
  * This fills the template with data and creates the PDF
  */
@@ -210,18 +267,25 @@ export const generateDocument = action({
     args
   ): Promise<{ success: true; s3Key: string; status: "READY" }> => {
     // Get document instance
-    const document = await ctx.runQuery(api.documents.generator.getDocumentById, {
-      documentId: args.documentId,
-    });
+    const document = await ctx.runQuery(
+      api.documents.generator.getDocumentById,
+      {
+        documentId: args.documentId,
+      }
+    );
 
     if (!document) {
       throw new Error("Document not found");
     }
 
     // Get template
-    const template = await ctx.runQuery(api.documents.templates.getTemplateById, {
-      templateId: document.templateId,
-    });
+    const template = await ctx.runQuery(
+      api.documents.templates.getTemplateById,
+      {
+        templateId: document.templateId,
+        skipAuth: true,
+      }
+    );
 
     if (!template) {
       throw new Error("Template not found");
@@ -237,7 +301,9 @@ export const generateDocument = action({
     );
 
     if (!validation.isValid) {
-      throw new Error(`Validation failed: ${JSON.stringify(validation.errors)}`);
+      throw new Error(
+        `Validation failed: ${JSON.stringify(validation.errors)}`
+      );
     }
 
     // Get template PDF download URL
@@ -322,12 +388,12 @@ export const generateDocument = action({
  */
 async function fillPDFTemplate(
   templateBuffer: ArrayBuffer,
-  fields: Array<{ 
-    name: string; 
-    type: string; 
-    page: number; 
+  fields: Array<{
+    name: string;
+    type: string;
+    page: number;
     rect?: number[];
-    pdfFieldName?: string;  // ← This should already be in the type
+    pdfFieldName?: string; // ← This should already be in the type
   }>,
   data: DocumentData
 ): Promise<ArrayBuffer> {
@@ -340,7 +406,7 @@ async function fillPDFTemplate(
 
     // ⚠️ ADD THIS: Get all available PDF field names for debugging
     const pdfFields = form.getFields();
-    const availableFieldNames = pdfFields.map(f => f.getName());
+    const availableFieldNames = pdfFields.map((f) => f.getName());
     // console.log('Available PDF fields:', availableFieldNames.join(', '));
 
     let fieldsFilledCount = 0;
@@ -353,7 +419,7 @@ async function fillPDFTemplate(
 
         // Skip if no value provided (unless it's a checkbox)
         if (value === undefined || value === null) {
-          if (field.type !== 'checkbox') {
+          if (field.type !== "checkbox") {
             fieldsSkippedCount++;
             continue;
           }
@@ -361,23 +427,42 @@ async function fillPDFTemplate(
 
         // ⚠️ CRITICAL FIX: Use pdfFieldName (exact case) instead of field.name (lowercase)
         const pdfFieldName = field.pdfFieldName || field.name;
-        
+
         // Try to get the PDF form field
-        let pdfField: PDFTextField | PDFCheckBox | PDFDropdown | PDFRadioGroup | undefined;
+        let pdfField:
+          | PDFTextField
+          | PDFCheckBox
+          | PDFDropdown
+          | PDFRadioGroup
+          | undefined;
         try {
-          pdfField = form.getField(pdfFieldName) as PDFTextField | PDFCheckBox | PDFDropdown | PDFRadioGroup;
+          pdfField = form.getField(pdfFieldName) as
+            | PDFTextField
+            | PDFCheckBox
+            | PDFDropdown
+            | PDFRadioGroup;
         } catch {
           // If not found, try case-insensitive search as fallback
           const matchingField = availableFieldNames.find(
-            name => name.toLowerCase() === pdfFieldName.toLowerCase()
+            (name) => name.toLowerCase() === pdfFieldName.toLowerCase()
           );
-          
+
           if (matchingField) {
-            console.log(`Case mismatch found: ${pdfFieldName} -> ${matchingField}`);
-            pdfField = form.getField(matchingField) as PDFTextField | PDFCheckBox | PDFDropdown | PDFRadioGroup;
+            console.log(
+              `Case mismatch found: ${pdfFieldName} -> ${matchingField}`
+            );
+            pdfField = form.getField(matchingField) as
+              | PDFTextField
+              | PDFCheckBox
+              | PDFDropdown
+              | PDFRadioGroup;
           } else {
             console.error(`Field not found: ${pdfFieldName}`);
-            console.log('Available fields:', availableFieldNames.slice(0, 10).join(', '), '...');
+            console.log(
+              "Available fields:",
+              availableFieldNames.slice(0, 10).join(", "),
+              "..."
+            );
             fieldsSkippedCount++;
             continue;
           }
@@ -385,15 +470,15 @@ async function fillPDFTemplate(
 
         // Fill based on field type (cast to our union type)
         const filled = await fillField(
-          pdfField as PDFField, 
-          { 
-            name: field.name, 
-            type: field.type as TemplateFieldType, 
-            pdfFieldName: pdfFieldName 
-          }, 
+          pdfField as PDFField,
+          {
+            name: field.name,
+            type: field.type as TemplateFieldType,
+            pdfFieldName: pdfFieldName,
+          },
           value
         );
-        
+
         if (filled) {
           fieldsFilledCount++;
           console.log(`✓ ${pdfFieldName} = ${value}`);
@@ -407,26 +492,32 @@ async function fillPDFTemplate(
       }
     }
 
-    console.log(`PDF filled: ${fieldsFilledCount} fields filled, ${fieldsSkippedCount} skipped`);
+    console.log(
+      `PDF filled: ${fieldsFilledCount} fields filled, ${fieldsSkippedCount} skipped`
+    );
 
     // Save the filled PDF
     const pdfBytes = await pdfDoc.save();
-    
+
     return pdfBytes.buffer as ArrayBuffer;
   } catch (error) {
-    console.error('Error filling PDF template:', error);
-    throw new Error(`Failed to fill PDF template: ${error instanceof Error ? error.message : String(error)}`);
+    console.error("Error filling PDF template:", error);
+    throw new Error(
+      `Failed to fill PDF template: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
-
-
 
 /**
  * Fill a single PDF field based on its type
  */
 type PDFField = PDFTextField | PDFCheckBox | PDFDropdown | PDFRadioGroup;
 
-async function fillField(pdfField: PDFField, fieldConfig: TemplateFieldConfig, value: unknown): Promise<boolean> {
+async function fillField(
+  pdfField: PDFField,
+  fieldConfig: TemplateFieldConfig,
+  value: unknown
+): Promise<boolean> {
   const fieldType = pdfField.constructor.name;
 
   try {
@@ -442,7 +533,7 @@ async function fillField(pdfField: PDFField, fieldConfig: TemplateFieldConfig, v
     if (pdfField instanceof PDFCheckBox) {
       const checkboxField = pdfField as PDFCheckBox;
       const isChecked = coerceToBoolean(value);
-      
+
       if (isChecked) {
         checkboxField.check();
       } else {
@@ -455,14 +546,16 @@ async function fillField(pdfField: PDFField, fieldConfig: TemplateFieldConfig, v
     if (pdfField instanceof PDFDropdown) {
       const dropdown = pdfField as PDFDropdown;
       const stringValue = String(value);
-      
+
       // Check if value is in options
       const options = dropdown.getOptions();
       if (options.includes(stringValue)) {
         dropdown.select(stringValue);
         return true;
       } else {
-        console.warn(`Value "${stringValue}" not in dropdown options for field ${fieldConfig.name}`);
+        console.warn(
+          `Value "${stringValue}" not in dropdown options for field ${fieldConfig.name}`
+        );
         return false;
       }
     }
@@ -471,14 +564,16 @@ async function fillField(pdfField: PDFField, fieldConfig: TemplateFieldConfig, v
     if (pdfField instanceof PDFRadioGroup) {
       const radioGroup = pdfField as PDFRadioGroup;
       const stringValue = String(value);
-      
+
       // Check if value is in options
       const options = radioGroup.getOptions();
       if (options.includes(stringValue)) {
         radioGroup.select(stringValue);
         return true;
       } else {
-        console.warn(`Value "${stringValue}" not in radio options for field ${fieldConfig.name}`);
+        console.warn(
+          `Value "${stringValue}" not in radio options for field ${fieldConfig.name}`
+        );
         return false;
       }
     }
@@ -496,18 +591,18 @@ async function fillField(pdfField: PDFField, fieldConfig: TemplateFieldConfig, v
  */
 function formatValueForField(value: unknown, fieldType: string): string {
   if (value === null || value === undefined) {
-    return '';
+    return "";
   }
 
   switch (fieldType) {
-    case 'date':
+    case "date":
       return formatDate(value);
 
-    case 'number':
+    case "number":
       return formatNumber(value);
 
-    case 'text':
-    case 'signature':
+    case "text":
+    case "signature":
     default:
       return String(value);
   }
@@ -523,9 +618,9 @@ function formatDate(value: unknown): string {
 
     if (value instanceof Date) {
       date = value;
-    } else if (typeof value === 'number') {
+    } else if (typeof value === "number") {
       date = new Date(value);
-    } else if (typeof value === 'string') {
+    } else if (typeof value === "string") {
       date = new Date(value);
     } else {
       return String(value);
@@ -537,13 +632,13 @@ function formatDate(value: unknown): string {
     }
 
     // Format as MM/DD/YYYY (US format)
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
     const year = date.getFullYear();
 
     return `${month}/${day}/${year}`;
   } catch (error) {
-    console.error('Error formatting date:', error);
+    console.error("Error formatting date:", error);
     return String(value);
   }
 }
@@ -554,15 +649,15 @@ function formatDate(value: unknown): string {
 function formatNumber(value: unknown): string {
   try {
     const num = Number(value);
-    
+
     if (Number.isNaN(num)) {
       return String(value);
     }
 
     // Format with commas for thousands
-    return num.toLocaleString('en-US');
+    return num.toLocaleString("en-US");
   } catch (error) {
-    console.error('Error formatting number:', error);
+    console.error("Error formatting number:", error);
     return String(value);
   }
 }
@@ -571,16 +666,21 @@ function formatNumber(value: unknown): string {
  * Coerce value to boolean
  */
 function coerceToBoolean(value: unknown): boolean {
-  if (typeof value === 'boolean') {
+  if (typeof value === "boolean") {
     return value;
   }
 
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const lower = value.toLowerCase().trim();
-    return lower === 'true' || lower === 'yes' || lower === '1' || lower === 'checked';
+    return (
+      lower === "true" ||
+      lower === "yes" ||
+      lower === "1" ||
+      lower === "checked"
+    );
   }
 
-  if (typeof value === 'number') {
+  if (typeof value === "number") {
     return value !== 0;
   }
 
@@ -595,15 +695,14 @@ function coerceToBoolean(value: unknown): boolean {
 function getNestedValue(obj: DocumentData, path: string): unknown {
   try {
     // Use Record<string, unknown> for nested access
-    return path.split('.').reduce(
-      (current: Record<string, unknown> | unknown, key) => {
-        if (current && typeof current === 'object' && key in current) {
+    return path
+      .split(".")
+      .reduce((current: Record<string, unknown> | unknown, key) => {
+        if (current && typeof current === "object" && key in current) {
           return (current as Record<string, unknown>)[key];
         }
         return undefined;
-      },
-      obj
-    );
+      }, obj);
   } catch {
     return undefined;
   }
@@ -621,12 +720,12 @@ async function fillPDFTemplateAdvanced(
     for (const field of fields) {
       try {
         // Support dot notation for nested data
-        const value = field.dataPath 
+        const value = field.dataPath
           ? getNestedValue(data, field.dataPath)
           : data[field.name];
 
         if (value === undefined || value === null) {
-          if (field.type !== 'checkbox') {
+          if (field.type !== "checkbox") {
             continue;
           }
         }
@@ -643,16 +742,21 @@ async function fillPDFTemplateAdvanced(
     const pdfBytes = await pdfDoc.save();
     return pdfBytes.buffer as ArrayBuffer;
   } catch (error) {
-    console.error('Error filling PDF template:', error);
-    throw new Error(`Failed to fill PDF template: ${error instanceof Error ? error.message : String(error)}`);
+    console.error("Error filling PDF template:", error);
+    throw new Error(
+      `Failed to fill PDF template: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 
 /**
  * Validate data against field requirements before filling
  */
-function validateDataBeforeFilling(fields: TemplateFieldConfig[], data: DocumentData): { 
-  isValid: boolean; 
+function validateDataBeforeFilling(
+  fields: TemplateFieldConfig[],
+  data: DocumentData
+): {
+  isValid: boolean;
   errors: string[];
   warnings: string[];
 } {
@@ -663,28 +767,36 @@ function validateDataBeforeFilling(fields: TemplateFieldConfig[], data: Document
     const value = data[field.name];
 
     // Check required fields
-    if (field.required && (value === undefined || value === null || value === '')) {
+    if (
+      field.required &&
+      (value === undefined || value === null || value === "")
+    ) {
       errors.push(`Required field "${field.label}" is missing`);
     }
 
     // Type validation
-    if (value !== undefined && value !== null && value !== '') {
+    if (value !== undefined && value !== null && value !== "") {
       switch (field.type) {
-        case 'number':
+        case "number":
           if (Number.isNaN(Number(value))) {
             errors.push(`Field "${field.label}" must be a number`);
           }
           break;
 
-        case 'date':
+        case "date":
           if (Number.isNaN(Date.parse(String(value)))) {
             errors.push(`Field "${field.label}" must be a valid date`);
           }
           break;
 
-        case 'checkbox':
-          if (typeof value !== 'boolean' && !['true', 'false', '1', '0'].includes(String(value).toLowerCase())) {
-            warnings.push(`Field "${field.label}" has unexpected value for checkbox`);
+        case "checkbox":
+          if (
+            typeof value !== "boolean" &&
+            !["true", "false", "1", "0"].includes(String(value).toLowerCase())
+          ) {
+            warnings.push(
+              `Field "${field.label}" has unexpected value for checkbox`
+            );
           }
           break;
       }
@@ -716,7 +828,7 @@ export const markDocumentGenerated = mutation({
     // Log S3 key before storing
     console.log("Storing S3 key:", args.s3Key);
     console.log("S3 key length:", args.s3Key.length);
-    console.log("S3 key ends with .pdf:", args.s3Key.endsWith('.pdf'));
+    console.log("S3 key ends with .pdf:", args.s3Key.endsWith(".pdf"));
 
     await ctx.db.patch(args.documentId, {
       status: "READY",
@@ -770,7 +882,8 @@ export const logGenerationError = mutation({
 /**
  * Sign a document (mark as immutable)
  */
-export const signDocument = mutation({
+/* Removed: digital signing flow */
+/* export const signDocument = mutation({
   args: {
     documentId: v.id("documentInstances"),
   },
@@ -821,7 +934,7 @@ export const signDocument = mutation({
       status: "SIGNED" as const,
     };
   },
-});
+}); */
 
 /**
  * Void a document with reason
@@ -897,7 +1010,9 @@ export const getDocumentById = query({
 
       // Verify user has access to this document's dealership
       if (document.dealershipId !== user.dealershipId) {
-        throw new Error("Access denied: Document belongs to different dealership");
+        throw new Error(
+          "Access denied: Document belongs to different dealership"
+        );
       }
     }
 
@@ -916,29 +1031,29 @@ export const getDocumentsByDeal = query({
   handler: async (ctx, args) => {
     // ✅ Authenticate (works for both desktop and web)
     const user = await requireAuth(ctx, args.token);
-    
+
     // Verify user has dealership
     if (!user.dealershipId) {
       throw new Error("User not associated with a dealership");
     }
-    
+
     // Get deal and verify it exists
     const deal = await ctx.db.get(args.dealId);
     if (!deal) {
       throw new Error("Deal not found");
     }
-    
+
     // Verify user has access to this deal
     if (deal.dealershipId !== user.dealershipId) {
       throw new Error("Access denied: Deal belongs to different dealership");
     }
-    
+
     // Fetch documents from documentInstances table
     const documents = await ctx.db
       .query("documentInstances")
       .withIndex("by_deal", (q) => q.eq("dealId", args.dealId))
       .collect();
-    
+
     // Get template info for each document
     const documentsWithTemplates = await Promise.all(
       documents.map(async (doc) => {
@@ -956,7 +1071,7 @@ export const getDocumentsByDeal = query({
         };
       })
     );
-    
+
     return documentsWithTemplates;
   },
 });
@@ -1012,7 +1127,10 @@ export const extractFieldValuesFromDocument = action({
     documentId: v.id("documentInstances"),
     token: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<{
+  handler: async (
+    ctx,
+    args
+  ): Promise<{
     fields: Array<{
       name: string;
       type: string;
@@ -1024,10 +1142,13 @@ export const extractFieldValuesFromDocument = action({
     templateName: string;
   }> => {
     // Get document with authentication
-    const document = await ctx.runQuery(api.documents.generator.getDocumentById, {
-      documentId: args.documentId,
-      token: args.token,
-    });
+    const document = await ctx.runQuery(
+      api.documents.generator.getDocumentById,
+      {
+        documentId: args.documentId,
+        token: args.token,
+      }
+    );
 
     if (!document) {
       throw new Error("Document not found");
@@ -1038,10 +1159,14 @@ export const extractFieldValuesFromDocument = action({
     }
 
     // Get template to know the field structure
-    const template = await ctx.runQuery(api.documents.templates.getTemplateById, {
-      templateId: document.templateId,
-      token: args.token,
-    });
+    const template = await ctx.runQuery(
+      api.documents.templates.getTemplateById,
+      {
+        templateId: document.templateId,
+        // token: args.token,
+        skipAuth: true,
+      }
+    );
 
     if (!template) {
       throw new Error("Template not found");
@@ -1067,7 +1192,7 @@ export const extractFieldValuesFromDocument = action({
 
       // Extract current field values from the PDF
       const fieldValues = await extractCurrentPDFFieldValues(pdfBuffer);
-      
+
       // console.log("Extracted field values from PDF:", fieldValues);
 
       // Use the actual fields from the PDF instead of template fields
@@ -1106,14 +1231,14 @@ async function extractCurrentPDFFieldValues(
   const formFields = form.getFields();
 
   console.log(`Found ${formFields.length} form fields in PDF`);
-  
+
   // Debug: Check if PDF has any form at all
   if (formFields.length === 0) {
     console.log("No form fields found in PDF. This could mean:");
     console.log("1. The PDF was flattened during generation");
     console.log("2. The PDF template doesn't have form fields");
     console.log("3. The PDF is corrupted or not loading properly");
-    
+
     // Try to get form info
     try {
       const formInfo = form.constructor.name;
@@ -1123,7 +1248,11 @@ async function extractCurrentPDFFieldValues(
     }
   }
 
-  const fieldValues: Array<{ name: string; value: string | boolean; type: string }> = [];
+  const fieldValues: Array<{
+    name: string;
+    value: string | boolean;
+    type: string;
+  }> = [];
 
   for (const field of formFields) {
     try {
@@ -1162,8 +1291,8 @@ async function extractCurrentPDFFieldValues(
  */
 function generateFieldLabel(fieldName: string): string {
   return fieldName
-    .replace(/[-_]/g, ' ') // Replace hyphens and underscores with spaces
-    .replace(/([a-z])([A-Z])/g, '$1 $2') // Add space between camelCase
+    .replace(/[-_]/g, " ") // Replace hyphens and underscores with spaces
+    .replace(/([a-z])([A-Z])/g, "$1 $2") // Add space between camelCase
     .replace(/\b\w/g, (char) => char.toUpperCase()) // Capitalize first letter of each word
     .trim();
 }
@@ -1185,10 +1314,13 @@ export const updateDocumentFieldValues = action({
   },
   handler: async (ctx, args): Promise<{ success: boolean; s3Key: string }> => {
     // Get document with authentication
-    const document = await ctx.runQuery(api.documents.generator.getDocumentById, {
-      documentId: args.documentId,
-      token: args.token,
-    });
+    const document = await ctx.runQuery(
+      api.documents.generator.getDocumentById,
+      {
+        documentId: args.documentId,
+        token: args.token,
+      }
+    );
 
     if (!document) {
       throw new Error("Document not found");
@@ -1217,7 +1349,10 @@ export const updateDocumentFieldValues = action({
       const pdfBuffer = await response.arrayBuffer();
 
       // Update the PDF with new field values
-      const updatedPdfBuffer = await updatePDFFieldValues(pdfBuffer, args.fieldValues);
+      const updatedPdfBuffer = await updatePDFFieldValues(
+        pdfBuffer,
+        args.fieldValues
+      );
 
       // Generate new S3 key (versioned)
       const timestamp = Date.now();
@@ -1272,13 +1407,15 @@ export const debugDocumentS3Key = query({
   handler: async (ctx, args) => {
     const document = await ctx.db.get(args.documentId);
     if (!document) return null;
-    
+
     return {
       documentId: document._id,
       s3Key: document.s3Key,
       s3KeyLength: document.s3Key?.length,
-      s3KeyEndsWithPdf: document.s3Key?.endsWith('.pdf'),
-      s3KeyBytes: document.s3Key ? new TextEncoder().encode(document.s3Key) : null,
+      s3KeyEndsWithPdf: document.s3Key?.endsWith(".pdf"),
+      s3KeyBytes: document.s3Key
+        ? new TextEncoder().encode(document.s3Key)
+        : null,
       status: document.status,
       name: document.name,
     };
@@ -1294,9 +1431,9 @@ async function updatePDFFieldValues(
 ): Promise<ArrayBuffer> {
   const pdfDoc = await PDFDocument.load(pdfBuffer);
   const form = pdfDoc.getForm();
-  
+
   // Get all available field names for debugging
-  const availableFields = form.getFields().map(field => field.getName());
+  const availableFields = form.getFields().map((field) => field.getName());
   console.log("Available PDF fields:", availableFields);
 
   for (const { pdfFieldName, value } of fieldValues) {
@@ -1307,7 +1444,8 @@ async function updatePDFFieldValues(
         (field as PDFTextField).setText(String(value));
         console.log(`Updated text field ${pdfFieldName} = ${value}`);
       } else if (field instanceof PDFCheckBox) {
-        const checked = typeof value === "boolean" ? value : String(value) === "true";
+        const checked =
+          typeof value === "boolean" ? value : String(value) === "true";
         if (checked) {
           (field as PDFCheckBox).check();
         } else {
@@ -1341,7 +1479,7 @@ export const finalizeDocument = mutation({
   handler: async (ctx, args) => {
     // Authenticate user
     const user = await requireAuth(ctx, args.token);
-    
+
     // Get document
     const document = await ctx.db.get(args.documentId);
     if (!document) {
@@ -1396,7 +1534,7 @@ export const markDocumentNotarized = mutation({
   handler: async (ctx, args) => {
     // Authenticate user
     const user = await requireAuth(ctx, args.token);
-    
+
     // Get document
     const document = await ctx.db.get(args.documentId);
     if (!document) {
@@ -1450,28 +1588,39 @@ export const getDocumentDownloadUrl = action({
     ctx,
     args
   ): Promise<{ downloadUrl: string; s3Key: string; expiresIn: number }> => {
-    // Get document with access checks via existing query to avoid duplicating logic
-    const document = await ctx.runQuery(api.documents.generator.getDocumentById, {
-      documentId: args.documentId,
-      token: args.token,
-    });
+    // Get document with access checks via existing query
+    const document = await ctx.runQuery(
+      api.documents.generator.getDocumentById,
+      {
+        documentId: args.documentId,
+        token: args.token,
+      }
+    );
 
-    if (!document.s3Key) {
+    // Use generated document PDF from S3
+    const s3Key = document.s3Key;
+
+    if (!s3Key) {
       throw new Error("Document not yet uploaded to S3");
     }
+
+    console.log(`📥 Downloading document ${args.documentId}:`, {
+      usingKey: s3Key,
+      status: document.status,
+    });
 
     // Generate presigned download URL
     const { downloadUrl } = await ctx.runAction(
       internal.secure_s3.generateDownloadUrl,
       {
-        s3Key: document.s3Key,
-        expiresIn: args.expiresIn || 300, // Default 5 minutes
+        s3Key,
+        expiresIn: args.expiresIn || 300,
       }
     );
 
     return {
       downloadUrl,
-      s3Key: document.s3Key,
+      s3Key,
       expiresIn: args.expiresIn || 300,
     };
   },
@@ -1490,17 +1639,27 @@ export const getDocumentUploadUrl = action({
   handler: async (
     ctx,
     args
-  ): Promise<{ uploadUrl: string; s3Key: string; expiresIn: number; maxFileSize: number }> => {
+  ): Promise<{
+    uploadUrl: string;
+    s3Key: string;
+    expiresIn: number;
+    maxFileSize: number;
+  }> => {
     // Get document (auth + access checks inside)
-    const document = await ctx.runQuery(api.documents.generator.getDocumentById, {
-      documentId: args.documentId,
-      token: args.token,
-    });
+    const document = await ctx.runQuery(
+      api.documents.generator.getDocumentById,
+      {
+        documentId: args.documentId,
+        token: args.token,
+      }
+    );
 
     // Verify file size (max 25MB for documents)
     const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
     if (args.fileSize > MAX_FILE_SIZE) {
-      throw new Error(`File size exceeds limit of ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
+      throw new Error(
+        `File size exceeds limit of ${MAX_FILE_SIZE / (1024 * 1024)}MB`
+      );
     }
 
     // Generate S3 key
@@ -1547,7 +1706,7 @@ export const updateDocumentFields = mutation({
   handler: async (ctx, args) => {
     // Authenticate user
     const user = await requireAuth(ctx, args.token);
-    
+
     // Get document
     const document = await ctx.db.get(args.documentId);
     if (!document) {
@@ -1561,7 +1720,7 @@ export const updateDocumentFields = mutation({
 
     // Update field values in metadata (optional tracking)
     const fieldValuesMap = Object.fromEntries(
-      args.fieldValues.map(f => [f.pdfFieldName, f.value])
+      args.fieldValues.map((f) => [f.pdfFieldName, f.value])
     );
 
     await ctx.db.patch(args.documentId, {
@@ -1573,7 +1732,9 @@ export const updateDocumentFields = mutation({
       updatedAt: Date.now(),
     });
 
-    console.log(`📝 Updated ${args.fieldValues.length} fields for ${args.documentId}`);
+    console.log(
+      `📝 Updated ${args.fieldValues.length} fields for ${args.documentId}`
+    );
 
     return { success: true, fieldCount: args.fieldValues.length };
   },
@@ -1591,315 +1752,7 @@ function generateDocumentS3Key(
 ): string {
   return `org/${dealershipId}/docs/instances/${dealId}/${documentId}.pdf`;
 }
-
-/**
- * Embed signatures into PDF document
- * This function loads the unsigned PDF, finds signature fields, and embeds signature images
- */
-export const embedSignaturesIntoPDF = action({
-  args: {
-    documentId: v.id("documentInstances"),
-  },
-  handler: async (ctx, args): Promise<{ success: boolean; signedS3Key?: string; signaturesEmbedded?: number; message?: string }> => {
-    // Get document (skip auth since this is an internal system action)
-    const document: Doc<"documentInstances"> | null = await ctx.runQuery(api.documents.generator.getDocumentById, {
-      documentId: args.documentId,
-      skipAuth: true,
-    });
-
-    if (!document) {
-      throw new Error("Document not found");
-    }
-
-    if (!document.s3Key) {
-      throw new Error("Document PDF not generated yet");
-    }
-
-    // Get all signatures for this document
-    const signatures: Array<{
-      id: Id<"signatures">;
-      signerRole: string;
-      signerName: string;
-      signedAt: number;
-      s3Key: string;
-      imagePreview?: string;
-    }> = await ctx.runQuery(api.signatures.getSignaturesForDeal, {
-      dealId: document.dealId,
-    });
-
-    // Filter to only signatures for this document
-    const documentSignatures: typeof signatures = signatures.filter((_sig: typeof signatures[number]) => {
-      // Check if signature belongs to this document
-      // Note: We need to check signature's documentId, but getSignaturesForDeal doesn't return it
-      // For now, we'll embed all signatures from the deal (they should all be for relevant documents)
-      return true; // Will be refined when signature query includes documentId
-    });
-
-    if (documentSignatures.length === 0) {
-      console.log("No signatures to embed for document", args.documentId);
-      return { success: true, message: "No signatures to embed" };
-    }
-
-    // Get template to find signature field positions
-    const template = await ctx.runQuery(api.documents.templates.getTemplateById, {
-      templateId: document.templateId,
-    });
-
-    if (!template) {
-      throw new Error("Template not found");
-    }
-
-    // Get unsigned PDF from S3
-    const { downloadUrl: pdfUrl } = await ctx.runAction(
-      internal.secure_s3.generateDownloadUrl,
-      {
-        s3Key: document.s3Key,
-        expiresIn: 300,
-      }
-    );
-
-    const pdfResponse = await fetch(pdfUrl);
-    if (!pdfResponse.ok) {
-      throw new Error("Failed to download PDF");
-    }
-
-    const pdfBuffer = await pdfResponse.arrayBuffer();
-    const pdfDoc = await PDFDocument.load(pdfBuffer);
-    const form = pdfDoc.getForm();
-    const pages = pdfDoc.getPages();
-
-    // Helper to find signature field by role
-    const findSignatureField = (role: string): { fieldName: string; pageIndex: number; rect?: { x: number; y: number; width: number; height: number } } | null => {
-      // Search through PDF fields to find signature field matching the role
-      const fields = form.getFields();
-      
-      for (const field of fields) {
-        const fieldName = field.getName().toLowerCase();
-        const roleLower = role.toLowerCase();
-        
-        // Match field name patterns like "signature_buyer", "buyer_signature", "SIGNATURE_BUYER", etc.
-        if (
-          fieldName.includes("signature") &&
-          (fieldName.includes(roleLower) || 
-           fieldName.includes(roleLower.replace("_", "")) ||
-           (roleLower === "seller" && (fieldName.includes("dealer") || fieldName.includes("seller"))) ||
-           (roleLower === "buyer" && !fieldName.includes("seller") && !fieldName.includes("dealer")))
-        ) {
-          // Get field position
-          const widgets = (field as any).acroField.getWidgets();
-          if (widgets.length > 0) {
-            const widget = widgets[0];
-            const rect = widget.Rect();
-            const pageRef = widget.P();
-            
-            let pageIndex = 0;
-            if (pageRef) {
-              pageIndex = pages.findIndex((p) => (p as any).ref === pageRef);
-            }
-
-            return {
-              fieldName: field.getName(),
-              pageIndex: pageIndex >= 0 ? pageIndex : 0,
-              rect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : undefined,
-            };
-          }
-        }
-      }
-      return null;
-    };
-
-    // Embed each signature
-    for (const signature of documentSignatures) {
-      try {
-        // Find the signature field for this role
-        const fieldInfo = findSignatureField(signature.signerRole);
-        
-        if (!fieldInfo) {
-          console.warn(`No signature field found for role: ${signature.signerRole}`);
-          continue;
-        }
-
-        // Get signature image (from imagePreview if available, or fetch from S3)
-        let signatureImage: Uint8Array | null = null;
-        let isSvgImage = false;
-
-        if (signature.imagePreview) {
-          // Use preview image (available for 24hrs)
-          const isSvgPreview = signature.imagePreview.startsWith("data:image/svg+xml;base64,");
-          isSvgImage = isSvgPreview;
-          const base64Data = signature.imagePreview.replace(/^data:image\/(png|svg\+xml);base64,/, "");
-          signatureImage = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
-        } else if (signature.s3Key) {
-          // Fetch from S3 using signature.s3Key
-          try {
-            const { downloadUrl } = await ctx.runAction(
-              internal.secure_s3.generateDownloadUrl,
-              {
-                s3Key: signature.s3Key,
-                expiresIn: 300,
-              }
-            );
-
-            const imageResponse = await fetch(downloadUrl);
-            if (!imageResponse.ok) {
-              console.warn(`Failed to fetch signature from S3: ${signature.s3Key}`);
-              continue;
-            }
-
-            const imageArrayBuffer = await imageResponse.arrayBuffer();
-            signatureImage = new Uint8Array(imageArrayBuffer);
-            isSvgImage = signature.s3Key.endsWith('.svg');
-          } catch (fetchError) {
-            console.error(`Error fetching signature ${signature.id} from S3:`, fetchError);
-            continue;
-          }
-        } else {
-          // No preview and no S3 key - skip this signature
-          console.warn(`No preview or S3 key available for signature ${signature.id}, skipping`);
-          continue;
-        }
-
-        if (!signatureImage) {
-          console.warn(`Could not load signature image for ${signature.id}`);
-          continue;
-        }
-
-        // For PDF embedding, we need PNG format
-        // If it's SVG, we'll try to embed it as-is (pdf-lib may support it)
-        // Otherwise use the image directly
-        const imageToEmbed: Uint8Array = signatureImage;
-
-        // Embed the signature image
-        const page = pages[fieldInfo.pageIndex];
-        if (!page) {
-          console.warn(`Page ${fieldInfo.pageIndex} not found`);
-          continue;
-        }
-
-        // Embed image at field position
-        // If rect is available, use it; otherwise use a default size
-        const width = fieldInfo.rect?.width || 150;
-        const height = fieldInfo.rect?.height || 50;
-        const x = fieldInfo.rect?.x || 100;
-        const y = page.getHeight() - (fieldInfo.rect?.y || 100) - height; // PDF y is bottom-up
-
-        try {
-          // pdf-lib embedPng returns PDFImage, but we can't import the type directly
-          // Use Awaited to get the resolved type
-          let embeddedImage: Awaited<ReturnType<typeof pdfDoc.embedPng>>;
-          if (isSvgImage) {
-            // For SVG, we need to convert to PNG or embed differently
-            // pdf-lib doesn't natively support SVG, so we'll need to handle it
-            // For now, try to decode SVG and create a PNG representation
-            // This is a limitation - in production, you'd want to use sharp or similar
-            console.warn(`SVG signature detected for ${signature.signerRole}, attempting PNG conversion`);
-            
-            // Try to embed as image - pdf-lib will attempt to decode
-            // Note: This may fail if SVG is complex. In production, convert SVG to PNG first.
-            try {
-              // Attempt to embed as PNG (will fail if truly SVG)
-              embeddedImage = await pdfDoc.embedPng(imageToEmbed);
-            } catch {
-              // If that fails, skip SVG signatures that can't be embedded
-              console.warn(`Cannot embed SVG signature directly, skipping ${signature.signerRole}`);
-              continue;
-            }
-          } else {
-            // PNG image - embed directly
-            embeddedImage = await pdfDoc.embedPng(imageToEmbed);
-          }
-          
-          page.drawImage(embeddedImage, {
-            x,
-            y,
-            width,
-            height,
-          });
-        } catch (embedError) {
-          console.error(`Failed to embed signature for role ${signature.signerRole}:`, embedError);
-          // Continue with other signatures
-          continue;
-        }
-
-        // Also set the field value if it's a text field
-        try {
-          const pdfField = form.getField(fieldInfo.fieldName);
-          if (pdfField instanceof PDFTextField) {
-            pdfField.setText(signature.signerName);
-          }
-        } catch {
-          // Field might not be a text field, that's ok
-        }
-      } catch (error) {
-        console.error(`Error embedding signature for role ${signature.signerRole}:`, error);
-        // Continue with other signatures
-      }
-    }
-
-    // Generate signed PDF
-    const signedPdfBytes = await pdfDoc.save();
-    const signedPdfBuffer = signedPdfBytes.buffer.slice(
-      signedPdfBytes.byteOffset,
-      signedPdfBytes.byteOffset + signedPdfBytes.byteLength
-    ) as ArrayBuffer;
-
-    // Upload signed PDF to S3
-    const orgId: Id<"orgs"> | Id<"dealerships"> = (document.orgId ?? document.dealershipId);
-    const signedS3Key: string = `org/${orgId}/docs/instances/${document.dealId}/${document._id}_signed.pdf`;
-
-    const { uploadUrl } = await ctx.runAction(
-      internal.secure_s3.generateUploadUrl,
-      {
-        s3Key: signedS3Key,
-        contentType: "application/pdf",
-        expiresIn: 300,
-      }
-    );
-
-    const uploadResponse = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/pdf",
-      },
-      body: signedPdfBuffer,
-    });
-
-    if (!uploadResponse.ok) {
-      throw new Error("Failed to upload signed PDF");
-    }
-
-    // Update document with signed PDF info
-    await ctx.runMutation(api.documents.generator.updateDocumentSignedPdf, {
-      documentId: args.documentId,
-      signedS3Key,
-      fileSize: signedPdfBuffer.byteLength,
-    });
-
-    return {
-      success: true,
-      signedS3Key,
-      signaturesEmbedded: documentSignatures.length,
-    };
-  },
-});
-
-/**
- * Update document with signed PDF info
- */
-export const updateDocumentSignedPdf = mutation({
-  args: {
-    documentId: v.id("documentInstances"),
-    signedS3Key: v.string(),
-    fileSize: v.number(),
-  },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.documentId, {
-      signedS3Key: args.signedS3Key,
-      fileSize: args.fileSize,
-      updatedAt: Date.now(),
-    });
-  },
-});
+// Signature/signing utilities removed
 
 export {
   fillPDFTemplate,

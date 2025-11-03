@@ -370,6 +370,7 @@ export const getTemplates = query({
 export const getTemplateById = query({
   args: {
     templateId: v.id("documentTemplates"),
+    skipAuth: v.optional(v.boolean()),
     token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -378,7 +379,10 @@ export const getTemplateById = query({
       throw new Error("Template not found");
     }
 
-    await assertDealershipAccess(ctx, template.dealershipId, args.token);
+    // ✅ Only check dealership access if not skipping auth
+    if (!args.skipAuth) {
+      await assertDealershipAccess(ctx, template.dealershipId, args.token);
+    }
 
     // Get the user who uploaded the template
     const uploadedByUser = await ctx.db.get(template.uploadedBy);

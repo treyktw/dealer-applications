@@ -23,7 +23,6 @@ import { Route as DealsNewIndexRouteImport } from './routes/deals/new/index'
 import { Route as DealsDealsIdIndexRouteImport } from './routes/deals/$dealsId/index'
 import { Route as DealsDealsIdDocumentsIndexRouteImport } from './routes/deals/$dealsId/documents/index'
 import { Route as DealsDealsIdDocumentsDocumentsRouteImport } from './routes/deals/$dealsId/documents/$documents'
-import { Route as DealsDealsIdDocumentsEditDocumentIdRouteImport } from './routes/deals/$dealsId/documents/edit.$documentId'
 
 const WhatsNewRoute = WhatsNewRouteImport.update({
   id: '/whats-new',
@@ -97,12 +96,6 @@ const DealsDealsIdDocumentsDocumentsRoute =
     path: '/deals/$dealsId/documents/$documents',
     getParentRoute: () => rootRouteImport,
   } as any)
-const DealsDealsIdDocumentsEditDocumentIdRoute =
-  DealsDealsIdDocumentsEditDocumentIdRouteImport.update({
-    id: '/deals/$dealsId/documents/edit/$documentId',
-    path: '/deals/$dealsId/documents/edit/$documentId',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -119,7 +112,6 @@ export interface FileRoutesByFullPath {
   '/deals/new': typeof DealsNewIndexRoute
   '/deals/$dealsId/documents/$documents': typeof DealsDealsIdDocumentsDocumentsRoute
   '/deals/$dealsId/documents': typeof DealsDealsIdDocumentsIndexRoute
-  '/deals/$dealsId/documents/edit/$documentId': typeof DealsDealsIdDocumentsEditDocumentIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -136,7 +128,6 @@ export interface FileRoutesByTo {
   '/deals/new': typeof DealsNewIndexRoute
   '/deals/$dealsId/documents/$documents': typeof DealsDealsIdDocumentsDocumentsRoute
   '/deals/$dealsId/documents': typeof DealsDealsIdDocumentsIndexRoute
-  '/deals/$dealsId/documents/edit/$documentId': typeof DealsDealsIdDocumentsEditDocumentIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -154,7 +145,6 @@ export interface FileRoutesById {
   '/deals/new/': typeof DealsNewIndexRoute
   '/deals/$dealsId/documents/$documents': typeof DealsDealsIdDocumentsDocumentsRoute
   '/deals/$dealsId/documents/': typeof DealsDealsIdDocumentsIndexRoute
-  '/deals/$dealsId/documents/edit/$documentId': typeof DealsDealsIdDocumentsEditDocumentIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -173,7 +163,6 @@ export interface FileRouteTypes {
     | '/deals/new'
     | '/deals/$dealsId/documents/$documents'
     | '/deals/$dealsId/documents'
-    | '/deals/$dealsId/documents/edit/$documentId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -190,7 +179,6 @@ export interface FileRouteTypes {
     | '/deals/new'
     | '/deals/$dealsId/documents/$documents'
     | '/deals/$dealsId/documents'
-    | '/deals/$dealsId/documents/edit/$documentId'
   id:
     | '__root__'
     | '/'
@@ -207,7 +195,6 @@ export interface FileRouteTypes {
     | '/deals/new/'
     | '/deals/$dealsId/documents/$documents'
     | '/deals/$dealsId/documents/'
-    | '/deals/$dealsId/documents/edit/$documentId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -225,7 +212,6 @@ export interface RootRouteChildren {
   DealsNewIndexRoute: typeof DealsNewIndexRoute
   DealsDealsIdDocumentsDocumentsRoute: typeof DealsDealsIdDocumentsDocumentsRoute
   DealsDealsIdDocumentsIndexRoute: typeof DealsDealsIdDocumentsIndexRoute
-  DealsDealsIdDocumentsEditDocumentIdRoute: typeof DealsDealsIdDocumentsEditDocumentIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -328,13 +314,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DealsDealsIdDocumentsDocumentsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/deals/$dealsId/documents/edit/$documentId': {
-      id: '/deals/$dealsId/documents/edit/$documentId'
-      path: '/deals/$dealsId/documents/edit/$documentId'
-      fullPath: '/deals/$dealsId/documents/edit/$documentId'
-      preLoaderRoute: typeof DealsDealsIdDocumentsEditDocumentIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -353,8 +332,6 @@ const rootRouteChildren: RootRouteChildren = {
   DealsNewIndexRoute: DealsNewIndexRoute,
   DealsDealsIdDocumentsDocumentsRoute: DealsDealsIdDocumentsDocumentsRoute,
   DealsDealsIdDocumentsIndexRoute: DealsDealsIdDocumentsIndexRoute,
-  DealsDealsIdDocumentsEditDocumentIdRoute:
-    DealsDealsIdDocumentsEditDocumentIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

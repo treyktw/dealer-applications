@@ -4,15 +4,39 @@ dealer-applications/
 │     └─ subscription-gating-and-desktop-auth-001db81b.plan.md
 ├─ .github/
 │  └─ workflows/
-│     └─ releave.yml
+│     └─ release.yml
+├─ .pnpm-store/
+│  └─ v3/
 ├─ .turbo/
 │  ├─ cache/
+│  │  ├─ 0b394f6491ad404b-meta.json
+│  │  ├─ 0b394f6491ad404b.tar.zst
+│  │  ├─ 7acf53d18deadfd4-meta.json
+│  │  ├─ 7acf53d18deadfd4.tar.zst
+│  │  ├─ 8f8ebecfbf283388-meta.json
+│  │  └─ 8f8ebecfbf283388.tar.zst
 │  ├─ cookies/
-│  │  └─ 1.cookie
+│  │  ├─ 1.cookie
+│  │  ├─ 10.cookie
+│  │  ├─ 11.cookie
+│  │  ├─ 12.cookie
+│  │  ├─ 13.cookie
+│  │  ├─ 14.cookie
+│  │  ├─ 15.cookie
+│  │  ├─ 2.cookie
+│  │  ├─ 3.cookie
+│  │  ├─ 4.cookie
+│  │  ├─ 5.cookie
+│  │  ├─ 6.cookie
+│  │  ├─ 7.cookie
+│  │  ├─ 8.cookie
+│  │  └─ 9.cookie
 │  ├─ daemon/
 │  │  ├─ 9e9f6c34e3e4de8e-turbo.log.2025-09-02
 │  │  ├─ 9e9f6c34e3e4de8e-turbo.log.2025-09-27
-│  │  └─ 9e9f6c34e3e4de8e-turbo.log.2025-10-10
+│  │  ├─ 9e9f6c34e3e4de8e-turbo.log.2025-10-10
+│  │  ├─ 9e9f6c34e3e4de8e-turbo.log.2025-10-29
+│  │  └─ 9e9f6c34e3e4de8e-turbo.log.2025-11-02
 │  └─ preferences/
 │     └─ tui.json
 ├─ .vscode/
@@ -20,10 +44,11 @@ dealer-applications/
 ├─ apps/
 │  ├─ desktop/
 │  │  ├─ .tanstack/
+│  │  ├─ .turbo/
 │  │  ├─ dist/
 │  │  │  ├─ assets/
-│  │  │  │  ├─ index-CV4c3TR6.css
-│  │  │  │  └─ index-pEFHiSVi.js
+│  │  │  │  ├─ index-B0Jo49_4.js
+│  │  │  │  └─ index-kzawZY95.css
 │  │  │  ├─ icon/
 │  │  │  │  ├─ 128x128.png
 │  │  │  │  ├─ 32x32.png
@@ -32,15 +57,6 @@ dealer-applications/
 │  │  │  │  └─ icon.png
 │  │  │  ├─ ds-hero.jpg
 │  │  │  ├─ index.html
-│  │  │  └─ logo.png
-│  │  ├─ public/
-│  │  │  ├─ icon/
-│  │  │  │  ├─ 128x128.png
-│  │  │  │  ├─ 32x32.png
-│  │  │  │  ├─ icon.icns
-│  │  │  │  ├─ icon.ico
-│  │  │  │  └─ icon.png
-│  │  │  ├─ ds-hero.jpg
 │  │  │  └─ logo.png
 │  │  ├─ src/
 │  │  │  ├─ assets/
@@ -51,23 +67,37 @@ dealer-applications/
 │  │  │  │  │  ├─ AuthGuard.tsx
 │  │  │  │  │  └─ DevModelogin.tsx
 │  │  │  │  ├─ documents/
-│  │  │  │  │  ├─ BuyerDataForm.tsx
-│  │  │  │  │  ├─ DealershipInfoForm.tsx
-│  │  │  │  │  ├─ DocumentList.tsx
-│  │  │  │  │  └─ ValidationPanel.tsx
+│  │  │  │  │  ├─ edit/
+│  │  │  │  │  │  └─ LivePDFPreview.tsx
+│  │  │  │  │  ├─ hooks/
+│  │  │  │  │  │  ├─ useDealDocuments.ts
+│  │  │  │  │  │  └─ useDocumentActions.ts
+│  │  │  │  │  ├─ CustomDocumentsList.tsx
+│  │  │  │  │  ├─ DocumentsHeader.tsx
+│  │  │  │  │  ├─ EditStep.tsx
+│  │  │  │  │  ├─ EmailDialog.tsx
+│  │  │  │  │  ├─ FinalizeStep.tsx
+│  │  │  │  │  ├─ GenerateDocumentsList.tsx
+│  │  │  │  │  ├─ NoterizeStep.tsx
+│  │  │  │  │  ├─ ProgressSteps.tsx
+│  │  │  │  │  ├─ ReviewStep.tsx
+│  │  │  │  │  └─ SignatureStep.tsx
 │  │  │  │  ├─ layout/
 │  │  │  │  │  ├─ Header.tsx
 │  │  │  │  │  ├─ layout.tsx
 │  │  │  │  │  └─ sidebar.tsx
+│  │  │  │  ├─ signature/
 │  │  │  │  ├─ subscription/
 │  │  │  │  │  └─ SubscriptionRequiredScreen.tsx
 │  │  │  │  ├─ theme/
 │  │  │  │  │  └─ theme-toggle.tsx
 │  │  │  │  ├─ ui/
 │  │  │  │  │  ├─ accordion.tsx
+│  │  │  │  │  ├─ alert.tsx
 │  │  │  │  │  ├─ avatar.tsx
 │  │  │  │  │  ├─ badge.tsx
 │  │  │  │  │  ├─ button.tsx
+│  │  │  │  │  ├─ calendar.tsx
 │  │  │  │  │  ├─ card.tsx
 │  │  │  │  │  ├─ checkbox.tsx
 │  │  │  │  │  ├─ dialog.tsx
@@ -76,30 +106,43 @@ dealer-applications/
 │  │  │  │  │  ├─ input.tsx
 │  │  │  │  │  ├─ label.tsx
 │  │  │  │  │  ├─ loading-screen.tsx
+│  │  │  │  │  ├─ popover.tsx
 │  │  │  │  │  ├─ progress.tsx
 │  │  │  │  │  ├─ scroll-area.tsx
 │  │  │  │  │  ├─ select.tsx
 │  │  │  │  │  ├─ separator.tsx
+│  │  │  │  │  ├─ skeleton.tsx
 │  │  │  │  │  ├─ switch.tsx
 │  │  │  │  │  ├─ tabs.tsx
 │  │  │  │  │  ├─ textarea.tsx
 │  │  │  │  │  └─ tooltip.tsx
 │  │  │  │  ├─ update/
 │  │  │  │  │  └─ UpdateManager.tsx
-│  │  │  │  └─ link-handler.tsx
+│  │  │  │  ├─ link-handler.tsx
+│  │  │  │  └─ PDFFieldInspector.tsx
 │  │  │  ├─ hooks/
+│  │  │  │  └─ useDocumentEditor.ts
 │  │  │  ├─ lib/
+│  │  │  │  ├─ document-storage/
+│  │  │  │  │  ├─ document-storage-service.ts
+│  │  │  │  │  ├─ pdf-field-repair.ts
+│  │  │  │  │  └─ pdf-field-updater.ts
 │  │  │  │  ├─ subscription/
 │  │  │  │  │  ├─ SubscriptionProvider.tsx
 │  │  │  │  │  └─ subscriptionUtils.ts
 │  │  │  │  ├─ convex.ts
 │  │  │  │  ├─ deeplink-listener.ts
+│  │  │  │  ├─ indexeddb-schema.ts
+│  │  │  │  ├─ pdf-config.ts
 │  │  │  │  ├─ storage.ts
 │  │  │  │  └─ utils.ts
 │  │  │  ├─ routes/
 │  │  │  │  ├─ deals/
 │  │  │  │  │  ├─ $dealsId/
-│  │  │  │  │  │  ├─ documents.tsx
+│  │  │  │  │  │  ├─ documents/
+│  │  │  │  │  │  │  ├─ $documents.tsx
+│  │  │  │  │  │  │  ├─ edit.$documentId.tsx
+│  │  │  │  │  │  │  └─ index.tsx
 │  │  │  │  │  │  └─ index.tsx
 │  │  │  │  │  ├─ new/
 │  │  │  │  │  │  └─ index.tsx
@@ -115,6 +158,7 @@ dealer-applications/
 │  │  │  │  ├─ subscription.tsx
 │  │  │  │  └─ whats-new.tsx
 │  │  │  ├─ styles/
+│  │  │  │  ├─ pdf-annotations.css
 │  │  │  │  ├─ theme.ts
 │  │  │  │  └─ variables.css
 │  │  │  ├─ theme/
@@ -190,6 +234,7 @@ dealer-applications/
 │  │  │  │  └─ icon.png
 │  │  │  ├─ src/
 │  │  │  │  ├─ encryption.rs
+│  │  │  │  ├─ file_operations.rs
 │  │  │  │  ├─ file_permissions.rs
 │  │  │  │  ├─ lib.rs
 │  │  │  │  ├─ main.rs
@@ -209,11 +254,13 @@ dealer-applications/
 │  │  ├─ index.html
 │  │  ├─ package.json
 │  │  ├─ README.md
+│  │  ├─ todo.md
 │  │  ├─ tsconfig.json
 │  │  ├─ tsconfig.node.json
 │  │  ├─ tsr.config.json
 │  │  └─ vite.config.ts
 │  ├─ docs/
+│  │  ├─ .turbo/
 │  │  ├─ app/
 │  │  │  ├─ fonts/
 │  │  │  │  ├─ GeistMonoVF.woff
@@ -223,14 +270,6 @@ dealer-applications/
 │  │  │  ├─ layout.tsx
 │  │  │  ├─ page.module.css
 │  │  │  └─ page.tsx
-│  │  ├─ public/
-│  │  │  ├─ file-text.svg
-│  │  │  ├─ globe.svg
-│  │  │  ├─ next.svg
-│  │  │  ├─ turborepo-dark.svg
-│  │  │  ├─ turborepo-light.svg
-│  │  │  ├─ vercel.svg
-│  │  │  └─ window.svg
 │  │  ├─ .gitignore
 │  │  ├─ eslint.config.js
 │  │  ├─ next-env.d.ts
@@ -240,26 +279,7 @@ dealer-applications/
 │  │  └─ tsconfig.json
 │  ├─ mobile/
 │  └─ web/
-│     ├─ public/
-│     │  ├─ documents/
-│     │  │  ├─ 1446484_1.pdf
-│     │  │  ├─ 872-IMP-We-Owe-You-Owe-Form.pdf
-│     │  │  ├─ As-Is-Bill-of-Sale-Template.pdf
-│     │  │  ├─ Attachment_0019_-_Bailment_Agreement.pdf
-│     │  │  ├─ cfr_buyers_guides_english.pdf
-│     │  │  ├─ Form MV-7D - State and Local Title Ad Valorem Tax (TAVT) Fees - effective January 1, 2022.pdf
-│     │  │  ├─ framework_ofac_cc.pdf
-│     │  │  ├─ MV_Bill_of_Sale_Form_Form_T7_0 (092022).pdf
-│     │  │  ├─ mv-1_tag_and_title_application_final_6-2020.pdf
-│     │  │  ├─ odometer_disclosure_statement.pdf
-│     │  │  └─ T-8_Limited_Power_of_Attorney.pdf
-│     │  ├─ ds-hero.jpg
-│     │  ├─ file.svg
-│     │  ├─ globe.svg
-│     │  ├─ icon-16x16.png
-│     │  ├─ next.svg
-│     │  ├─ vercel.svg
-│     │  └─ window.svg
+│     ├─ .turbo/
 │     ├─ react-email/
 │     │  └─ react-email-starter/
 │     │     ├─ emails/
@@ -282,6 +302,13 @@ dealer-applications/
 │     ├─ scripts/
 │     │  ├─ __pycache__/
 │     │  │  └─ generate_dealer_data.cpython-312.pyc
+│     │  ├─ inventory-api-fetching/
+│     │  │  ├─ api/
+│     │  │  │  └─ inventory-api-client.ts
+│     │  │  ├─ hooks/
+│     │  │  │  └─ use-inventory.ts
+│     │  │  └─ types/
+│     │  │     └─ catalogue.ts
 │     │  ├─ clients_import.csv
 │     │  ├─ clients_test.csv
 │     │  ├─ clients.csv
@@ -335,10 +362,17 @@ dealer-applications/
 │     │  │  │  │  └─ QuickStatsWidget.tsx
 │     │  │  │  ├─ deals/
 │     │  │  │  │  ├─ _components/
+│     │  │  │  │  │  ├─ ClientDealActionButton.tsx
+│     │  │  │  │  │  ├─ DealDetailPageComponent.tsx
 │     │  │  │  │  │  ├─ DealDetailsSkeleton.tsx
 │     │  │  │  │  │  ├─ DealsSkeleton.tsx
-│     │  │  │  │  │  └─ DealsTable.tsx
+│     │  │  │  │  │  ├─ DealsTable.tsx
+│     │  │  │  │  │  ├─ DocumentGenerator.tsx
+│     │  │  │  │  │  ├─ DocumentsList.tsx
+│     │  │  │  │  │  └─ GenerateDocumentButtons.tsx
 │     │  │  │  │  ├─ [id]/
+│     │  │  │  │  │  └─ page.tsx
+│     │  │  │  │  ├─ new/
 │     │  │  │  │  │  └─ page.tsx
 │     │  │  │  │  └─ page.tsx
 │     │  │  │  ├─ inventory/
@@ -365,9 +399,33 @@ dealer-applications/
 │     │  │  │  │  │  └─ page.tsx
 │     │  │  │  │  └─ page.tsx
 │     │  │  │  ├─ settings/
+│     │  │  │  │  ├─ _components/
+│     │  │  │  │  │  ├─ DcoumentProgressCard.tsx
+│     │  │  │  │  │  ├─ EmptyState.tsx
+│     │  │  │  │  │  ├─ FieldExtractionProgress.tsx
+│     │  │  │  │  │  ├─ FileUploadZone.tsx
+│     │  │  │  │  │  ├─ TemplateCard.tsx
+│     │  │  │  │  │  ├─ test-api-component.tsx
+│     │  │  │  │  │  └─ UploadProgress.tsx
+│     │  │  │  │  ├─ api-keys/
+│     │  │  │  │  │  └─ page.tsx
+│     │  │  │  │  ├─ api-usage/
+│     │  │  │  │  │  └─ page.tsx
 │     │  │  │  │  ├─ billing/
 │     │  │  │  │  │  └─ page.tsx
+│     │  │  │  │  ├─ cache/
+│     │  │  │  │  │  └─ page.tsx
 │     │  │  │  │  ├─ developer/
+│     │  │  │  │  │  └─ page.tsx
+│     │  │  │  │  ├─ document-templates/
+│     │  │  │  │  │  ├─ [id]/
+│     │  │  │  │  │  │  ├─ map-fields/
+│     │  │  │  │  │  │  │  └─ page.tsx
+│     │  │  │  │  │  │  └─ page.tsx
+│     │  │  │  │  │  ├─ upload/
+│     │  │  │  │  │  │  └─ page.tsx
+│     │  │  │  │  │  └─ page.tsx
+│     │  │  │  │  ├─ domain/
 │     │  │  │  │  │  └─ page.tsx
 │     │  │  │  │  ├─ general/
 │     │  │  │  │  │  └─ page.tsx
@@ -387,15 +445,28 @@ dealer-applications/
 │     │  │  ├─ access-denied/
 │     │  │  │  └─ page.tsx
 │     │  │  ├─ api/
+│     │  │  │  ├─ domain-verification/
+│     │  │  │  │  └─ download/
+│     │  │  │  │     └─ route.ts
 │     │  │  │  ├─ render-invitation-email/
 │     │  │  │  │  └─ route.ts
 │     │  │  │  ├─ send-invitation-email/
 │     │  │  │  │  └─ route.ts
+│     │  │  │  ├─ signature-status/
+│     │  │  │  │  └─ [token]/
+│     │  │  │  │     └─ route.ts
 │     │  │  │  └─ webhooks/
 │     │  │  │     └─ clerk/
 │     │  │  │        └─ route.ts
 │     │  │  ├─ invitation/
 │     │  │  │  └─ [token]/
+│     │  │  │     └─ page.tsx
+│     │  │  ├─ sign/
+│     │  │  │  └─ [token]/
+│     │  │  │     ├─ error.tsx
+│     │  │  │     ├─ layout.tsx
+│     │  │  │     ├─ loading.tsx
+│     │  │  │     ├─ not-found.tsx
 │     │  │  │     └─ page.tsx
 │     │  │  ├─ testing/
 │     │  │  │  └─ page.tsx
@@ -407,11 +478,8 @@ dealer-applications/
 │     │  ├─ components/
 │     │  │  ├─ dashboard/
 │     │  │  │  ├─ client/
-│     │  │  │  │  ├─ ClientDealActionButton.tsx
 │     │  │  │  │  ├─ ClientDetailPage.tsx
-│     │  │  │  │  ├─ ClientEditPage.tsx
-│     │  │  │  │  ├─ DealDetailPageComponent.tsx
-│     │  │  │  │  └─ DocumentGenerator.tsx
+│     │  │  │  │  └─ ClientEditPage.tsx
 │     │  │  │  ├─ inventory/
 │     │  │  │  │  └─ SecureImage.tsx
 │     │  │  │  ├─ pdf-view.tsx
@@ -490,13 +558,12 @@ dealer-applications/
 │     │  │  │  ├─ toggle.tsx
 │     │  │  │  └─ tooltip.tsx
 │     │  │  └─ user-sync.tsx
+│     │  ├─ config/
+│     │  │  └─ settings-config.ts
 │     │  ├─ constants/
 │     │  │  └─ inventory.ts
 │     │  ├─ convex/
 │     │  │  └─ client.ts
-│     │  ├─ db/
-│     │  │  ├─ index.ts
-│     │  │  └─ schema.ts
 │     │  ├─ emails/
 │     │  │  └─ InvitationEmail.tsx
 │     │  ├─ hooks/
@@ -508,15 +575,23 @@ dealer-applications/
 │     │  │  ├─ useUrlState.ts
 │     │  │  └─ useUserManagement.ts
 │     │  ├─ lib/
+│     │  │  ├─ pdf/
+│     │  │  │  ├─ document-schema.ts
+│     │  │  │  ├─ documents-templates.ts
+│     │  │  │  ├─ mapping-utils.ts
+│     │  │  │  └─ pdf-extractor.ts
 │     │  │  ├─ schemas/
 │     │  │  │  └─ index.ts
-│     │  │  ├─ auth.ts
+│     │  │  ├─ api-auth.ts
+│     │  │  ├─ cors.ts
+│     │  │  ├─ dns-verification.ts
 │     │  │  ├─ email-service.ts
+│     │  │  ├─ field-auto-mapper.ts
 │     │  │  ├─ migrateToConvex.ts
-│     │  │  ├─ notifications.ts
+│     │  │  ├─ rate-limit.ts
 │     │  │  ├─ resend.ts
-│     │  │  ├─ s3-bucket-manager.ts
-│     │  │  ├─ s3.ts
+│     │  │  ├─ s3-client.ts
+│     │  │  ├─ signature-utils.ts
 │     │  │  └─ utils.ts
 │     │  ├─ middleware/
 │     │  │  └─ ip-check.ts
@@ -525,14 +600,11 @@ dealer-applications/
 │     │  │  ├─ dealership-provider.tsx
 │     │  │  ├─ query-provider.tsx
 │     │  │  └─ SubscriptionProvider.tsx
-│     │  ├─ services/
-│     │  │  ├─ document-service.ts
-│     │  │  ├─ pdf-template-service.ts
-│     │  │  └─ vehicle-image-service.ts
 │     │  ├─ types/
 │     │  │  ├─ client.ts
 │     │  │  ├─ documents.ts
 │     │  │  ├─ index.ts
+│     │  │  ├─ signatures.ts
 │     │  │  └─ vehicle.ts
 │     │  └─ middleware.ts
 │     ├─ .env
@@ -540,7 +612,6 @@ dealer-applications/
 │     ├─ .gitignore
 │     ├─ components.json
 │     ├─ convex.json
-│     ├─ drizzle.config.ts
 │     ├─ eslint.config.mjs
 │     ├─ next-env.d.ts
 │     ├─ next.config.ts
@@ -548,6 +619,7 @@ dealer-applications/
 │     ├─ pnpm-lock.yaml
 │     ├─ postcss.config.mjs
 │     ├─ README.md
+│     ├─ todo.md
 │     ├─ tsconfig.json
 │     └─ tsconfig.tsbuildinfo
 ├─ convex/
@@ -557,16 +629,29 @@ dealer-applications/
 │  │  ├─ dataModel.d.ts
 │  │  ├─ server.d.ts
 │  │  └─ server.js
-│  ├─ convex/
+│  ├─ .turbo/
+│  ├─ documents/
+│  │  ├─ deal_generator.ts
+│  │  ├─ fields.ts
+│  │  ├─ generator.ts
+│  │  └─ templates.ts
+│  ├─ lib/
+│  │  ├─ helpers/
+│  │  │  └─ auth_helpers.ts
+│  │  ├─ data_transformer.ts
+│  │  ├─ expression_evaluator.ts
+│  │  └─ pdf_data_preparer.ts
 │  ├─ queries/
 │  │  └─ templates.ts
 │  ├─ .env.local
 │  ├─ adminIpManagement.ts
 │  ├─ allowList.ts
+│  ├─ api_keys.ts
 │  ├─ auth.config.ts
 │  ├─ auth.ts
 │  ├─ clerk.ts
 │  ├─ clients.ts
+│  ├─ crons.ts
 │  ├─ dealerships.ts
 │  ├─ deals.ts
 │  ├─ debug.ts
@@ -576,27 +661,34 @@ dealer-applications/
 │  ├─ developer.ts
 │  ├─ documentPacks.ts
 │  ├─ documents.ts
+│  ├─ domain_verification.ts
 │  ├─ employees.ts
 │  ├─ external_api.ts
+│  ├─ guards.ts
 │  ├─ http.ts
 │  ├─ index.ts
+│  ├─ internal.ts
 │  ├─ inventory.ts
 │  ├─ package.json
-│  ├─ pdfFieldInspector.ts
-│  ├─ pdfFieldMapper.ts
-│  ├─ pdfProcessor.ts
-│  ├─ pdfTemplates.ts
+│  ├─ permissions.ts
 │  ├─ public_api.ts
 │  ├─ README.md
+│  ├─ s3_utils.ts
 │  ├─ schema.ts
 │  ├─ secure_s3.ts
 │  ├─ security.ts
 │  ├─ settings.ts
+│  ├─ signatures.ts
 │  ├─ stripe_webhook.ts
 │  ├─ subscriptions.ts
 │  ├─ tsconfig.json
 │  └─ users.ts
+├─ keys/
+│  └─ .keys/
+│     └─ test-keys.txt
 ├─ markdown/
+│  ├─ dealer_apps_production_hardening_feature_roadmap_solo_dev_plan.md
+│  └─ tickets_todos.md
 ├─ packages/
 │  ├─ eslint-config/
 │  │  ├─ base.js

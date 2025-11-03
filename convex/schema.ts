@@ -1200,115 +1200,7 @@ export default defineSchema({
     .index("by_org", ["orgId"])
     .index("by_dealership_status", ["dealershipId", "status"]),
 
-  signatureSessions: defineTable({
-    // Session Info
-    sessionToken: v.string(), // Unique token for QR URL
-    dealId: v.id("deals"),
-    documentId: v.id("documentInstances"),
-    dealershipId: v.id("dealerships"),
-
-    // Signer Info
-    signerRole: v.string(), // "buyer" | "seller" | "notary"
-    signerName: v.string(), // Expected signer name
-    signerEmail: v.optional(v.string()),
-
-    // Status
-    status: v.string(), // "pending" | "signed" | "expired" | "cancelled"
-
-    // Signature Data (once captured)
-    signatureS3Key: v.optional(v.string()),
-    signedAt: v.optional(v.number()),
-    ipAddress: v.optional(v.string()),
-    userAgent: v.optional(v.string()),
-    geolocation: v.optional(
-      v.object({
-        latitude: v.number(),
-        longitude: v.number(),
-      })
-    ),
-
-    // Consent
-    consentGiven: v.boolean(),
-    consentTimestamp: v.optional(v.number()),
-    consentText: v.string(), // What they agreed to
-
-    // Security
-    createdBy: v.id("users"), // Dealer who initiated
-    expiresAt: v.number(), // Auto-expire after 15 minutes
-    createdAt: v.number(),
-  })
-    .index("by_token", ["sessionToken"])
-    .index("by_deal", ["dealId"])
-    .index("by_status_expires", ["status", "expiresAt"])
-    .index("by_dealership", ["dealershipId"]),
-
-  // Signature Records (permanent audit trail)
-  signatures: defineTable({
-    dealershipId: v.id("dealerships"),
-    dealId: v.id("deals"),
-    documentId: v.id("documentInstances"),
-
-    // Signer Info
-    signerRole: v.string(), // "buyer" | "seller" | "notary"
-    signerName: v.string(),
-    signerEmail: v.optional(v.string()),
-
-    // Signature Data
-    s3Key: v.string(), // Path to signature image in S3
-    imageDataUrl: v.optional(v.string()), // Base64 preview (deleted after 24hrs)
-    width: v.optional(v.number()),
-    height: v.optional(v.number()),
-
-    // Metadata
-    ipAddress: v.string(),
-    userAgent: v.string(),
-    geolocation: v.optional(
-      v.object({
-        latitude: v.number(),
-        longitude: v.number(),
-      })
-    ),
-
-    // Consent
-    consentGiven: v.boolean(),
-    consentText: v.string(),
-    consentTimestamp: v.number(),
-
-    // Audit
-    createdAt: v.number(),
-    scheduledDeletionAt: v.number(), // Auto-delete after 30 days
-    deletedAt: v.optional(v.number()), // When actually deleted
-  })
-    .index("by_deal", ["dealId"])
-    .index("by_document", ["documentId"])
-    .index("by_dealership_created", ["dealershipId", "createdAt"])
-    .index("by_scheduled_deletion", ["scheduledDeletionAt"])
-    .index("by_role_deal", ["dealId", "signerRole"]),
-
-  // E-Signature Consent Records
-  eSignatureConsents: defineTable({
-    dealershipId: v.id("dealerships"),
-    clientId: v.optional(v.id("clients")),
-    dealId: v.id("deals"),
-
-    // Consent Details
-    consentGiven: v.boolean(),
-    consentText: v.string(), // Full legal text
-    consentVersion: v.string(), // v1.0, v2.0, etc.
-
-    // Metadata
-    ipAddress: v.string(),
-    userAgent: v.string(),
-    timestamp: v.number(),
-
-    // Revocation
-    revoked: v.boolean(),
-    revokedAt: v.optional(v.number()),
-    revokedReason: v.optional(v.string()),
-  })
-    .index("by_client", ["clientId"])
-    .index("by_deal", ["dealId"])
-    .index("by_dealership", ["dealershipId"]),
+  // Removed: signature sessions, signatures, and e-signature consents
 
   generatedDocuments: defineTable({
     dealershipId: v.id("dealerships"),
@@ -1321,20 +1213,8 @@ export default defineSchema({
     s3Key: v.string(), // Filled PDF location
     fileSize: v.number(),
 
-    // Status
-    status: v.string(), // "draft" | "ready_to_sign" | "partially_signed" | "fully_signed" | "void"
-
-    // Required Signatures
-    requiredSignatures: v.array(v.string()), // ["buyer", "seller", "notary"]
-
-    // Signature Status
-    signaturesCollected: v.array(
-      v.object({
-        role: v.string(),
-        signatureId: v.id("signatures"),
-        signedAt: v.number(),
-      })
-    ),
+    // Status (simplified)
+    status: v.string(), // "draft" | "ready" | "void"
 
     // Audit Trail
     generatedBy: v.id("users"),

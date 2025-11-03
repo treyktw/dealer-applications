@@ -123,16 +123,16 @@ export function DealsTable() {
         className: "bg-blue-100 text-blue-700 border-blue-200"
       },
       ready_for_signatures: {
-        label: "Ready to Sign",
+        label: "Ready",
         variant: "default",
-        icon: <AlertCircle className="w-3 h-3" />,
-        className: "bg-yellow-100 text-yellow-700 border-yellow-200"
+        icon: <CheckCircle2 className="w-3 h-3" />,
+        className: "bg-green-100 text-green-700 border-green-200"
       },
       partially_signed: {
-        label: "Partial",
-        variant: "secondary",
-        icon: <Clock className="w-3 h-3" />,
-        className: "bg-orange-100 text-orange-700 border-orange-200"
+        label: "Ready",
+        variant: "default",
+        icon: <CheckCircle2 className="w-3 h-3" />,
+        className: "bg-green-100 text-green-700 border-green-200"
       },
       ready_to_finalize: {
         label: "Ready",

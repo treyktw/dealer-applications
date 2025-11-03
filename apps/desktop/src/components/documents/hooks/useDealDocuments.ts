@@ -41,6 +41,15 @@ export function useDealDocuments({ dealsId, deepLinkToken }: UseDealDocumentsPro
       }
     },
     enabled: !!deepLinkToken || !!session?.token,
+    retry: (failureCount, error: any) => {
+      const message = String(error?.message || "");
+      // Retry a couple of times on transient network/auth lapses
+      if (failureCount < 2 && (message.includes("Invalid or expired session") || message.includes("Network"))) {
+        return true;
+      }
+      return false;
+    },
+    retryDelay: (attempt) => Math.min(2000 * attempt, 5000),
   });
 
   // Fetch deal details with SESSION token
@@ -57,6 +66,14 @@ export function useDealDocuments({ dealsId, deepLinkToken }: UseDealDocumentsPro
       });
     },
     enabled: !!dealQuery.data && !!session?.token,
+    retry: (failureCount, error: any) => {
+      const message = String(error?.message || "");
+      if (failureCount < 2 && (message.includes("Invalid or expired session") || message.includes("Network"))) {
+        return true;
+      }
+      return false;
+    },
+    retryDelay: (attempt) => Math.min(2000 * attempt, 5000),
   });
 
   // Fetch generated documents
@@ -73,6 +90,14 @@ export function useDealDocuments({ dealsId, deepLinkToken }: UseDealDocumentsPro
       });
     },
     enabled: !!dealQuery.data && !!session?.token,
+    retry: (failureCount, error: any) => {
+      const message = String(error?.message || "");
+      if (failureCount < 2 && (message.includes("Invalid or expired session") || message.includes("Network"))) {
+        return true;
+      }
+      return false;
+    },
+    retryDelay: (attempt) => Math.min(2000 * attempt, 5000),
   });
 
   // Fetch custom uploaded documents
@@ -98,7 +123,15 @@ export function useDealDocuments({ dealsId, deepLinkToken }: UseDealDocumentsPro
       }
     },
     enabled: !!dealQuery.data && !!session?.token,
-    retry: false, // Don't retry subscription errors
+    retry: (failureCount, error: any) => {
+      const message = String(error?.message || "");
+      if (message.includes("Premium subscription")) return false;
+      if (failureCount < 2 && (message.includes("Invalid or expired session") || message.includes("Network"))) {
+        return true;
+      }
+      return false;
+    },
+    retryDelay: (attempt) => Math.min(2000 * attempt, 5000),
   });
 
   return {
@@ -106,9 +139,18 @@ export function useDealDocuments({ dealsId, deepLinkToken }: UseDealDocumentsPro
     dealDetails: dealDetailsQuery.data,
     documents: documentsQuery.data,
     customDocuments: customDocumentsQuery.data,
-    isLoading: dealQuery.isLoading,
-    error: dealQuery.error,
+    isLoading: dealQuery.isLoading || dealDetailsQuery.isLoading || documentsQuery.isLoading,
+    error:
+      dealQuery.error || dealDetailsQuery.error || documentsQuery.error || customDocumentsQuery.error,
     sessionToken: session?.token,
     refetchDocuments: documentsQuery.refetch,
+    refetchAll: async () => {
+      await Promise.all([
+        dealQuery.refetch(),
+        dealDetailsQuery.refetch(),
+        documentsQuery.refetch(),
+        customDocumentsQuery.refetch(),
+      ]);
+    },
   };
 }

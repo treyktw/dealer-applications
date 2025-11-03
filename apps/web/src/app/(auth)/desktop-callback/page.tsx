@@ -5,6 +5,9 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth, useUser } from '@clerk/nextjs';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle2, Copy, ExternalLink, AlertCircle, Loader2 } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function DesktopCallbackPage() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
@@ -15,6 +18,9 @@ export default function DesktopCallbackPage() {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'generating' | 'success'>('idle');
+  
+  // Dev mode check
+  const isDevMode = process.env.NODE_ENV !== 'production';
 
   // Freeze state on mount
   const [frozenState] = useState(() => searchParams.get('state'));
@@ -176,23 +182,25 @@ export default function DesktopCallbackPage() {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-red-100 p-6">
-        <div className="max-w-md w-full">
-          <div className="bg-white rounded-lg shadow-xl p-8 text-center">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertCircle className="w-8 h-8 text-red-600" />
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950 p-6">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center">
+            <div className="w-12 h-12 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-6 h-6 text-destructive" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              Authentication Error
-            </h1>
-            <p className="text-gray-600 mb-6">
-              {error}
-            </p>
-            <p className="text-sm text-gray-500">
-              Please close this window and try again from the desktop app.
-            </p>
-          </div>
-        </div>
+            <CardTitle>Authentication Error</CardTitle>
+            <CardDescription>{error}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert variant="destructive">
+              <AlertCircle className="size-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>
+                Please close this window and try again from the desktop app.
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -200,129 +208,135 @@ export default function DesktopCallbackPage() {
   // Loading state
   if (!jwt || status === 'generating') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
-        <div className="max-w-md w-full">
-          <div className="bg-white rounded-lg shadow-xl p-8 text-center">
-            <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              Preparing Authentication...
-            </h1>
-            <p className="text-gray-600">
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950 p-6">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center">
+            <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
+            <CardTitle>Preparing Authentication...</CardTitle>
+            <CardDescription>
               Generating secure token for desktop app
-            </p>
-            <p className="text-sm text-gray-500 mt-4">
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-sm text-muted-foreground">
               This should only take a moment
             </p>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   // Success state
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 p-6">
-      <div className="max-w-lg w-full">
-        <div className="bg-white rounded-lg shadow-xl p-8">
-          {/* Success Icon */}
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle2 className="w-8 h-8 text-green-600" />
-          </div>
-
-          {/* Title */}
-          <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">
-            Authentication Successful!
-          </h1>
-          <p className="text-gray-600 text-center mb-8">
-            You can now return to DealerPro Desktop
-          </p>
-
-          {/* Instructions */}
-          <div className="space-y-4 mb-8">
-            <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 text-sm font-bold">
-                1
+    <div className="min-h-screen flex items-center justify-center bg-zinc-950 p-6">
+      <div className="max-w-lg w-full space-y-6">
+        <Card>
+          <CardHeader className="text-center">
+            <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="w-6 h-6 text-primary" />
+            </div>
+            <CardTitle>Authentication Successful!</CardTitle>
+            <CardDescription>
+              You can now return to DealerPro Desktop
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Instructions */}
+            <div className="space-y-4">
+              <div className="flex items-start gap-3 p-4 rounded-lg border bg-muted/50">
+                <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">
+                  1
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium mb-1">Browser Prompt</p>
+                  <p className="text-sm text-muted-foreground">
+                    Your browser should have prompted you to &quot;Open DealerPro Desktop&quot;. 
+                    If you clicked <strong>Open</strong>, you&apos;re all set!
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="font-medium text-gray-900">Browser Prompt</p>
-                <p className="text-sm text-gray-600 mt-1">
-                  Your browser should have prompted you to &quot;Open DealerPro Desktop&quot;. 
-                  If you clicked <strong>Open</strong>, you&apos;re all set!
-                </p>
+
+              <div className="flex items-start gap-3 p-4 rounded-lg border bg-muted/50">
+                <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">
+                  2
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium mb-1">Didn&apos;t See a Prompt?</p>
+                  <p className="text-sm text-muted-foreground">
+                    Click the button below to try again, or check if DealerPro Desktop is already open.
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="flex items-start gap-3 p-4 bg-purple-50 rounded-lg border border-purple-200">
-              <div className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center flex-shrink-0 text-sm font-bold">
-                2
-              </div>
-              <div>
-                <p className="font-medium text-gray-900">Didn&apos;t See a Prompt?</p>
-                <p className="text-sm text-gray-600 mt-1">
-                  Click the button below to try again, or check if DealerPro Desktop is already open.
-                </p>
-              </div>
-            </div>
-          </div>
+            {/* Action Buttons */}
+            <div className="space-y-3">
+              <Button
+                onClick={retryDeepLink}
+                className="w-full"
+                size="lg"
+              >
+                <ExternalLink className="size-4" />
+                Open in DealerPro Desktop
+              </Button>
 
-          {/* Action Buttons */}
-          <div className="space-y-3">
-            <button
-              type="button"
-              onClick={retryDeepLink}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-            >
-              <ExternalLink className="w-5 h-5" />
-              Open in DealerPro Desktop
-            </button>
-
-            <button
-              type="button"
-              onClick={copyToken}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium rounded-lg transition-colors"
-            >
-              {copied ? (
-                <>
-                  <CheckCircle2 className="w-5 h-5 text-green-600" />
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <Copy className="w-5 h-5" />
-                  Copy Token (Manual Fallback)
-                </>
+              {/* Dev-only copy token button */}
+              {isDevMode && (
+                <Button
+                  onClick={copyToken}
+                  variant="outline"
+                  className="w-full"
+                  size="lg"
+                >
+                  {copied ? (
+                    <>
+                      <CheckCircle2 className="size-4 text-green-600" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="size-4" />
+                      Copy Token (Dev Mode)
+                    </>
+                  )}
+                </Button>
               )}
-            </button>
-          </div>
-
-          {/* Token Display (collapsed by default) */}
-          <details className="mt-6">
-            <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700">
-              Show authentication token (advanced)
-            </summary>
-            <div className="mt-3 p-3 bg-gray-50 rounded border border-gray-200">
-              <p className="text-xs font-mono text-gray-600 break-all">
-                {jwt}
-              </p>
             </div>
-          </details>
 
-          {/* Security Notice */}
-          <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <p className="text-xs text-gray-600 text-center">
-              🔒 This token will expire in 5 minutes. Do not share it with anyone.
-              This window will auto-close in 1 minute or you can close it manually.
-            </p>
-          </div>
-        </div>
+            {/* Token Display (dev mode only, collapsed by default) */}
+            {isDevMode && (
+              <details className="mt-6">
+                <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
+                  Show authentication token (dev mode only)
+                </summary>
+                <div className="mt-3 p-3 bg-muted rounded-md border">
+                  <p className="text-xs font-mono text-muted-foreground break-all">
+                    {jwt}
+                  </p>
+                </div>
+              </details>
+            )}
+
+            {/* Security Notice */}
+            <Alert>
+              <AlertCircle className="size-4" />
+              <AlertTitle>Security Notice</AlertTitle>
+              <AlertDescription>
+                This token will expire in 5 minutes. Do not share it with anyone.
+                This window will auto-close in 1 minute or you can close it manually.
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
 
         {/* Help Text */}
-        <div className="mt-6 text-center">
-          <p className="text-sm text-gray-600">
+        <div className="text-center">
+          <p className="text-sm text-muted-foreground">
             Having trouble?{' '}
             <a
               href="mailto:support@dealerpro.com"
-              className="text-blue-600 hover:text-blue-700 font-medium"
+              className="text-primary hover:text-primary/90 font-medium underline-offset-4 hover:underline"
             >
               Contact Support
             </a>

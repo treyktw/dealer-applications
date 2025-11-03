@@ -16,10 +16,7 @@ import { useDocumentActions } from "@/components/documents/hooks/useDocumentActi
 import { DocumentsHeader } from "@/components/documents/DocumentsHeader";
 import { ProgressSteps, type Step } from "@/components/documents/ProgressSteps";
 import { ReviewStep } from "@/components/documents/ReviewStep";
-import { EditStep } from "@/components/documents/EditStep";
 import { FinalizeStep } from "@/components/documents/FinalizeStep";
-import { NotarizeStep } from "@/components/documents/NoterizeStep";
-import { SignatureStep } from "@/components/documents/SignatureStep";
 
 
 export const Route = createFileRoute("/deals/$dealsId/documents/")({
@@ -67,24 +64,6 @@ function DocumentsPage() {
       label: "Review",
       icon: <Eye className="w-4 h-4" />,
       description: "Review all deal documents",
-    },
-    {
-      id: "edit" as Step,
-      label: "Corrections",
-      icon: <Edit className="w-4 h-4" />,
-      description: "Make any necessary corrections",
-    },
-    {
-      id: "sign" as Step,
-      label: "Signatures",
-      icon: <FileText className="w-4 h-4" />,
-      description: "Collect required signatures",
-    },
-    {
-      id: "notarize" as Step,
-      label: "Notarize",
-      icon: <Shield className="w-4 h-4" />,
-      description: "Notarize documents (if required)",
     },
     {
       id: "finalize" as Step,
@@ -156,11 +135,25 @@ function DocumentsPage() {
           <AlertCircle className="mb-4 w-16 h-16 text-red-500" />
           <h2 className="mb-2 text-2xl font-bold">Deal Not Found</h2>
           <p className="mb-6 text-muted-foreground">
-            {error?.message || "This deal could not be loaded."}
+            {error?.message?.includes("Invalid or expired session")
+              ? "Your session appears to have expired or gone offline. We'll retry briefly — or refresh to continue."
+              : (error?.message || "This deal could not be loaded.")}
           </p>
-          <Button onClick={() => navigate({ to: "/deals" })}>
-            Return to Deals
-          </Button>
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                // soft refresh: refetch data
+                refetchDocuments();
+              }}
+            >
+              Retry
+            </Button>
+            <Button onClick={() => window.location.reload()}>Refresh</Button>
+            <Button onClick={() => navigate({ to: "/deals" })} variant="ghost">
+              Return to Deals
+            </Button>
+          </div>
         </div>
       </Layout>
     );
@@ -208,56 +201,13 @@ function DocumentsPage() {
                 onDownloadCustom={(id) => downloadCustomDocument.mutate(id)}
                 onDeleteCustom={(id) => deleteCustomDocument.mutate(id)}
                 onUpload={handleUpload}
-                onContinue={() => setCurrentStep("edit")}
-              />
-            )}
-
-            {currentStep === "edit" && (
-              <EditStep
-                documents={documents?.map(doc => ({
-                  ...doc,
-                  template: doc.template ? {
-                    _id: doc.template._id,
-                    name: doc.template.name
-                  } : undefined
-                }))}
-                dealsId={dealsId}
-                sessionToken={sessionToken}
-                onSelectDocument={handleSelectDocument}
-                onBack={() => setCurrentStep("review")}
-                onContinue={() => setCurrentStep("sign")}
-              />
-            )}
-
-            {currentStep === "sign" && (
-              <SignatureStep
-                dealsId={dealsId}
-                documents={documents}
-                dealDetails={dealDetails ? {
-                  client: {
-                    firstName: dealDetails.client?.firstName,
-                    lastName: dealDetails.client?.lastName,
-                    email: dealDetails.client?.email,
-                  },
-                } : undefined}
-                sessionToken={sessionToken}
-                onBack={() => setCurrentStep("edit")}
-                onContinue={() => setCurrentStep("notarize")}
-              />
-            )}
-
-            {currentStep === "notarize" && (
-              <NotarizeStep
-                dealsId={dealsId}
-                documents={documents}
-                onBack={() => setCurrentStep("sign")}
                 onContinue={() => setCurrentStep("finalize")}
               />
             )}
 
             {currentStep === "finalize" && (
               <FinalizeStep
-                onBack={() => setCurrentStep("notarize")}
+                onBack={() => setCurrentStep("review")}
                 onComplete={handleCompleteDeal}
                 dealsId={dealsId}
                 documents={documents}

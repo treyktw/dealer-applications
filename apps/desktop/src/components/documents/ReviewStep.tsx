@@ -2,7 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { ChevronRight, Upload } from "lucide-react";
-import { GeneratedDocumentsList } from "./GenerateDocumentsList";
+import { useMemo, useState } from "react";
+import { GeneratedDocumentsGrid } from "./GeneratedDocumentsGrid";
 import { CustomDocumentsList } from "./CustomDocumentsList";
 import type { Id } from "@dealer/convex";
 
@@ -27,6 +28,22 @@ export function ReviewStep({
   onUpload,
   onContinue,
 }: ReviewStepProps) {
+  const [localDocs, setLocalDocs] = useState<any[]>(documents || []);
+
+  // sync when prop changes
+  if (documents && localDocs !== documents) {
+    setLocalDocs(documents);
+  }
+
+  const allCompleted = useMemo(() => {
+    return (localDocs || []).every((d) => (d.status || "").toUpperCase() === "FINALIZED");
+  }, [localDocs]);
+
+  const handleStatusChanged = (documentId: string, status: string) => {
+    setLocalDocs((prev) =>
+      (prev || []).map((d) => (d._id === documentId ? { ...d, status } : d))
+    );
+  };
   return (
     <div className="space-y-6">
       <div>
@@ -39,10 +56,7 @@ export function ReviewStep({
       {/* Generated Documents Section */}
       <div className="space-y-4">
         <h3 className="text-lg font-medium">Generated Documents</h3>
-        <GeneratedDocumentsList
-          documents={documents}
-          onDownload={onDownloadGenerated}
-        />
+        <GeneratedDocumentsGrid documents={localDocs} onStatusChanged={handleStatusChanged as any} />
       </div>
 
       {/* Custom Uploaded Documents Section */}
@@ -66,8 +80,8 @@ export function ReviewStep({
       </div>
 
       <div className="flex justify-end">
-        <Button onClick={onContinue}>
-          Continue to Corrections
+        <Button onClick={onContinue} disabled={!allCompleted} title={!allCompleted ? "Mark all documents as Completed to continue" : undefined}>
+          Continue to Finalize
           <ChevronRight className="ml-2 w-4 h-4" />
         </Button>
       </div>

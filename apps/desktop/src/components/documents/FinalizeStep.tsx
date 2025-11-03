@@ -1,4 +1,4 @@
-import { CheckCircle2, Download, Printer, Mail, Save, Loader2, ExternalLink } from "lucide-react";
+import { CheckCircle2, Download, Printer, Mail, Loader2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { toast } from "react-hot-toast";
@@ -175,7 +175,7 @@ export function FinalizeStep({
       try {
         defaultDir = await invoke<string>("get_downloads_dir");
       } catch (error) {
-        console.warn("Could not get downloads dir, using fallback");
+        console.warn("Could not get downloads dir, using fallback", error);
         defaultDir = "";
       }
 
@@ -205,6 +205,7 @@ export function FinalizeStep({
           <div className="flex items-center gap-2">
             <span>Downloaded {completed} documents!</span>
             <button
+              type="button"
               onClick={() => handleRevealInExplorer(filePath)}
               className="text-xs underline hover:no-underline"
             >
@@ -378,9 +379,27 @@ export function FinalizeStep({
     sendEmail.mutate(email);
   };
 
-  const handleArchive = () => {
-    archiveDeal.mutate();
-  };
+  // Complete all documents then archive deal
+  const completeAndArchive = useMutation({
+    mutationFn: async () => {
+      if (!sessionToken) throw new Error("No session token");
+      const targets = (documents || []).filter((d) => (d.status || '').toUpperCase() !== 'FINALIZED');
+      await Promise.all(
+        targets.map((d) =>
+          convexMutation((api as any).documents.generator.updateDocumentStatus, {
+            documentId: d._id as Id<"documentInstances">,
+            status: "FINALIZED",
+            token: sessionToken,
+          })
+        )
+      );
+      await archiveDeal.mutateAsync();
+    },
+    onError: (error) => {
+      console.error("Finalize error:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to complete deal");
+    },
+  });
 
   return (
     <div className="space-y-6">
@@ -400,7 +419,7 @@ export function FinalizeStep({
               All Steps Complete
             </h4>
             <p className="text-sm text-green-700 dark:text-green-300">
-              All documents have been reviewed, corrected, and signed
+              All documents are ready and marked as completed
             </p>
           </div>
         </div>
@@ -476,20 +495,7 @@ export function FinalizeStep({
           <span className="text-xs text-muted-foreground">Send copies</span>
         </Button>
 
-        <Button
-          variant="outline"
-          className="flex-col justify-center h-24"
-          onClick={handleArchive}
-          disabled={archiveDeal.isPending || !sessionToken}
-        >
-          {archiveDeal.isPending ? (
-            <Loader2 className="mb-2 w-5 h-5 animate-spin" />
-          ) : (
-            <Save className="mb-2 w-5 h-5" />
-          )}
-          <span className="font-medium">Archive Deal</span>
-          <span className="text-xs text-muted-foreground">Save to records</span>
-        </Button>
+        {/* Archive happens as part of Complete Deal */}
       </div>
 
       {/* Email Dialog */}
@@ -504,13 +510,23 @@ export function FinalizeStep({
         <Button variant="outline" onClick={onBack}>
           Back
         </Button>
-        <Button 
-          size="lg" 
+        <Button
+          size="lg"
           className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600"
-          onClick={onComplete}
+          onClick={() => completeAndArchive.mutate()}
+          disabled={completeAndArchive.isPending || archiveDeal.isPending}
         >
-          <CheckCircle2 className="mr-2 w-5 h-5" />
-          Complete Deal
+          {completeAndArchive.isPending || archiveDeal.isPending ? (
+            <>
+              <Loader2 className="mr-2 w-5 h-5 animate-spin" />
+              Completing...
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="mr-2 w-5 h-5" />
+              Complete Deal
+            </>
+          )}
         </Button>
       </div>
     </div>

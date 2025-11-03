@@ -47,7 +47,6 @@ import type * as s3_utils from "../s3_utils.js";
 import type * as secure_s3 from "../secure_s3.js";
 import type * as security from "../security.js";
 import type * as settings from "../settings.js";
-import type * as signatures from "../signatures.js";
 import type * as stripe_webhook from "../stripe_webhook.js";
 import type * as subscriptions from "../subscriptions.js";
 import type * as users from "../users.js";
@@ -106,7 +105,6 @@ declare const fullApi: ApiFromModules<{
   secure_s3: typeof secure_s3;
   security: typeof security;
   settings: typeof settings;
-  signatures: typeof signatures;
   stripe_webhook: typeof stripe_webhook;
   subscriptions: typeof subscriptions;
   users: typeof users;

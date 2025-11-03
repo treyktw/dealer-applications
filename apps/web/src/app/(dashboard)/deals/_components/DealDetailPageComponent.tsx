@@ -120,7 +120,7 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
   // Check if we should show generate button
   const canGenerateDocs = dealStatus === "draft" || dealStatus === "on_hold";
   const hasDocuments = docStatus.total > 0;
-  const docsAreReady = docStatus.ready > 0 || docStatus.signed > 0;
+  const docsAreReady = docStatus.ready > 0;
 
   // Get status badge
   const getStatusBadge = (status: string) => {
@@ -361,7 +361,7 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
             <CardDescription>
               {hasDocuments 
                 ? "Documents have been generated. Click below to regenerate if needed."
-                : "Create all required documents for this deal to proceed with signatures"}
+                : "Create all required documents for this deal to proceed to finalization"}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -386,10 +386,10 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
           <CardHeader>
             <CardTitle className="flex gap-2 items-center text-blue-900 dark:text-blue-100">
               <ExternalLink className="w-5 h-5" />
-              Ready for Signatures
+              Ready to Finalize
             </CardTitle>
             <CardDescription className="text-blue-700 dark:text-blue-300">
-              Documents have been generated and are ready for signing in the desktop app
+              Documents are generated and ready to finalize in the desktop app
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -412,7 +412,7 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
               )}
             </Button>
             <p className="mt-3 text-sm text-blue-700 dark:text-blue-300">
-              💡 The desktop app allows you to review documents, collect signatures, and make final corrections
+              The desktop app lets you review, finalize, print, zip, and email documents
             </p>
           </CardContent>
         </Card>
@@ -425,11 +425,11 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
             <CardTitle className="flex justify-between items-center">
               <span>Document Progress</span>
               <span className="text-2xl font-bold">
-                {Math.round((docStatus.signed / docStatus.total) * 100)}%
+                {Math.round((docStatus.ready / docStatus.total) * 100)}%
               </span>
             </CardTitle>
             <CardDescription>
-              {docStatus.signed} of {docStatus.total} documents signed
+              {docStatus.ready} of {docStatus.total} documents ready
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -445,7 +445,7 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
               </div>
 
               {/* Status breakdown */}
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
                 <div className="p-3 text-center rounded-lg bg-muted">
                   <p className="text-2xl font-bold">{docStatus.draft}</p>
                   <p className="text-sm text-muted-foreground">Draft</p>
@@ -455,12 +455,6 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
                     {docStatus.ready}
                   </p>
                   <p className="text-sm text-muted-foreground">Ready</p>
-                </div>
-                <div className="p-3 text-center bg-green-50 rounded-lg dark:bg-green-950">
-                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    {docStatus.signed}
-                  </p>
-                  <p className="text-sm text-muted-foreground">Signed</p>
                 </div>
                 <div className="p-3 text-center rounded-lg bg-muted">
                   <p className="text-2xl font-bold">{docStatus.voided}</p>

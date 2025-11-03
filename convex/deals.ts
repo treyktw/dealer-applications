@@ -176,8 +176,6 @@ export const updateDealStatus = mutation({
     status: v.union(
       v.literal("draft"),
       v.literal("pending_documents"),
-      v.literal("ready_for_signatures"),
-      v.literal("partially_signed"),
       v.literal("ready_to_finalize"),
       v.literal("completed"),
       v.literal("cancelled"),

@@ -140,7 +140,7 @@ export const generateDealDocuments = action({
       // Update deal status
       await ctx.runMutation(api.deals.updateDealStatus, {
         dealId: args.dealId,
-        status: "ready_for_signatures",
+        status: "ready_to_finalize",
       });
 
       return {
