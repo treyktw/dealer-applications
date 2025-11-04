@@ -2,7 +2,7 @@ name: Release Desktop App
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, windows-latest] 
+        platform: [macos-latest, windows-latest]
     runs-on: ${{ matrix.platform }}
 
     steps:
@@ -27,7 +27,7 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: './apps/desktop/src-tauri -> target'
+          workspaces: "./apps/desktop/src-tauri -> target"
 
       - name: Install pnpm
         uses: pnpm/action-setup@v3
@@ -37,8 +37,8 @@ jobs:
       - name: Sync node version and setup cache
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
-          cache: 'pnpm'
+          node-version: "lts/*"
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install
@@ -81,18 +81,23 @@ jobs:
           projectPath: apps/desktop
           args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin' || '' }}
           tagName: v__VERSION__
-          releaseName: 'Dealer Software v__VERSION__'
-          releaseBody: 'See the assets to download and install this version.'
+          releaseName: "Dealer Software v__VERSION__"
+          releaseBody: "See the assets to download and install this version."
           releaseDraft: true
           prerelease: false
-  
+
   publish-updater:
-    needs: release          
+    needs: release
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
 
       - name: Generate and upload latest.json
         env:
@@ -100,65 +105,77 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           VERSION=$(node -p "JSON.parse(require('fs').readFileSync('./apps/desktop/package.json','utf8')).version")
-          
-          # Download release assets info
-          ASSETS=$(gh release view "v$VERSION" --json assets -q '.assets[].name')
-          
-          # Generate latest.json
-          node --input-type=module - <<'JS'
+
+          # Download release assets list
+          gh release view "v$VERSION" --json assets -q '.assets[] | select(.name | test("\\.(app\\.tar\\.gz|exe|msi)(\\.sig)?$")) | .name' > assets.txt
+
+          # Create the generation script
+          cat > generate-manifest.mjs << 'EOF'
           import fs from 'fs';
-          const version = process.argv[1];
-          const ownerRepo = process.env.GITHUB_REPOSITORY;
-          const assets = process.argv[2].split('\n').filter(Boolean);
-          
+
+          const version = process.argv[2];
+          const ownerRepo = process.argv[3];
+          const assetsText = fs.readFileSync('assets.txt', 'utf8');
+          const assets = assetsText.split('\n').filter(Boolean);
+
+          console.log('Found assets:', assets);
+
           const manifest = { version, notes: '', platforms: {} };
-          
+
           const mac = assets.find(f => f.endsWith('.app.tar.gz'));
           const macSig = assets.find(f => f.endsWith('.app.tar.gz.sig'));
-          const win = assets.find(f => f.match(/\.(exe|msi)$/));
-          const winSig = assets.find(f => f.match(/\.(exe|msi)\.sig$/));
-          
+          const win = assets.find(f => /\.(exe|msi)$/.test(f));
+          const winSig = assets.find(f => /\.(exe|msi)\.sig$/.test(f));
+
+          console.log('Mac file:', mac);
+          console.log('Mac sig:', macSig);
+          console.log('Win file:', win);
+          console.log('Win sig:', winSig);
+
+          // Download signature files
+          const signatures = {};
+
+          if (macSig) {
+            try {
+              const response = await fetch(`https://github.com/${ownerRepo}/releases/download/v${version}/${macSig}`);
+              signatures.mac = await response.text();
+            } catch (e) {
+              console.log('Could not fetch mac signature:', e.message);
+            }
+          }
+
+          if (winSig) {
+            try {
+              const response = await fetch(`https://github.com/${ownerRepo}/releases/download/v${version}/${winSig}`);
+              signatures.win = await response.text();
+            } catch (e) {
+              console.log('Could not fetch win signature:', e.message);
+            }
+          }
+
           if (mac) {
             manifest.platforms['darwin-universal'] = {
               url: `https://github.com/${ownerRepo}/releases/download/v${version}/${mac}`,
-              signature: macSig ? '' : '' // Signature will be read from .sig file
+              signature: (signatures.mac || '').trim()
             };
           }
-          
+
           if (win) {
             manifest.platforms['windows-x86_64'] = {
               url: `https://github.com/${ownerRepo}/releases/download/v${version}/${win}`,
-              signature: winSig ? '' : ''
+              signature: (signatures.win || '').trim()
             };
           }
-          
+
           fs.writeFileSync('latest.json', JSON.stringify(manifest, null, 2));
           console.log('✅ Generated latest.json:\n', JSON.stringify(manifest, null, 2));
-          JS "$VERSION" "$ASSETS"
-          
-          # Download signatures and add to manifest
-          if gh release download "v$VERSION" -p "*.sig" 2>/dev/null; then
-            node --input-type=module - <<'JS'
-            import fs from 'fs';
-            const manifest = JSON.parse(fs.readFileSync('latest.json', 'utf8'));
-            
-            for (const platform in manifest.platforms) {
-              const url = manifest.platforms[platform].url;
-              const filename = url.split('/').pop();
-              const sigFile = `${filename}.sig`;
-              
-              if (fs.existsSync(sigFile)) {
-                manifest.platforms[platform].signature = fs.readFileSync(sigFile, 'utf8').trim();
-              }
-            }
-            
-            fs.writeFileSync('latest.json', JSON.stringify(manifest, null, 2));
-            console.log('✅ Updated latest.json with signatures');
-            JS
-          fi
-          
+          EOF
+
+          # Run the script
+          node generate-manifest.mjs "$VERSION" "$GITHUB_REPOSITORY"
+
           # Upload latest.json to release
           gh release upload "v$VERSION" latest.json --clobber
-          
+
           # Mark release as published
           gh release edit "v$VERSION" --draft=false
