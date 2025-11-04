@@ -94,11 +94,23 @@ jobs:
           prerelease: false
 
       # ✅ Upload artifacts from the build
+      - name: List bundle contents
+        run: |
+          echo "Listing all files in target/release/bundle:"
+          ls -R apps/desktop/src-tauri/target/release/bundle/ || echo "Bundle directory not found"
+          
+      # ✅ Upload artifacts from the build
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-artifacts
-          path: apps/desktop/src-tauri/target/release/bundle/**/*
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/**/*.app.tar.gz
+            apps/desktop/src-tauri/target/release/bundle/**/*.app.tar.gz.sig
+            apps/desktop/src-tauri/target/release/bundle/**/*.exe
+            apps/desktop/src-tauri/target/release/bundle/**/*.exe.sig
+            apps/desktop/src-tauri/target/release/bundle/**/*.msi
+            apps/desktop/src-tauri/target/release/bundle/**/*.msi.sig
           if-no-files-found: error
   
   publish:
