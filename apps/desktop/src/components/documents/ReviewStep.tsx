@@ -21,7 +21,6 @@ interface ReviewStepProps {
 export function ReviewStep({
   documents,
   customDocuments,
-  onDownloadGenerated,
   onViewCustom,
   onDownloadCustom,
   onDeleteCustom,

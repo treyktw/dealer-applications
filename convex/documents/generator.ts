@@ -5,7 +5,6 @@ import {
   query,
   action,
   type QueryCtx,
-  internalAction,
 } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";

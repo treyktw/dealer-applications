@@ -4,7 +4,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Layout } from "@/components/layout/layout";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, Eye, Edit, FileText, Shield, CheckCircle2 } from "lucide-react";
+import { AlertCircle, Eye, CheckCircle2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useOpenLink } from "@/components/link-handler";
 
@@ -83,10 +83,6 @@ function DocumentsPage() {
 
   const handleViewGeneratedDocument = (documentId: any) => {
     downloadDocument.mutate(documentId);
-  };
-
-  const handleSelectDocument = (_documentId: string) => {
-    toast.success("Opening document editor...");
   };
 
   const handleUpload = () => {
