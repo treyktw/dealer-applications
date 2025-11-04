@@ -97,3 +97,69 @@ jobs:
           releaseBody: 'See the assets to download and install this version.'
           releaseDraft: false
           prerelease: false
+  
+  publish:
+    needs: release          
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # ⬇️ Download both build artifacts from macOS + Windows jobs
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-latest-artifacts
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-latest-artifacts
+          path: dist
+
+      # ⬇️ Generate latest.json for both platforms
+      - name: Generate latest.json
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          node --input-type=module - <<'JS'
+          import fs from 'fs';
+          import path from 'path';
+          const dist = 'dist';
+          const version = process.argv[2] || require('./apps/desktop/package.json').version;
+          const files = fs.readdirSync(dist);
+          const ownerRepo = process.env.GITHUB_REPOSITORY;
+
+          function pick(rx){ return files.find(f => rx.test(f)); }
+          function sig(f){
+            const s = files.find(x => x.startsWith(f) && x.endsWith('.sig')) || `${f}.sig`;
+            return fs.existsSync(path.join(dist,s)) ? fs.readFileSync(path.join(dist,s),'utf8').trim() : '';
+          }
+
+          const manifest = { version, notes:'', platforms:{} };
+          const mac = pick(/\.app\.tar\.gz$/);
+          const win = pick(/\.(exe|msi)$/);
+
+          if(mac) manifest.platforms['darwin-universal'] = {
+            url:`https://github.com/${ownerRepo}/releases/download/v${version}/${mac}`,
+            signature:sig(mac)
+          };
+          if(win) manifest.platforms['windows-x86_64'] = {
+            url:`https://github.com/${ownerRepo}/releases/download/v${version}/${win}`,
+            signature:sig(win)
+          };
+
+          fs.writeFileSync('latest.json', JSON.stringify(manifest,null,2));
+          console.log('✅ latest.json generated:\n', JSON.stringify(manifest,null,2));
+          JS
+
+      # ⬇️ Upload installers + manifest to the GitHub Release
+      - name: Upload to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./apps/desktop/package.json').version")
+          gh release view "v$VERSION" >/dev/null 2>&1 || gh release create "v$VERSION" -t "Dealer Software v$VERSION" -n "See the assets to download and install this version." -d
+          gh release upload "v$VERSION" dist/* --clobber
+          gh release upload "v$VERSION" latest.json --clobber
+          gh release edit "v$VERSION" --draft=false
