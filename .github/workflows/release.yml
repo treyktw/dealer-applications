@@ -73,13 +73,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-          # ✅ Add your environment variables here
           VITE_CONVEX_URL: ${{ secrets.VITE_CONVEX_URL }}
           VITE_CONVEX_DEPLOYMENT: ${{ secrets.VITE_CONVEX_DEPLOYMENT }}
-          # Add any other env vars your app needs
-          # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           VITE_WEB_URL_PROD: ${{ secrets.VITE_WEB_URL_PROD }}
           PROD: true
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -95,8 +90,16 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Dealer Software v__VERSION__'
           releaseBody: 'See the assets to download and install this version.'
-          releaseDraft: false
+          releaseDraft: true  # Keep draft until publish job completes
           prerelease: false
+
+      # ✅ Upload artifacts from the build
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-artifacts
+          path: apps/desktop/src-tauri/target/release/bundle/**/*
+          if-no-files-found: error
   
   publish:
     needs: release          
@@ -106,7 +109,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ⬇️ Download both build artifacts from macOS + Windows jobs
+      # Download both build artifacts
       - uses: actions/download-artifact@v4
         with:
           name: macos-latest-artifacts
@@ -117,7 +120,7 @@ jobs:
           name: windows-latest-artifacts
           path: dist
 
-      # ⬇️ Generate latest.json for both platforms
+      # Generate latest.json for both platforms
       - name: Generate latest.json
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -126,14 +129,14 @@ jobs:
           import fs from 'fs';
           import path from 'path';
           const dist = 'dist';
-          const version = process.argv[2] || require('./apps/desktop/package.json').version;
-          const files = fs.readdirSync(dist);
+          const version = process.argv[2] || JSON.parse(fs.readFileSync('./apps/desktop/package.json','utf8')).version;
+          const files = fs.readdirSync(dist, { recursive: true }).filter(f => !fs.statSync(path.join(dist,f)).isDirectory());
           const ownerRepo = process.env.GITHUB_REPOSITORY;
 
           function pick(rx){ return files.find(f => rx.test(f)); }
           function sig(f){
-            const s = files.find(x => x.startsWith(f) && x.endsWith('.sig')) || `${f}.sig`;
-            return fs.existsSync(path.join(dist,s)) ? fs.readFileSync(path.join(dist,s),'utf8').trim() : '';
+            const s = files.find(x => x.includes(path.basename(f)) && x.endsWith('.sig'));
+            return s && fs.existsSync(path.join(dist,s)) ? fs.readFileSync(path.join(dist,s),'utf8').trim() : '';
           }
 
           const manifest = { version, notes:'', platforms:{} };
@@ -141,11 +144,11 @@ jobs:
           const win = pick(/\.(exe|msi)$/);
 
           if(mac) manifest.platforms['darwin-universal'] = {
-            url:`https://github.com/${ownerRepo}/releases/download/v${version}/${mac}`,
+            url:`https://github.com/${ownerRepo}/releases/download/v${version}/${path.basename(mac)}`,
             signature:sig(mac)
           };
           if(win) manifest.platforms['windows-x86_64'] = {
-            url:`https://github.com/${ownerRepo}/releases/download/v${version}/${win}`,
+            url:`https://github.com/${ownerRepo}/releases/download/v${version}/${path.basename(win)}`,
             signature:sig(win)
           };
 
@@ -153,13 +156,18 @@ jobs:
           console.log('✅ latest.json generated:\n', JSON.stringify(manifest,null,2));
           JS
 
-      # ⬇️ Upload installers + manifest to the GitHub Release
+      # Upload installers + manifest to the GitHub Release
       - name: Upload to release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION=$(node -p "require('./apps/desktop/package.json').version")
-          gh release view "v$VERSION" >/dev/null 2>&1 || gh release create "v$VERSION" -t "Dealer Software v$VERSION" -n "See the assets to download and install this version." -d
-          gh release upload "v$VERSION" dist/* --clobber
+          VERSION=$(node -p "JSON.parse(require('fs').readFileSync('./apps/desktop/package.json','utf8')).version")
+          
+          # Find all relevant files (installers and signatures)
+          find dist -type f \( -name "*.app.tar.gz" -o -name "*.exe" -o -name "*.msi" -o -name "*.sig" \) -exec gh release upload "v$VERSION" {} --clobber \;
+          
+          # Upload manifest
           gh release upload "v$VERSION" latest.json --clobber
+          
+          # Mark release as published
           gh release edit "v$VERSION" --draft=false
