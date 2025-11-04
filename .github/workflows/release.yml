@@ -49,22 +49,15 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
-          # Create keychain
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
-          
-          # Decode certificate
           echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
-          
-          # Create keychain and import certificate
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security import certificate.p12 -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security list-keychain -d user -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          
-          # Clean up
           rm certificate.p12
 
       - name: Build the desktop app
@@ -90,30 +83,10 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'Dealer Software v__VERSION__'
           releaseBody: 'See the assets to download and install this version.'
-          releaseDraft: true  # Keep draft until publish job completes
+          releaseDraft: true
           prerelease: false
-
-      # ✅ Upload artifacts from the build
-      - name: List bundle contents
-        run: |
-          echo "Listing all files in target/release/bundle:"
-          ls -R apps/desktop/src-tauri/target/release/bundle/ || echo "Bundle directory not found"
-          
-      # ✅ Upload artifacts from the build
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.platform }}-artifacts
-          path: |
-            apps/desktop/src-tauri/target/release/bundle/**/*.app.tar.gz
-            apps/desktop/src-tauri/target/release/bundle/**/*.app.tar.gz.sig
-            apps/desktop/src-tauri/target/release/bundle/**/*.exe
-            apps/desktop/src-tauri/target/release/bundle/**/*.exe.sig
-            apps/desktop/src-tauri/target/release/bundle/**/*.msi
-            apps/desktop/src-tauri/target/release/bundle/**/*.msi.sig
-          if-no-files-found: error
   
-  publish:
+  publish-updater:
     needs: release          
     runs-on: ubuntu-latest
     permissions:
@@ -121,64 +94,70 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Download both build artifacts
-      - uses: actions/download-artifact@v4
-        with:
-          name: macos-latest-artifacts
-          path: dist
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: windows-latest-artifacts
-          path: dist
-
-      # Generate latest.json for both platforms
-      - name: Generate latest.json
-        env:
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: |
-          node --input-type=module - <<'JS'
-          import fs from 'fs';
-          import path from 'path';
-          const dist = 'dist';
-          const version = process.argv[2] || JSON.parse(fs.readFileSync('./apps/desktop/package.json','utf8')).version;
-          const files = fs.readdirSync(dist, { recursive: true }).filter(f => !fs.statSync(path.join(dist,f)).isDirectory());
-          const ownerRepo = process.env.GITHUB_REPOSITORY;
-
-          function pick(rx){ return files.find(f => rx.test(f)); }
-          function sig(f){
-            const s = files.find(x => x.includes(path.basename(f)) && x.endsWith('.sig'));
-            return s && fs.existsSync(path.join(dist,s)) ? fs.readFileSync(path.join(dist,s),'utf8').trim() : '';
-          }
-
-          const manifest = { version, notes:'', platforms:{} };
-          const mac = pick(/\.app\.tar\.gz$/);
-          const win = pick(/\.(exe|msi)$/);
-
-          if(mac) manifest.platforms['darwin-universal'] = {
-            url:`https://github.com/${ownerRepo}/releases/download/v${version}/${path.basename(mac)}`,
-            signature:sig(mac)
-          };
-          if(win) manifest.platforms['windows-x86_64'] = {
-            url:`https://github.com/${ownerRepo}/releases/download/v${version}/${path.basename(win)}`,
-            signature:sig(win)
-          };
-
-          fs.writeFileSync('latest.json', JSON.stringify(manifest,null,2));
-          console.log('✅ latest.json generated:\n', JSON.stringify(manifest,null,2));
-          JS
-
-      # Upload installers + manifest to the GitHub Release
-      - name: Upload to release
+      - name: Generate and upload latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           VERSION=$(node -p "JSON.parse(require('fs').readFileSync('./apps/desktop/package.json','utf8')).version")
           
-          # Find all relevant files (installers and signatures)
-          find dist -type f \( -name "*.app.tar.gz" -o -name "*.exe" -o -name "*.msi" -o -name "*.sig" \) -exec gh release upload "v$VERSION" {} --clobber \;
+          # Download release assets info
+          ASSETS=$(gh release view "v$VERSION" --json assets -q '.assets[].name')
           
-          # Upload manifest
+          # Generate latest.json
+          node --input-type=module - <<'JS'
+          import fs from 'fs';
+          const version = process.argv[1];
+          const ownerRepo = process.env.GITHUB_REPOSITORY;
+          const assets = process.argv[2].split('\n').filter(Boolean);
+          
+          const manifest = { version, notes: '', platforms: {} };
+          
+          const mac = assets.find(f => f.endsWith('.app.tar.gz'));
+          const macSig = assets.find(f => f.endsWith('.app.tar.gz.sig'));
+          const win = assets.find(f => f.match(/\.(exe|msi)$/));
+          const winSig = assets.find(f => f.match(/\.(exe|msi)\.sig$/));
+          
+          if (mac) {
+            manifest.platforms['darwin-universal'] = {
+              url: `https://github.com/${ownerRepo}/releases/download/v${version}/${mac}`,
+              signature: macSig ? '' : '' // Signature will be read from .sig file
+            };
+          }
+          
+          if (win) {
+            manifest.platforms['windows-x86_64'] = {
+              url: `https://github.com/${ownerRepo}/releases/download/v${version}/${win}`,
+              signature: winSig ? '' : ''
+            };
+          }
+          
+          fs.writeFileSync('latest.json', JSON.stringify(manifest, null, 2));
+          console.log('✅ Generated latest.json:\n', JSON.stringify(manifest, null, 2));
+          JS "$VERSION" "$ASSETS"
+          
+          # Download signatures and add to manifest
+          if gh release download "v$VERSION" -p "*.sig" 2>/dev/null; then
+            node --input-type=module - <<'JS'
+            import fs from 'fs';
+            const manifest = JSON.parse(fs.readFileSync('latest.json', 'utf8'));
+            
+            for (const platform in manifest.platforms) {
+              const url = manifest.platforms[platform].url;
+              const filename = url.split('/').pop();
+              const sigFile = `${filename}.sig`;
+              
+              if (fs.existsSync(sigFile)) {
+                manifest.platforms[platform].signature = fs.readFileSync(sigFile, 'utf8').trim();
+              }
+            }
+            
+            fs.writeFileSync('latest.json', JSON.stringify(manifest, null, 2));
+            console.log('✅ Updated latest.json with signatures');
+            JS
+          fi
+          
+          # Upload latest.json to release
           gh release upload "v$VERSION" latest.json --clobber
           
           # Mark release as published
