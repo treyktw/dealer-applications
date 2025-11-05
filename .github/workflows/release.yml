@@ -87,7 +87,7 @@ jobs:
           prerelease: false
 
   publish-updater:
-    needs: release
+    needs: release          
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -97,7 +97,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "lts/*"
+          node-version: 'lts/*'
 
       - name: Generate and upload latest.json
         env:
@@ -105,77 +105,79 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           VERSION=$(node -p "JSON.parse(require('fs').readFileSync('./apps/desktop/package.json','utf8')).version")
-
-          # Download release assets list
-          gh release view "v$VERSION" --json assets -q '.assets[] | select(.name | test("\\.(app\\.tar\\.gz|exe|msi)(\\.sig)?$")) | .name' > assets.txt
-
+          
+          # Download all release assets
+          mkdir -p assets
+          gh release download "v$VERSION" -D assets
+          
           # Create the generation script
           cat > generate-manifest.mjs << 'EOF'
           import fs from 'fs';
-
+          import path from 'path';
+          
           const version = process.argv[2];
           const ownerRepo = process.argv[3];
-          const assetsText = fs.readFileSync('assets.txt', 'utf8');
-          const assets = assetsText.split('\n').filter(Boolean);
-
-          console.log('Found assets:', assets);
-
+          const assetsDir = 'assets';
+          
+          const files = fs.readdirSync(assetsDir);
+          console.log('Found files:', files);
+          
           const manifest = { version, notes: '', platforms: {} };
-
-          const mac = assets.find(f => f.endsWith('.app.tar.gz'));
-          const macSig = assets.find(f => f.endsWith('.app.tar.gz.sig'));
-          const win = assets.find(f => /\.(exe|msi)$/.test(f));
-          const winSig = assets.find(f => /\.(exe|msi)\.sig$/.test(f));
-
+          
+          // Find Mac files
+          const mac = files.find(f => f.endsWith('.app.tar.gz') && !f.endsWith('.sig'));
+          const macSig = files.find(f => f.endsWith('.app.tar.gz.sig'));
+          
+          // Find Windows files
+          const win = files.find(f => /\.(exe|msi)$/.test(f) && !f.endsWith('.sig'));
+          const winSig = files.find(f => /\.(exe|msi)\.sig$/.test(f));
+          
           console.log('Mac file:', mac);
-          console.log('Mac sig:', macSig);
-          console.log('Win file:', win);
-          console.log('Win sig:', winSig);
-
-          // Download signature files
-          const signatures = {};
-
-          if (macSig) {
-            try {
-              const response = await fetch(`https://github.com/${ownerRepo}/releases/download/v${version}/${macSig}`);
-              signatures.mac = await response.text();
-            } catch (e) {
-              console.log('Could not fetch mac signature:', e.message);
-            }
-          }
-
-          if (winSig) {
-            try {
-              const response = await fetch(`https://github.com/${ownerRepo}/releases/download/v${version}/${winSig}`);
-              signatures.win = await response.text();
-            } catch (e) {
-              console.log('Could not fetch win signature:', e.message);
-            }
-          }
-
+          console.log('Mac signature:', macSig);
+          console.log('Windows file:', win);
+          console.log('Windows signature:', winSig);
+          
           if (mac) {
+            const signature = macSig 
+              ? fs.readFileSync(path.join(assetsDir, macSig), 'utf8').trim()
+              : '';
+            
             manifest.platforms['darwin-universal'] = {
               url: `https://github.com/${ownerRepo}/releases/download/v${version}/${mac}`,
-              signature: (signatures.mac || '').trim()
+              signature
             };
+            
+            if (!signature) {
+              console.warn('⚠️  WARNING: Mac signature file not found!');
+            }
           }
-
+          
           if (win) {
+            const signature = winSig
+              ? fs.readFileSync(path.join(assetsDir, winSig), 'utf8').trim()
+              : '';
+            
             manifest.platforms['windows-x86_64'] = {
               url: `https://github.com/${ownerRepo}/releases/download/v${version}/${win}`,
-              signature: (signatures.win || '').trim()
+              signature
             };
+            
+            if (!signature) {
+              console.warn('⚠️  WARNING: Windows signature file not found!');
+            }
           }
-
+          
           fs.writeFileSync('latest.json', JSON.stringify(manifest, null, 2));
           console.log('✅ Generated latest.json:\n', JSON.stringify(manifest, null, 2));
           EOF
-
+          
           # Run the script
           node generate-manifest.mjs "$VERSION" "$GITHUB_REPOSITORY"
-
+          
           # Upload latest.json to release
           gh release upload "v$VERSION" latest.json --clobber
-
+          
           # Mark release as published
           gh release edit "v$VERSION" --draft=false
+          
+          echo "✅ Update manifest published successfully!"

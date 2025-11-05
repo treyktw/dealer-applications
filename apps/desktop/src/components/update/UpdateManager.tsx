@@ -15,7 +15,6 @@ import { Progress } from "@/components/ui/progress";
 import { Shield, Sparkles, Download, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
-// Add toast import check - fallback if sonner toast isn't available
 const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
   try {
     if (type === "success") toast.success(message);
@@ -60,11 +59,9 @@ export function UpdateManager() {
         }
       }
     } catch (error) {
-      // Silently handle update check failures (endpoint might not exist yet)
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.warn("Update check failed (this is normal if releases aren't set up yet):", errorMessage);
+      console.warn("Update check failed:", errorMessage);
       
-      // Only show errors if user manually requested update check
       if (showErrors) {
         if (errorMessage.includes("release JSON") || errorMessage.includes("404")) {
           showToast("Update server not configured yet. Updates will be available when releases are published.", "info");
@@ -77,7 +74,6 @@ export function UpdateManager() {
   }, []);
 
   useEffect(() => {
-    // Silent background check on mount (won't show errors)
     checkForUpdates(false);
   }, [checkForUpdates]);
 
@@ -90,7 +86,6 @@ export function UpdateManager() {
       const update = await check();
 
       if (update) {
-        // Download and install with progress
         await update.downloadAndInstall((event) => {
           switch (event.event) {
             case "Started":
@@ -109,10 +104,8 @@ export function UpdateManager() {
           }
         });
 
-        // Show success message
         toast.success("Update installed! Restarting app...");
 
-        // Wait a moment for user to see the message
         setTimeout(async () => {
           await relaunch();
         }, 1500);
@@ -159,7 +152,6 @@ export function UpdateManager() {
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Current vs New Version */}
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Current version:</span>
             <span className="font-medium">{updateInfo.currentVersion}</span>
@@ -171,19 +163,17 @@ export function UpdateManager() {
             </span>
           </div>
 
-          {/* Release Notes */}
           {updateInfo.body && (
             <div className="space-y-2">
               <h4 className="text-sm font-semibold">What's new:</h4>
               <div className="text-sm text-muted-foreground bg-muted p-3 rounded-lg max-h-32 overflow-y-auto">
-                {updateInfo.body.split("\n").map((line) => (
+                {updateInfo.body.split("\n").map((line: string) => (
                   <p key={line}>{line}</p>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Download Progress */}
           {downloading && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
@@ -197,7 +187,6 @@ export function UpdateManager() {
             </div>
           )}
 
-          {/* Error Message */}
           {error && (
             <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 p-3 rounded-lg">
               <AlertCircle className="h-4 w-4" />
@@ -234,8 +223,23 @@ export function UpdateManager() {
   );
 }
 
-// ✅ Export function for manual update checks
-export async function checkForUpdatesManually() {
+// ✅ Export for getting current version
+export async function getCurrentVersion(): Promise<string> {
+  try {
+    const update = await check();
+    return update?.currentVersion || "Unknown";
+  } catch (error) {
+    console.error("Failed to get version:", error);
+    return "Unknown";
+  }
+}
+
+// ✅ Export function for manual update checks with loading state
+export async function checkForUpdatesManually(): Promise<{
+  available: boolean;
+  version?: string;
+  currentVersion?: string;
+}> {
   try {
     const update = await check();
     if (update) {
@@ -245,12 +249,13 @@ export async function checkForUpdatesManually() {
         currentVersion: update.currentVersion,
       };
     }
-    return { available: false };
+    return { 
+      available: false
+    };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.warn("Manual update check failed:", errorMessage);
     
-    // Return a user-friendly error instead of throwing
     if (errorMessage.includes("release JSON") || errorMessage.includes("404")) {
       throw new Error("Update server not configured. Releases must be published with a latest.json file.");
     }

@@ -22,9 +22,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { convexClient } from "@/lib/convex";
 import { api } from "@dealer/convex";
 import { useAuth } from "@/components/auth/AuthContext";
-import { checkForUpdatesManually } from "@/components/update/UpdateManager";
-import { relaunch } from "@tauri-apps/plugin-process";
-import { check } from "@tauri-apps/plugin-updater";
+import { checkForUpdatesManually, getCurrentVersion } from "@/components/update/UpdateManager";
 
 export const Route = createFileRoute("/profile")({
   component: ProfilePage,
@@ -35,7 +33,7 @@ function ProfilePage() {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
-  const [currentVersion, setCurrentVersion] = useState<string>("");
+  const [currentVersion, setCurrentVersion] = useState<string>("Loading...");
 
   const firstName = user?.name?.split(" ")[0] || "";
   const lastName = user?.name?.split(" ").slice(1).join(" ") || "";
@@ -49,21 +47,11 @@ function ProfilePage() {
     lastName: lastName,
   });
 
-  // Get current app version
+  // Get current app version on mount
   useEffect(() => {
     const fetchVersion = async () => {
-      try {
-        const updateInfo = await check();
-        if (updateInfo) {
-          setCurrentVersion(updateInfo.currentVersion);
-        } else {
-          // If no update info available, try to get version from package.json or use fallback
-          setCurrentVersion("0.1.2"); // Fallback to version from tauri.conf.json
-        }
-      } catch (error) {
-        console.error("Failed to get app version:", error);
-        setCurrentVersion("0.1.2"); // Fallback to version from tauri.conf.json
-      }
+      const version = await getCurrentVersion();
+      setCurrentVersion(version);
     };
     fetchVersion();
   }, []);
@@ -117,7 +105,6 @@ function ProfilePage() {
   };
 
   const handleCancel = () => {
-    // Reset form to original values
     if (user) {
       const first = user.name?.split(" ")[0] || "";
       const last = user.name?.split(" ").slice(1).join(" ") || "";
@@ -129,20 +116,24 @@ function ProfilePage() {
     setIsEditing(false);
   };
 
-  // ✅ Manual update check function
+  // ✅ Manual update check with proper loading state
   const handleCheckForUpdates = async () => {
     setCheckingUpdates(true);
+    
     try {
       const result = await checkForUpdatesManually();
+      
       if (result.available) {
         toast.success(`Update available: v${result.version}`, {
-          description: "The update will be downloaded automatically.",
+          description: "A dialog will appear to install the update.",
+          duration: 5000,
         });
-        // The UpdateManager component will handle showing the dialog
-        relaunch(); // Reload to trigger UpdateManager
+        // The UpdateManager component will automatically show the dialog
+        window.location.reload(); // Trigger UpdateManager to check again
       } else {
         toast.success("You're on the latest version!", {
-          description: `Current version: v${result.currentVersion}`,
+          description: result.currentVersion ? `Current version: v${result.currentVersion}` : undefined,
+          duration: 3000,
         });
       }
     } catch (error) {
@@ -150,6 +141,7 @@ function ProfilePage() {
       const errorMessage = error instanceof Error ? error.message : String(error);
       toast.error("Update check failed", {
         description: errorMessage || "Please try again later.",
+        duration: 5000,
       });
     } finally {
       setCheckingUpdates(false);
@@ -326,11 +318,11 @@ function ProfilePage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between p-4 rounded-lg border">
+            <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
               <div>
                 <p className="font-medium">Current Version</p>
-                <p className="text-sm text-muted-foreground">
-                  {currentVersion}
+                <p className="text-sm text-muted-foreground mt-1">
+                  v{currentVersion}
                 </p>
               </div>
               <Button 
