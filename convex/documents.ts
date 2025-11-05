@@ -6,10 +6,11 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3
 import type { Doc, Id } from "./_generated/dataModel";
 import { generateDownloadUrl as generateS3DownloadUrl } from "./lib/s3";
 import { DealStatus, type DealStatusType } from "./lib/statuses";
-// Helper function for custom document path (inline since we can't import from web app)
-function generateCustomDocumentPath(dealershipId: string, dealId: string, fileName: string): string {
-  return `${dealershipId}/custom-documents/${dealId}/${fileName}`;
-}
+import {
+  generateCustomDocumentPath,
+  validateS3Key,
+  cleanS3Key
+} from "./lib/s3/document-paths";
 
 // S3 Configuration
 const s3Client = new S3Client({
@@ -266,13 +267,19 @@ export const generateCustomDocumentUploadUrl = action({
     const timestamp = Date.now();
     const sanitizedFileName = args.fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
     const uniqueFileName = `${timestamp}-${sanitizedFileName}`;
-    
-    // Generate S3 key for custom document
+
+    // Generate S3 key for custom document using centralized path generator
     const s3Key = generateCustomDocumentPath(
-      user.dealershipId,
+      user.dealershipId as Id<"dealerships">,
       args.dealId,
       uniqueFileName
     );
+
+    // Validate S3 key format
+    const validation = validateS3Key(s3Key);
+    if (!validation.valid) {
+      throw new Error(`Invalid S3 key format: ${validation.error}`);
+    }
 
     // Create file upload record directly
     const fileUploadId = await ctx.runMutation(api.documents.createFileUploadRecord, {
@@ -727,21 +734,28 @@ export const getDocumentPreviewUrl = action({
     console.log("Retrieved S3 key length:", document.s3Key.length);
     console.log("Retrieved S3 key ends with .pdf:", document.s3Key.endsWith('.pdf'));
 
-    // Validate and clean S3 key format
-    if (!document.s3Key.endsWith('.pdf')) {
-      console.error("Invalid S3 key format detected:", document.s3Key);
-      // Try to clean the S3 key by removing extra data after .pdf
-      const cleanS3Key = document.s3Key.includes('.pdf') 
-        ? document.s3Key.split('.pdf')[0] + '.pdf'
-        : document.s3Key;
-      console.log("Cleaned S3 key:", cleanS3Key);
-      
-      if (!cleanS3Key.endsWith('.pdf')) {
-        throw new Error("Invalid document S3 key format - does not end with .pdf");
+    // Clean and validate S3 key format using centralized utilities
+    const cleanedKey = cleanS3Key(document.s3Key);
+    const validation = validateS3Key(cleanedKey);
+
+    if (!validation.valid) {
+      console.error("Invalid S3 key format detected:", cleanedKey);
+      console.error("Validation error:", validation.error);
+
+      // Try to repair the key by removing extra data after .pdf
+      const repairedKey = cleanedKey.includes('.pdf')
+        ? cleanedKey.split('.pdf')[0] + '.pdf'
+        : cleanedKey;
+
+      const repairedValidation = validateS3Key(repairedKey);
+      if (!repairedValidation.valid) {
+        throw new Error(`Invalid document S3 key format: ${repairedValidation.error}`);
       }
-      
-      // Use the cleaned key
-      document.s3Key = cleanS3Key;
+
+      console.log("Repaired S3 key:", repairedKey);
+      document.s3Key = repairedKey;
+    } else {
+      document.s3Key = cleanedKey;
     }
 
     // Use the same S3 bucket as document generation

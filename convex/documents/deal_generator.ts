@@ -13,6 +13,11 @@ import {
 } from "../lib/pdf_data_preparer";
 import { generateDownloadUrl, generateUploadUrl } from "../lib/s3";
 import { DealStatus } from "../lib/statuses";
+import {
+  generateDealDocumentPath,
+  validateS3Key,
+  cleanS3Key
+} from "../lib/s3/document-paths";
 
 /**
  * Generate all documents for a deal
@@ -349,9 +354,19 @@ export const generateSingleDocument = action({
       preparedData.fields
     );
 
-    // Generate S3 key for filled document
-    const orgId = (deal as { orgId?: Id<"orgs"> }).orgId || (deal.dealershipId as unknown as Id<"dealerships">);
-    const s3Key = `org/${orgId}/deals/${args.dealId}/documents/${documentId.documentId}.pdf`;
+    // Generate S3 key for filled document using centralized path generator
+    const s3Key = generateDealDocumentPath(
+      deal.dealershipId as Id<"dealerships">,
+      args.dealId,
+      documentId.documentId,
+      "pdf"
+    );
+
+    // Validate S3 key format
+    const validation = validateS3Key(s3Key);
+    if (!validation.valid) {
+      throw new Error(`Invalid S3 key format: ${validation.error}`);
+    }
 
     // Log S3 key generation
     console.log("Generated S3 key (deal_generator):", s3Key);
@@ -475,14 +490,23 @@ export const updateDocumentWithGeneration = mutation({
       throw new Error("Document not found");
     }
 
-    // Log S3 key before storing
-    console.log("Storing S3 key (deal_generator):", args.s3Key);
-    console.log("S3 key length:", args.s3Key.length);
-    console.log("S3 key ends with .pdf:", args.s3Key.endsWith('.pdf'));
+    // Clean and validate S3 key before storing
+    const cleanedKey = cleanS3Key(args.s3Key);
+    const validation = validateS3Key(cleanedKey);
+
+    if (!validation.valid) {
+      console.error("Invalid S3 key format:", cleanedKey);
+      console.error("Validation error:", validation.error);
+      throw new Error(`Invalid S3 key format: ${validation.error}`);
+    }
+
+    console.log("Storing S3 key (deal_generator):", cleanedKey);
+    console.log("S3 key length:", cleanedKey.length);
+    console.log("S3 key ends with .pdf:", cleanedKey.endsWith('.pdf'));
 
     await ctx.db.patch(args.documentId, {
       status: "READY",
-      s3Key: args.s3Key.trim(), // Add trim() to remove any whitespace
+      s3Key: cleanedKey,
       fileSize: args.fileSize,
       documentType: args.documentType,
       name: args.name,

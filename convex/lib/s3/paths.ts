@@ -1,4 +1,13 @@
 // convex/lib/s3/paths.ts
+//
+// DEPRECATED FOR DOCUMENTS: This file uses the old org-based path structure
+//
+// For document paths, use the NEW centralized path generator:
+// See: convex/lib/s3/document-paths.ts
+//
+// This file is still used for non-document assets (vehicles, logos, profiles)
+// but should eventually be migrated to dealership-based paths for consistency
+//
 // S3 path generation utilities
 // Always uses org-based structure for consistency
 

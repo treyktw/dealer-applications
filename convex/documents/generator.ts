@@ -17,6 +17,11 @@ import {
   PDFRadioGroup,
 } from "pdf-lib";
 import { generateDownloadUrl, generateUploadUrl } from "../lib/s3";
+import {
+  generateDealDocumentPath,
+  validateS3Key,
+  cleanS3Key
+} from "../lib/s3/document-paths";
 
 /**
  * Authentication helper that works for both desktop and web apps
@@ -321,9 +326,20 @@ export const generateDocument = action({
         document.data
       );
 
-      // Generate S3 key for filled document
-      const orgId = document.orgId || document.dealershipId;
-      const s3Key = `org/${orgId}/docs/instances/${document.dealId}/${document._id}.pdf`;
+      // Generate S3 key for filled document using centralized path generator
+      const s3Key = generateDealDocumentPath(
+        document.dealershipId as Id<"dealerships">,
+        document.dealId,
+        document._id,
+        "pdf"
+      );
+
+      // Validate S3 key format
+      const validation = validateS3Key(s3Key);
+      if (!validation.valid) {
+        throw new Error(`Invalid S3 key format: ${validation.error}`);
+      }
+
       // Log S3 key generation
       // console.log("Generated S3 key:", s3Key);
       // console.log("S3 key length:", s3Key.length);
@@ -812,14 +828,23 @@ export const markDocumentGenerated = mutation({
       throw new Error("Document not found");
     }
 
-    // Log S3 key before storing
-    console.log("Storing S3 key:", args.s3Key);
-    console.log("S3 key length:", args.s3Key.length);
-    console.log("S3 key ends with .pdf:", args.s3Key.endsWith(".pdf"));
+    // Clean and validate S3 key before storing
+    const cleanedKey = cleanS3Key(args.s3Key);
+    const validation = validateS3Key(cleanedKey);
+
+    if (!validation.valid) {
+      console.error("Invalid S3 key format:", cleanedKey);
+      console.error("Validation error:", validation.error);
+      throw new Error(`Invalid S3 key format: ${validation.error}`);
+    }
+
+    console.log("Storing S3 key:", cleanedKey);
+    console.log("S3 key length:", cleanedKey.length);
+    console.log("S3 key ends with .pdf:", cleanedKey.endsWith(".pdf"));
 
     await ctx.db.patch(args.documentId, {
       status: "READY",
-      s3Key: args.s3Key.trim(), // Add trim() to remove any whitespace
+      s3Key: cleanedKey,
       fileSize: args.fileSize,
       updatedAt: Date.now(),
     });
@@ -1329,10 +1354,20 @@ export const updateDocumentFieldValues = action({
         args.fieldValues
       );
 
-      // Generate new S3 key (versioned)
+      // Generate new S3 key (versioned) using centralized path generator
       const timestamp = Date.now();
-      const orgId = document.orgId || document.dealershipId;
-      const s3Key = `org/${orgId}/docs/instances/${document.dealId}/${document._id}-v${timestamp}.pdf`;
+      const s3Key = generateDealDocumentPath(
+        document.dealershipId as Id<"dealerships">,
+        document.dealId,
+        `${document._id}-v${timestamp}`,
+        "pdf"
+      );
+
+      // Validate S3 key format
+      const validation = validateS3Key(s3Key);
+      if (!validation.valid) {
+        throw new Error(`Invalid S3 key format: ${validation.error}`);
+      }
 
       // Get upload URL
       const uploadUrl = await generateUploadUrl(
@@ -1631,12 +1666,19 @@ export const getDocumentUploadUrl = action({
       );
     }
 
-    // Generate S3 key
-    const s3Key = generateDocumentS3Key(
+    // Generate S3 key using centralized path generator
+    const s3Key = generateDealDocumentPath(
       document.dealershipId,
       document.dealId,
-      args.documentId
+      args.documentId,
+      "pdf"
     );
+
+    // Validate S3 key format
+    const validation = validateS3Key(s3Key);
+    if (!validation.valid) {
+      throw new Error(`Invalid S3 key format: ${validation.error}`);
+    }
 
     // Generate presigned upload URL
     const uploadUrl = await generateUploadUrl(
@@ -1708,16 +1750,9 @@ export const updateDocumentFields = mutation({
 
 // ==================== HELPER FUNCTIONS ====================
 
-/**
- * Generate S3 key for document
- */
-function generateDocumentS3Key(
-  dealershipId: Id<"dealerships">,
-  dealId: Id<"deals">,
-  documentId: Id<"documentInstances">
-): string {
-  return `org/${dealershipId}/docs/instances/${dealId}/${documentId}.pdf`;
-}
+// S3 key generation now handled by centralized path generator
+// See: lib/s3/document-paths.ts
+
 // Signature/signing utilities removed
 
 export {

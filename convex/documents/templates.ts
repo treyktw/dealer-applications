@@ -9,6 +9,11 @@ import {
   assertDealershipAccess,
 } from "../guards";
 import { generateUploadUrl, generateDownloadUrl, deleteFile } from "../lib/s3";
+import {
+  generateTemplatePath,
+  validateS3Key,
+  cleanS3Key
+} from "../lib/s3/document-paths";
 
 /**
  * Create a new document template
@@ -60,14 +65,25 @@ export const createTemplate = mutation({
 
     const version = allVersions.length + 1;
 
-    // Generate S3 key using new org-based path structure
-    const orgId = dealership.orgId || args.dealershipId; // Fallback to dealership if no org
+    // Generate S3 key using centralized path generator
     const timestamp = Date.now();
     const sanitizedFileName = args.fileName
       .replace(/[^a-zA-Z0-9.-]/g, "-")
       .toLowerCase();
 
-    const s3Key = `org/${orgId}/docs/templates/${args.category}/v${version}-${timestamp}-${sanitizedFileName}`;
+    // Create a unique template ID with version and timestamp
+    const templateIdentifier = `${args.category}-v${version}-${timestamp}-${sanitizedFileName}`;
+    const s3Key = generateTemplatePath(
+      args.dealershipId,
+      templateIdentifier.replace(/\.pdf$/i, ""), // Remove .pdf if present, will be added by generator
+      "pdf"
+    );
+
+    // Validate S3 key format
+    const validation = validateS3Key(s3Key);
+    if (!validation.valid) {
+      throw new Error(`Invalid S3 key format: ${validation.error}`);
+    }
 
     // Create template record (initially inactive until PDF is uploaded)
     const templateId = await ctx.db.insert("documentTemplates", {
