@@ -12,10 +12,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, ShoppingCart, CheckCircle2, FileText } from "lucide-react";
+import {
+  ShoppingCart,
+  CheckCircle2,
+  FileText,
+  Shield,
+  Clock,
+  Star,
+  Sparkles,
+  ArrowRight,
+  Package,
+} from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 interface PageProps {
   params: {
@@ -26,23 +38,25 @@ interface PageProps {
 export default function DocumentPackDetailPage({ params }: PageProps) {
   const router = useRouter();
   const packId = params.id as Id<"document_pack_templates">;
-
-  // Get current user's dealership (you'll need to implement this query)
-  // For now using a placeholder - replace with actual query
-  const dealershipId = "placeholder" as Id<"dealerships">;
+  // Get current user's dealership
+  const { user } = useCurrentUser();
+  const dealershipId = user?.dealershipId as Id<"dealerships"> | undefined;
 
   // Fetch pack preview
-  const packPreview = useQuery(api.dealerDocumentPackPurchases.previewPack, {
-    packId,
-  });
+  const packPreview = useQuery(
+    api.dealerDocumentPackPurchases.previewPack,
+    packId ? { packId } : "skip"
+  );
 
   // Check ownership
   const ownership = useQuery(
     api.dealerDocumentPackPurchases.checkOwnership,
-    {
-      dealershipId,
-      packId,
-    }
+    dealershipId && packId
+      ? {
+          dealershipId,
+          packId,
+        }
+      : "skip"
   );
 
   const createCheckoutSession = useAction(
@@ -54,7 +68,13 @@ export default function DocumentPackDetailPage({ params }: PageProps) {
   };
 
   const handlePurchase = async () => {
+    if (!dealershipId) {
+      toast.error("No dealership found. Please contact support.");
+      return;
+    }
+
     try {
+      toast.loading("Redirecting to checkout...", { id: "checkout" });
       const result = await createCheckoutSession({
         packId,
         dealershipId,
@@ -62,23 +82,46 @@ export default function DocumentPackDetailPage({ params }: PageProps) {
         cancelUrl: `${window.location.origin}/marketplace/document-packs/${packId}`,
       });
 
+      toast.dismiss("checkout");
       if (result.sessionUrl) {
-        // Redirect to Stripe Checkout
         window.location.href = result.sessionUrl;
       }
     } catch (error) {
+      toast.dismiss("checkout");
       toast.error(
         error instanceof Error ? error.message : "Failed to start checkout"
       );
     }
   };
 
+
+  if (!dealershipId) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Card className="max-w-md">
+          <CardContent className="pt-6 text-center">
+            <Shield className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              No Dealership Found
+            </h3>
+            <p className="text-gray-600 mb-4">
+              Please contact support to associate your account with a dealership.
+            </p>
+            <Button onClick={() => router.push("/dashboard")}>
+              Back to Dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (packPreview === undefined || ownership === undefined) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading pack details...</p>
+          <p className="text-gray-600">Loading pack details...</p>
         </div>
       </div>
     );
@@ -86,16 +129,21 @@ export default function DocumentPackDetailPage({ params }: PageProps) {
 
   if (!packPreview) {
     return (
-      <div className="text-center py-12">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Pack Not Found
-        </h2>
-        <p className="text-gray-600 mb-4">
-          The document pack you're looking for doesn't exist.
-        </p>
-        <Button onClick={() => router.push("/marketplace/document-packs")}>
-          Back to Marketplace
-        </Button>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Card className="max-w-md">
+          <CardContent className="pt-6 text-center">
+            <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              Pack Not Found
+            </h2>
+            <p className="text-gray-600 mb-4">
+              The document pack you&apos;re looking for doesn&apos;t exist.
+            </p>
+            <Button onClick={() => router.push("/marketplace/document-packs")}>
+              Back to Document Packs
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -104,61 +152,66 @@ export default function DocumentPackDetailPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center space-x-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => router.back()}
-          className="flex items-center"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back
-        </Button>
-      </div>
+      {/* Breadcrumbs are handled by the layout */}
 
-      {/* Pack Information */}
+      {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Details */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Main Details */}
+          {/* Hero Section */}
           <Card>
             <CardHeader>
               <div className="flex items-start justify-between">
-                <div>
-                  <CardTitle className="text-2xl">{packPreview.name}</CardTitle>
-                  <CardDescription className="mt-2">
-                    {packPreview.description}
-                  </CardDescription>
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Sparkles className="w-6 h-6 text-blue-600" />
+                    <CardTitle className="text-3xl">{packPreview.name}</CardTitle>
+                  </div>
+                  {isOwned && (
+                    <Badge className="bg-green-600 mt-2">
+                      <CheckCircle2 className="w-3 h-3 mr-1" />
+                      You Own This Pack
+                    </Badge>
+                  )}
                 </div>
-                {isOwned && (
-                  <Badge className="bg-green-600">
-                    <CheckCircle2 className="w-4 h-4 mr-1" />
-                    Owned
-                  </Badge>
-                )}
               </div>
+              <CardDescription className="text-base mt-4">
+                {packPreview.description}
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Jurisdiction</p>
-                  <Badge variant="outline" className="capitalize">
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <div className="flex items-center gap-2 text-blue-600 mb-1">
+                    <FileText className="w-4 h-4" />
+                    <span className="text-sm font-medium">Documents</span>
+                  </div>
+                  <p className="text-2xl font-bold">{packPreview.documentCount}</p>
+                </div>
+                <div className="p-4 bg-purple-50 rounded-lg">
+                  <div className="flex items-center gap-2 text-purple-600 mb-1">
+                    <Shield className="w-4 h-4" />
+                    <span className="text-sm font-medium">Jurisdiction</span>
+                  </div>
+                  <p className="text-lg font-bold capitalize">
                     {packPreview.jurisdiction}
-                  </Badge>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Pack Type</p>
-                  <span className="capitalize">
-                    {packPreview.packType.replace(/_/g, " ")}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">
-                    Documents Included
                   </p>
-                  <span className="font-medium">
-                    {packPreview.documentCount} documents
-                  </span>
+                </div>
+                <div className="p-4 bg-green-50 rounded-lg">
+                  <div className="flex items-center gap-2 text-green-600 mb-1">
+                    <Star className="w-4 h-4" />
+                    <span className="text-sm font-medium">Type</span>
+                  </div>
+                  <p className="text-lg font-bold capitalize">
+                    {packPreview.packType.replace(/_/g, " ")}
+                  </p>
+                </div>
+                <div className="p-4 bg-orange-50 rounded-lg">
+                  <div className="flex items-center gap-2 text-orange-600 mb-1">
+                    <Clock className="w-4 h-4" />
+                    <span className="text-sm font-medium">Delivery</span>
+                  </div>
+                  <p className="text-lg font-bold">Instant</p>
                 </div>
               </div>
             </CardContent>
@@ -167,22 +220,32 @@ export default function DocumentPackDetailPage({ params }: PageProps) {
           {/* Documents List */}
           <Card>
             <CardHeader>
-              <CardTitle>Included Documents</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                Included Documents
+              </CardTitle>
               <CardDescription>
-                These documents will be available for use in your deals
+                All documents included in this pack are ready to use in your deals
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {packPreview.documentList.map((doc: any, index: number) => (
+                {packPreview.documentList.map((doc: { name: string; type: string; required: boolean }) => (
                   <div
-                    key={index}
-                    className="flex items-start space-x-3 p-3 border rounded-lg"
+                    key={doc.name}
+                    className="flex items-start space-x-4 p-4 border rounded-lg hover:bg-gray-50 transition-colors"
                   >
-                    <FileText className="w-5 h-5 text-blue-600 mt-0.5" />
+                    <div className="bg-blue-100 rounded-lg p-2">
+                      <FileText className="w-5 h-5 text-blue-600" />
+                    </div>
                     <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-medium">{doc.name}</h4>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="font-semibold text-lg">{doc.name}</h4>
+                          <p className="text-sm text-gray-600 capitalize mt-1">
+                            {doc.type.replace(/_/g, " ")}
+                          </p>
+                        </div>
                         {doc.required && (
                           <Badge
                             variant="outline"
@@ -192,85 +255,149 @@ export default function DocumentPackDetailPage({ params }: PageProps) {
                           </Badge>
                         )}
                       </div>
-                      <p className="text-sm text-gray-600 capitalize mt-1">
-                        {doc.type.replace(/_/g, " ")}
-                      </p>
                     </div>
                   </div>
                 ))}
               </div>
             </CardContent>
           </Card>
+
+          {/* Features/Benefits */}
+          <Card>
+            <CardHeader>
+              <CardTitle>What You Get</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-semibold">Ready to Use</h4>
+                    <p className="text-sm text-gray-600">
+                      All documents are pre-configured and ready for your deals
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-semibold">Compliance Guaranteed</h4>
+                    <p className="text-sm text-gray-600">
+                      All documents meet state and federal requirements
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-semibold">Lifetime Access</h4>
+                    <p className="text-sm text-gray-600">
+                      Use these documents in unlimited deals
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-semibold">Auto-Updates</h4>
+                    <p className="text-sm text-gray-600">
+                      Receive updates when regulations change
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Sidebar - Purchase */}
+        {/* Right Column - Purchase Card */}
         <div className="lg:col-span-1">
-          <Card className="sticky top-6">
-            <CardHeader>
-              <CardTitle className="text-3xl text-center text-blue-600">
-                {formatPrice(packPreview.price)}
-              </CardTitle>
-              <CardDescription className="text-center">
-                One-time purchase
-              </CardDescription>
+          <Card className="sticky top-6 border-2">
+            <CardHeader className="text-center pb-4">
+              <div className="space-y-2">
+                <div className="text-4xl font-bold text-blue-600">
+                  {formatPrice(packPreview.price)}
+                </div>
+                <CardDescription className="text-base">
+                  One-time purchase
+                </CardDescription>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <Separator />
+            <CardContent className="space-y-4 pt-6">
               {isOwned ? (
                 <div className="text-center space-y-4">
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <CheckCircle2 className="w-12 h-12 text-green-600 mx-auto mb-2" />
-                    <p className="font-medium text-green-900">
-                      You own this pack
-                    </p>
-                    <p className="text-sm text-green-700 mt-1">
-                      Available for use in all your deals
+                  <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6">
+                    <CheckCircle2 className="w-12 h-12 text-green-600 mx-auto mb-3" />
+                    <h3 className="font-semibold text-green-900 mb-2">
+                      You Own This Pack
+                    </h3>
+                    <p className="text-sm text-green-700">
+                      Available for use in all your deals. Access it anytime from your
+                      document packs.
                     </p>
                   </div>
                   <Button
-                    variant="outline"
                     className="w-full"
-                    onClick={() =>
-                      router.push("/settings/my-document-packs")
-                    }
+                    onClick={() => router.push("/marketplace/document-packs")}
                   >
-                    View My Packs
+                    Browse More Packs
+                    <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+                <>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
                     <div className="flex items-center justify-between text-sm">
-                      <span>Documents:</span>
-                      <span className="font-medium">
+                      <span className="text-gray-600">Documents:</span>
+                      <span className="font-semibold">
                         {packPreview.documentCount}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span>Jurisdiction:</span>
-                      <span className="font-medium capitalize">
+                      <span className="text-gray-600">Jurisdiction:</span>
+                      <span className="font-semibold capitalize">
                         {packPreview.jurisdiction}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span>Type:</span>
-                      <span className="font-medium capitalize">
+                      <span className="text-gray-600">Type:</span>
+                      <span className="font-semibold capitalize">
                         {packPreview.packType.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between font-semibold">
+                      <span>Total:</span>
+                      <span className="text-lg text-blue-600">
+                        {formatPrice(packPreview.price)}
                       </span>
                     </div>
                   </div>
 
                   <Button
-                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-lg py-6"
                     onClick={handlePurchase}
                   >
-                    <ShoppingCart className="w-4 h-4 mr-2" />
+                    <ShoppingCart className="w-5 h-5 mr-2" />
                     Purchase Now
                   </Button>
 
-                  <p className="text-xs text-gray-600 text-center">
-                    Secure payment powered by Stripe
-                  </p>
-                </div>
+                  <div className="space-y-2 text-xs text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-green-600" />
+                      <span>Secure payment powered by Stripe</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-green-600" />
+                      <span>Instant access after purchase</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-green-600" />
+                      <span>30-day money-back guarantee</span>
+                    </div>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>

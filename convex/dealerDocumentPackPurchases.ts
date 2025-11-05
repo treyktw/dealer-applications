@@ -3,9 +3,9 @@
 
 import { v } from "convex/values";
 import { mutation, query, action, internalMutation } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
-import { internal } from "./_generated/api";
+import { api } from "./_generated/api";
 import { stripe } from "./lib/stripe/client";
+import type { Doc } from "./_generated/dataModel";
 
 // ============================================================================
 // DEALER - Browse & Purchase
@@ -167,12 +167,12 @@ export const createCheckoutSession = action({
     successUrl: v.string(),
     cancelUrl: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ success: boolean; sessionId: string; sessionUrl: string | null }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
     // Get pack details
-    const pack = await ctx.runQuery(internal.documentPackTemplates.getById, {
+    const pack: Doc<"document_pack_templates"> | null = await ctx.runQuery(api.documentPackTemplates.getById, {
       packId: args.packId,
     });
 
@@ -181,7 +181,7 @@ export const createCheckoutSession = action({
 
     // Check if dealer already owns this pack
     const ownership = await ctx.runQuery(
-      internal.dealerDocumentPackPurchases.checkOwnership,
+      api.dealerDocumentPackPurchases.checkOwnership,
       {
         dealershipId: args.dealershipId,
         packId: args.packId,
@@ -193,8 +193,8 @@ export const createCheckoutSession = action({
     }
 
     // Get dealership for customer info
-    const dealership = await ctx.runQuery(
-      internal.dealerships.getById,
+    const dealership: Doc<"dealerships"> | null = await ctx.runQuery(
+      api.dealerships.getDealershipById,
       { dealershipId: args.dealershipId }
     );
 

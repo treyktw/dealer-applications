@@ -18,6 +18,7 @@ import {
   UserCog,
   Activity,
   type LucideIcon,
+  Package,
 } from "lucide-react";
 
 export interface SettingsItem {
@@ -211,6 +212,15 @@ export const settingsItems: SettingsItem[] = [
     href: "/settings/document-templates",
     category: "api",
     keywords: ["templates", "documents", "pdf", "forms", "upload", "bill of sale"],
+  },
+  {
+    id: "document-packs",
+    title: "Document Packs",
+    description: "Purchase and manage document packs for your dealership",
+    icon: Package,
+    href: "/marketplace/document-packs",
+    category: "api",
+    keywords: ["packs", "documents", "pdf", "forms", "purchase", "bill of sale"],
   },
 
   // BILLING CATEGORY

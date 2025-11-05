@@ -2,7 +2,7 @@
 // Master Admin functions for managing document pack templates in the marketplace
 
 import { v } from "convex/values";
-import { mutation, query, internalMutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { stripe } from "./lib/stripe/client";
 import { requireMasterAdmin } from "./lib/helpers/auth_helpers";
@@ -132,7 +132,28 @@ export const update = mutation({
     if (!pack) throw new Error("Pack not found");
 
     // Build update object
-    const updates: any = {
+    const updates: Partial<{
+      name: string;
+      description: string;
+      price: number;
+      isActive: boolean;
+      documents: Array<{
+        type: string;
+        name: string;
+        templateContent: string;
+        fillableFields: string[];
+        required: boolean;
+        order: number;
+      }>;
+      version: number;
+      changelog: Array<{
+        version: number;
+        changes: string;
+        updatedAt: number;
+        updatedBy: Id<"users">;
+      }>;
+      updatedAt: number;
+    }> = {
       updatedAt: Date.now(),
     };
 
@@ -151,7 +172,7 @@ export const update = mutation({
         version: pack.version + 1,
         changes: args.changeNote || "Documents updated",
         updatedAt: Date.now(),
-        updatedBy: user._id,
+        updatedBy: user._id as Id<"users">,
       };
 
       updates.changelog = [...(pack.changelog || []), changelogEntry];
@@ -267,7 +288,7 @@ export const getAnalytics = query({
       const purchases = await ctx.db
         .query("dealer_document_pack_purchases")
         .withIndex("by_pack_template", (q) =>
-          q.eq("packTemplateId", args.packId!)
+          q.eq("packTemplateId", args.packId as Id<"document_pack_templates">)
         )
         .collect();
 
@@ -317,7 +338,7 @@ export const seedInitialPacks = mutation({
   args: {
     createStripeProducts: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, _args) => {
     // Verify master admin access
     const user = await requireMasterAdmin(ctx);
 
@@ -343,7 +364,7 @@ export const seedInitialPacks = mutation({
   <p><strong>Year:</strong> {{year}} <strong>Make:</strong> {{make}} <strong>Model:</strong> {{model}}</p>
   <p><strong>Seller:</strong> {{sellerName}}</p>
   <p><strong>Buyer:</strong> {{buyerName}}</p>
-  <p><strong>Sale Price:</strong> ${{salePrice}}</p>
+  <p><strong>Sale Price:</strong> ${"$"}{{salePrice}}</p>
   <p><strong>Date:</strong> {{saleDate}}</p>
 </div>`,
           fillableFields: [
