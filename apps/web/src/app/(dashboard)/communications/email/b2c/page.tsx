@@ -1,7 +1,7 @@
 // apps/web/src/app/(dashboard)/communications/email/b2c/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useId } from "react";
 import { useQuery, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -15,20 +15,34 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Mail, Send, Users, FileText, History } from "lucide-react";
+import { Mail, Send, Users, History } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+
+// Email preview component to handle HTML rendering
+// This is safe because it's only used for previewing user-entered email content
+function EmailPreview({ content }: { content: string }) {
+  // Strip HTML tags for a simple text preview, or render as-is if needed
+  // For now, we'll show a sanitized version
+  const textContent = content.replace(/<[^>]*>/g, "").trim();
+  
+  return (
+    <div className="text-sm text-gray-700 whitespace-pre-wrap">
+      {textContent || content}
+    </div>
+  );
+}
 
 export default function B2CEmailPage() {
+  const fromEmailId = useId();
+  const fromNameId = useId();
+  const replyToId = useId();
+  const subjectId = useId();
+  const messageId = useId();
+
   const [selectedClients, setSelectedClients] = useState<Id<"clients">[]>([]);
   const [subject, setSubject] = useState("");
   const [htmlContent, setHtmlContent] = useState("");
@@ -37,17 +51,28 @@ export default function B2CEmailPage() {
   const [replyTo, setReplyTo] = useState("");
   const [isSending, setIsSending] = useState(false);
 
-  // TODO: Get current user's dealership
-  const dealershipId = "placeholder" as Id<"dealerships">;
+  // Get current user's dealership
+  const { user } = useCurrentUser();
+  const dealershipId = user?.dealershipId as Id<"dealerships"> | undefined;
 
   // Fetch clients for the dealership
-  const clients = useQuery(api.clients.list, { dealershipId });
+  const clientsResult = useQuery(
+    api.clients.listClients,
+    dealershipId ? { dealershipId: dealershipId as string } : "skip"
+  );
+  
+  const clients = clientsResult?.data || [];
 
   // Fetch email history
-  const emailHistory = useQuery(api.emailService.getEmailHistory, {
-    dealershipId,
-    limit: 20,
-  });
+  const emailHistory = useQuery(
+    api.emailService.getEmailHistory,
+    dealershipId
+      ? {
+          dealershipId,
+          limit: 20,
+        }
+      : "skip"
+  );
 
   const sendToClients = useAction(api.emailService.sendToClients);
 
@@ -60,7 +85,7 @@ export default function B2CEmailPage() {
   };
 
   const handleSelectAll = () => {
-    if (!clients) return;
+    if (!clients || clients.length === 0) return;
     if (selectedClients.length === clients.length) {
       setSelectedClients([]);
     } else {
@@ -69,6 +94,11 @@ export default function B2CEmailPage() {
   };
 
   const handleSend = async () => {
+    if (!dealershipId) {
+      toast.error("No dealership found. Please contact support.");
+      return;
+    }
+
     if (selectedClients.length === 0) {
       toast.error("Please select at least one client");
       return;
@@ -106,6 +136,24 @@ export default function B2CEmailPage() {
       setIsSending(false);
     }
   };
+
+  if (!dealershipId) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Card className="max-w-md">
+          <CardContent className="pt-6 text-center">
+            <Mail className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              No Dealership Found
+            </h3>
+            <p className="text-gray-600 mb-4">
+              Please contact support to associate your account with a dealership.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -152,14 +200,14 @@ export default function B2CEmailPage() {
                     size="sm"
                     onClick={handleSelectAll}
                   >
-                    {selectedClients.length === clients?.length
+                    {selectedClients.length === clients.length
                       ? "Deselect All"
                       : "Select All"}
                   </Button>
                 </div>
 
                 <div className="max-h-96 overflow-y-auto space-y-2 border rounded-lg p-2">
-                  {clients === undefined ? (
+                  {clientsResult === undefined ? (
                     <p className="text-sm text-gray-600 text-center py-4">
                       Loading clients...
                     </p>
@@ -168,32 +216,34 @@ export default function B2CEmailPage() {
                       No clients found
                     </p>
                   ) : (
-                    clients.map((client) => (
-                      <div
-                        key={client._id}
-                        className={`flex items-center space-x-2 p-2 rounded cursor-pointer hover:bg-gray-100 ${
-                          selectedClients.includes(client._id)
-                            ? "bg-blue-50 border border-blue-300"
-                            : "border border-transparent"
-                        }`}
-                        onClick={() => handleSelectClient(client._id)}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedClients.includes(client._id)}
-                          onChange={() => {}}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {client.name}
-                          </p>
-                          <p className="text-xs text-gray-600 truncate">
-                            {client.email}
-                          </p>
-                        </div>
-                      </div>
-                    ))
+                    clients.map((client) => {
+                      const clientName = `${client.firstName || ""} ${client.lastName || ""}`.trim() || client.email || "Unknown";
+                      return (
+                        <label
+                          key={client._id}
+                          className={`flex items-center space-x-2 p-2 rounded cursor-pointer hover:bg-gray-100 ${
+                            selectedClients.includes(client._id)
+                              ? "bg-blue-50 border border-blue-300"
+                              : "border border-transparent"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedClients.includes(client._id)}
+                            onChange={() => handleSelectClient(client._id)}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {clientName}
+                            </p>
+                            <p className="text-xs text-gray-600 truncate">
+                              {client.email || "No email"}
+                            </p>
+                          </div>
+                        </label>
+                      );
+                    })
                   )}
                 </div>
               </CardContent>
@@ -211,9 +261,9 @@ export default function B2CEmailPage() {
                 {/* Sender Settings */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="fromEmail">From Email (Optional)</Label>
+                    <Label htmlFor={fromEmailId}>From Email (Optional)</Label>
                     <Input
-                      id="fromEmail"
+                      id={fromEmailId}
                       type="email"
                       value={fromEmail}
                       onChange={(e) => setFromEmail(e.target.value)}
@@ -225,9 +275,9 @@ export default function B2CEmailPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="fromName">From Name (Optional)</Label>
+                    <Label htmlFor={fromNameId}>From Name (Optional)</Label>
                     <Input
-                      id="fromName"
+                      id={fromNameId}
                       value={fromName}
                       onChange={(e) => setFromName(e.target.value)}
                       placeholder="Your Dealership"
@@ -236,9 +286,9 @@ export default function B2CEmailPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="replyTo">Reply To (Optional)</Label>
+                  <Label htmlFor={replyToId}>Reply To (Optional)</Label>
                   <Input
-                    id="replyTo"
+                    id={replyToId}
                     type="email"
                     value={replyTo}
                     onChange={(e) => setReplyTo(e.target.value)}
@@ -248,9 +298,9 @@ export default function B2CEmailPage() {
 
                 {/* Subject */}
                 <div className="space-y-2">
-                  <Label htmlFor="subject">Subject *</Label>
+                  <Label htmlFor={subjectId}>Subject *</Label>
                   <Input
-                    id="subject"
+                    id={subjectId}
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
                     placeholder="Special offer just for you!"
@@ -260,9 +310,9 @@ export default function B2CEmailPage() {
 
                 {/* Message */}
                 <div className="space-y-2">
-                  <Label htmlFor="message">Message *</Label>
+                  <Label htmlFor={messageId}>Message *</Label>
                   <Textarea
-                    id="message"
+                    id={messageId}
                     value={htmlContent}
                     onChange={(e) => setHtmlContent(e.target.value)}
                     placeholder="Write your email message here..."
@@ -276,18 +326,18 @@ export default function B2CEmailPage() {
                 </div>
 
                 {/* Preview */}
-                <div className="border rounded-lg p-4 bg-gray-50">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">
-                    Preview
-                  </h4>
-                  <div className="bg-white border rounded p-4">
-                    <p className="text-sm font-semibold mb-2">{subject}</p>
-                    <div
-                      className="text-sm text-gray-700"
-                      dangerouslySetInnerHTML={{ __html: htmlContent }}
-                    />
+                {htmlContent && (
+                  <div className="border rounded-lg p-4 bg-gray-50">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">
+                      Preview
+                    </h4>
+                    <div className="bg-white border rounded p-4">
+                      <p className="text-sm font-semibold mb-2">{subject || "(No subject)"}</p>
+                      {/* Preview of HTML email content - safe as it's user-generated preview */}
+                      <EmailPreview content={htmlContent} />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Send Button */}
                 <div className="flex items-center justify-between pt-4 border-t">

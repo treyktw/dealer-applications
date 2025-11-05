@@ -2,10 +2,10 @@
 // Email service for B2B (platform to dealers) and B2C (dealers to clients)
 
 import { v } from "convex/values";
-import { action, mutation, query, internalMutation } from "./_generated/server";
-import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
-import { getCurrentUser, requireUser } from "./lib/helpers/auth_helpers";
+import { action, query, internalMutation } from "./_generated/server";
+import { internal, api } from "./_generated/api";
+import type { Id, Doc } from "./_generated/dataModel";
+import { getCurrentUser } from "./lib/helpers/auth_helpers";
 import {
   resend,
   sendEmail,
@@ -48,7 +48,7 @@ export const sendSingleEmail = action({
     let text = args.textContent;
 
     if (args.templateId) {
-      const template = await ctx.runQuery(internal.emailService.getTemplateById, {
+      const template = await ctx.runQuery(api.emailService.getTemplateById, {
         templateId: args.templateId as Id<"email_templates">,
       });
 
@@ -139,19 +139,27 @@ export const sendToDealershipOwners = action({
     templateVariables: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
-    const emails: any[] = [];
+    type EmailPayload = {
+      from: string;
+      to: string;
+      subject: string;
+      html?: string;
+      replyTo: string;
+      tags: Array<{ name: string; value: string }>;
+    };
+    const emails: EmailPayload[] = [];
 
     // Get all dealerships and their owners
     for (const dealershipId of args.dealershipIds) {
       const dealership = await ctx.runQuery(
-        internal.emailService.getDealership,
+        api.emailService.getDealership,
         { dealershipId }
       );
 
       if (!dealership) continue;
 
       // Get dealership owner(s)
-      const owners = await ctx.runQuery(internal.emailService.getDealershipOwners, {
+      const owners = await ctx.runQuery(api.emailService.getDealershipOwners, {
         dealershipId,
       });
 
@@ -169,7 +177,7 @@ export const sendToDealershipOwners = action({
         let html = args.htmlContent;
         if (args.templateId) {
           const template = await ctx.runQuery(
-            internal.emailService.getTemplateById,
+            api.emailService.getTemplateById,
             { templateId: args.templateId as Id<"email_templates"> }
           );
           if (template) {
@@ -201,6 +209,8 @@ export const sendToDealershipOwners = action({
     const result = await sendBatchEmails(emails);
 
     // Record sends
+    // Resend batch.send returns data as an array of email results
+    const resultData = result.data ? (result.data as unknown as Array<{ id?: string }>) : undefined;
     for (let i = 0; i < emails.length; i++) {
       await ctx.runMutation(internal.emailService.recordEmailSend, {
         recipientEmail: emails[i].to,
@@ -208,7 +218,7 @@ export const sendToDealershipOwners = action({
         subject: emails[i].subject,
         fromEmail: EMAIL_CONFIG.b2b.fromEmail,
         fromName: EMAIL_CONFIG.b2b.fromName,
-        resendEmailId: result.data?.[i]?.id,
+        resendEmailId: resultData?.[i]?.id,
         status: "sent",
       });
     }
@@ -230,15 +240,15 @@ export const sendToAllDealerships = action({
     templateId: v.optional(v.string()),
     templateVariables: v.optional(v.any()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ success: boolean; sent: number }> => {
     // Get all active dealerships
-    const dealerships = await ctx.runQuery(
-      internal.emailService.getAllDealerships,
+    const dealerships: Doc<"dealerships">[] = await ctx.runQuery(
+      api.emailService.getAllDealerships,
       {}
     );
 
-    return await ctx.runAction(internal.emailService.sendToDealershipOwners, {
-      dealershipIds: dealerships.map((d) => d._id),
+    return await ctx.runAction(api.emailService.sendToDealershipOwners, {
+      dealershipIds: dealerships.map((d: Doc<"dealerships">) => d._id),
       subject: args.subject,
       htmlContent: args.htmlContent,
       templateId: args.templateId,
@@ -267,7 +277,8 @@ export const sendToClients = action({
     replyTo: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await getCurrentUser(ctx);
+    // Get current user via query (we need QueryCtx for getCurrentUser)
+    const user = await ctx.runQuery(api.emailService.getCurrentUserForEmail);
     if (!user) throw new Error("Not authenticated");
 
     // Verify user belongs to dealership
@@ -275,16 +286,24 @@ export const sendToClients = action({
       throw new Error("Not authorized");
     }
 
-    const dealership = await ctx.runQuery(internal.emailService.getDealership, {
+    const dealership = await ctx.runQuery(api.emailService.getDealership, {
       dealershipId: args.dealershipId,
     });
 
     if (!dealership) throw new Error("Dealership not found");
 
-    const emails: any[] = [];
+    type EmailPayload = {
+      from: string;
+      to: string;
+      subject: string;
+      html?: string;
+      replyTo: string;
+      tags: Array<{ name: string; value: string }>;
+    };
+    const emails: EmailPayload[] = [];
 
     for (const clientId of args.clientIds) {
-      const client = await ctx.runQuery(internal.emailService.getClient, {
+      const client = await ctx.runQuery(api.emailService.getClient, {
         clientId,
       });
 
@@ -292,7 +311,7 @@ export const sendToClients = action({
 
       // Check email preferences
       const canSend = await ctx.runQuery(
-        internal.emailService.checkEmailPreference,
+        api.emailService.checkEmailPreference,
         {
           email: client.email,
           emailType: "marketing",
@@ -302,16 +321,17 @@ export const sendToClients = action({
       if (!canSend) continue;
 
       // Apply template variables
+      const clientName = `${client.firstName || ""} ${client.lastName || ""}`.trim() || client.email || "Customer";
       const variables = {
         ...args.templateVariables,
-        clientName: client.name,
+        clientName,
         clientEmail: client.email,
         dealershipName: dealership.name,
       };
 
       let html = args.htmlContent;
       if (args.templateId) {
-        const template = await ctx.runQuery(internal.emailService.getTemplateById, {
+        const template = await ctx.runQuery(api.emailService.getTemplateById, {
           templateId: args.templateId as Id<"email_templates">,
         });
         if (template) {
@@ -328,7 +348,7 @@ export const sendToClients = action({
         to: client.email,
         subject: replaceTemplateVariables(args.subject, variables),
         html,
-        replyTo: args.replyTo || dealership.contactEmail,
+        replyTo: args.replyTo || dealership.email || EMAIL_CONFIG.b2b.replyTo,
         tags: [
           { name: "type", value: "b2c" },
           { name: "dealership_id", value: args.dealershipId },
@@ -345,6 +365,8 @@ export const sendToClients = action({
     const result = await sendBatchEmails(emails);
 
     // Record sends
+    // Resend batch.send returns data as an array of email results
+    const resultData = result.data ? (result.data as unknown as Array<{ id?: string }>) : undefined;
     for (let i = 0; i < emails.length; i++) {
       await ctx.runMutation(internal.emailService.recordEmailSend, {
         recipientEmail: emails[i].to,
@@ -353,7 +375,7 @@ export const sendToClients = action({
         subject: emails[i].subject,
         fromEmail: args.fromEmail || EMAIL_CONFIG.b2b.fromEmail,
         fromName: args.fromName || dealership.name,
-        resendEmailId: result.data?.[i]?.id,
+        resendEmailId: resultData?.[i]?.id,
         status: "sent",
       });
     }
@@ -426,7 +448,7 @@ export const checkEmailPreference = query({
       v.literal("promotions")
     ),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<boolean> => {
     const preference = await ctx.db
       .query("email_preferences")
       .withIndex("by_email_type", (q) =>
@@ -441,6 +463,13 @@ export const checkEmailPreference = query({
     }
 
     return preference.isSubscribed;
+  },
+});
+
+export const getCurrentUserForEmail = query({
+  args: {},
+  handler: async (ctx) => {
+    return await getCurrentUser(ctx);
   },
 });
 

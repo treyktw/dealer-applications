@@ -38,7 +38,10 @@ import {
   Database,
   Globe,
   Shield,
-  Building
+  Building,
+  ShoppingCart,
+  Package,
+  Mail,
 } from "lucide-react";
 import { DealershipProvider } from "@/providers/dealership-provider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -110,6 +113,30 @@ const navItemsWithSubRoutes = [
       },
     ],
   },
+  {
+    href: "/marketplace",
+    label: "Marketplace",
+    icon: ShoppingCart,
+    subItems: [
+      {
+        href: "/marketplace/document-packs",
+        label: "Document Packs",
+        icon: Package,
+      },
+    ],
+  },
+  {
+    href: "/communications",
+    label: "Communications",
+    icon: Mail,
+    subItems: [
+      {
+        href: "/communications/email/b2c",
+        label: "Email",
+        icon: Mail,
+      },
+    ],
+  }
 ];
 
 // Settings navigation with subdomains
