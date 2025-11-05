@@ -658,37 +658,38 @@ export function getDealStatusLabel(status: string): string {
 
 ---
 
-## ❓ Questions for Clarification
+## ✅ User Requirements (Confirmed)
 
-Before starting implementation, please clarify:
+**Deal Statuses:**
+- ✅ Include financing-related statuses for future-proofing (FINANCING_PENDING, FINANCING_APPROVED, FINANCING_DECLINED)
+- ✅ Keep separate "DELIVERED" and "COMPLETED" statuses
+- ✅ All proposed statuses approved
 
-1. **Deal Statuses:**
-   - Do you need financing-related statuses? (FINANCING_PENDING, etc.)
-   - Should we have separate "DELIVERED" and "COMPLETED" statuses?
-   - What statuses are most important for your workflow?
+**Vehicle Statuses:**
+- ✅ Include WHOLESALE status for future-proofing (not actively needed now)
+- ✅ **REQUIRED:** TRADED status for trade-ins (actively used)
+- ✅ Include IN_TRANSIT status
 
-2. **Vehicle Statuses:**
-   - Do you wholesale vehicles? (need WHOLESALE status?)
-   - Do you accept trade-ins as inventory? (need TRADED status?)
-   - Do you need IN_TRANSIT status for auction purchases?
+**Client Statuses:**
+- ✅ All proposed sales funnel statuses approved
+- ✅ Include DO_NOT_CONTACT for compliance
+- ✅ REPEAT_CUSTOMER separate from CUSTOMER
 
-3. **Client Statuses:**
-   - How detailed should the sales funnel be?
-   - Do you want DO_NOT_CONTACT status for compliance?
-   - Should REPEAT_CUSTOMER be separate from CUSTOMER?
+**Status History:**
+- ✅ **REQUIRED:** Full status change history and audit trail
+- ✅ History needed for master admin functionality (future feature)
+- ✅ Keep indefinitely for audit purposes
 
-4. **Status History:**
-   - Do you need full status change history? (audit trail)
-   - How long should history be kept?
+**Automatic Transitions:**
+- ✅ **REQUIRED:** Status should auto-update:
+  - Deal status auto-update when docs generated
+  - Vehicle status auto-update when deal completes
+  - Client status auto-update when deal closes
+  - Desktop app changes sync to web app in real-time
 
-5. **Automatic Transitions:**
-   - Should deal status auto-update when docs generated?
-   - Should vehicle status auto-update when deal completes?
-   - Should client status auto-update when deal closes?
-
-6. **Backward Compatibility:**
-   - Are there existing integrations using current statuses?
-   - Can we break the API or need versioning?
+**Additional Requirements:**
+- ✅ Real-time sync between desktop and web app
+- ✅ When deal is signed/finalized on desktop → immediately reflect in web app
 
 ---
 
