@@ -17,7 +17,6 @@ import type * as clients from "../clients.js";
 import type * as crons from "../crons.js";
 import type * as dealerships from "../dealerships.js";
 import type * as deals from "../deals.js";
-import type * as debug from "../debug.js";
 import type * as deeplink from "../deeplink.js";
 import type * as desktopAuth from "../desktopAuth.js";
 import type * as desktop_subscriptions from "../desktop_subscriptions.js";
@@ -40,6 +39,10 @@ import type * as lib_data_transformer from "../lib/data_transformer.js";
 import type * as lib_expression_evaluator from "../lib/expression_evaluator.js";
 import type * as lib_helpers_auth_helpers from "../lib/helpers/auth_helpers.js";
 import type * as lib_pdf_data_preparer from "../lib/pdf_data_preparer.js";
+import type * as lib_stripe_client from "../lib/stripe/client.js";
+import type * as lib_stripe_index from "../lib/stripe/index.js";
+import type * as lib_stripe_products from "../lib/stripe/products.js";
+import type * as lib_stripe_status from "../lib/stripe/status.js";
 import type * as permissions from "../permissions.js";
 import type * as public_api from "../public_api.js";
 import type * as queries_templates from "../queries/templates.js";
@@ -50,6 +53,7 @@ import type * as settings from "../settings.js";
 import type * as stripe_webhook from "../stripe_webhook.js";
 import type * as subscriptions from "../subscriptions.js";
 import type * as users from "../users.js";
+import type * as webhooks from "../webhooks.js";
 
 import type {
   ApiFromModules,
@@ -75,7 +79,6 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   dealerships: typeof dealerships;
   deals: typeof deals;
-  debug: typeof debug;
   deeplink: typeof deeplink;
   desktopAuth: typeof desktopAuth;
   desktop_subscriptions: typeof desktop_subscriptions;
@@ -98,6 +101,10 @@ declare const fullApi: ApiFromModules<{
   "lib/expression_evaluator": typeof lib_expression_evaluator;
   "lib/helpers/auth_helpers": typeof lib_helpers_auth_helpers;
   "lib/pdf_data_preparer": typeof lib_pdf_data_preparer;
+  "lib/stripe/client": typeof lib_stripe_client;
+  "lib/stripe/index": typeof lib_stripe_index;
+  "lib/stripe/products": typeof lib_stripe_products;
+  "lib/stripe/status": typeof lib_stripe_status;
   permissions: typeof permissions;
   public_api: typeof public_api;
   "queries/templates": typeof queries_templates;
@@ -108,6 +115,7 @@ declare const fullApi: ApiFromModules<{
   stripe_webhook: typeof stripe_webhook;
   subscriptions: typeof subscriptions;
   users: typeof users;
+  webhooks: typeof webhooks;
 }>;
 declare const fullApiWithMounts: typeof fullApi;
 

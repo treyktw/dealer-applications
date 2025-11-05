@@ -4,6 +4,14 @@
 /**
  * Public Inventory API Client
  * Use this to fetch inventory data from the dealer admin system
+ * 
+ * IMPORTANT: The API is hosted on the Next.js admin application domain.
+ * 
+ * ✅ CORRECT: Use the admin app URL (e.g., https://dealer.universalautobrokers.net)
+ * ❌ WRONG: Don't use the dealership website URL (e.g., universalautobrokers.net)
+ * 
+ * The API routes are part of the Next.js admin app, not the dealership website.
+ * When calling from the dealership website, you must use the admin app's domain.
  */
 
 export interface InventoryVehicle {
@@ -135,17 +143,30 @@ export class InventoryAPIClient {
           'Content-Type': 'application/json',
           'X-API-Key': this.apiKey,
         },
-        // Use Next.js cache for even better performance
-        next: { revalidate: 300 }, // 5 minutes
+        // Note: next option only works in Next.js server components/API routes
+        // For client-side or external use, remove this option
+        ...(typeof window === 'undefined' && { next: { revalidate: 300 } }), // 5 minutes
       });
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        let errorMessage = `API Error: ${response.status} ${response.statusText}`;
+        
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.error || errorMessage;
+        } catch {
+          // If response isn't JSON, use the text
+          if (errorText) errorMessage = errorText;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       return await response.json();
     } catch (error) {
       console.error('Inventory API Error:', error);
+      console.error('Request URL:', url);
       throw error;
     }
   }
@@ -270,11 +291,57 @@ export class InventoryAPIClient {
 
 /**
  * Create a singleton instance for your dealership
+ * 
+ * IMPORTANT: The baseUrl should point to where your Next.js admin app is hosted.
+ * For production, this is typically: https://dealer.universalautobrokers.net
+ * NOT the dealership website (e.g., universalautobrokers.net)
+ * 
+ * The API routes are part of the Next.js admin application, not the dealership website.
+ * 
+ * @example
+ * // For production use:
+ * const client = new InventoryAPIClient({
+ *   baseUrl: 'https://dealer.universalautobrokers.net', // Admin app URL
+ *   dealershipId: 'your-dealership-id',
+ *   apiKey: 'your-api-key',
+ * });
+ * 
+ * // For development:
+ * const client = new InventoryAPIClient({
+ *   baseUrl: 'http://localhost:3000',
+ *   dealershipId: 'your-dealership-id',
+ *   apiKey: 'your-api-key',
+ * });
  */
 export function createInventoryClient() {
+  // Default to production admin app URL if not specified
+  const defaultBaseUrl = 
+    process.env.NEXT_PUBLIC_API_BASE_URL || 
+    (typeof window !== 'undefined' && window.location.hostname.includes('dealer.') 
+      ? window.location.origin 
+      : 'https://dealer.universalautobrokers.net') ||
+    'http://localhost:3000';
+    
   return new InventoryAPIClient({
-    baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000',
+    baseUrl: defaultBaseUrl,
     dealershipId: process.env.NEXT_PUBLIC_DEALERSHIP_ID!,
     apiKey: process.env.NEXT_PUBLIC_API_KEY!,
   });
+}
+
+/**
+ * Create an inventory client with explicit configuration
+ * Use this when you need to specify the base URL explicitly
+ * 
+ * @param config - Configuration object
+ * @param config.baseUrl - The base URL of the Next.js admin app (e.g., 'https://dealer.universalautobrokers.net')
+ * @param config.dealershipId - Your dealership ID
+ * @param config.apiKey - Your API key
+ */
+export function createInventoryClientWithConfig(config: {
+  baseUrl: string;
+  dealershipId: string;
+  apiKey: string;
+}) {
+  return new InventoryAPIClient(config);
 }

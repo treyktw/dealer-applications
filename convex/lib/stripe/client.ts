@@ -37,7 +37,7 @@ export const STRIPE_WEBHOOK_SECRET = webhookSecret;
 export async function testStripeConnection(): Promise<boolean> {
   try {
     // Try to retrieve account info
-    const account = await stripe.account.retrieve();
+    const account = await stripe.accounts.retrieve();
     console.log(`✅ Stripe connected: ${account.id} (${account.business_profile?.name || 'No name'})`);
     return true;
   } catch (error) {

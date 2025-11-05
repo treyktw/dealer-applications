@@ -73,15 +73,16 @@ export const getRecentEvents = internalQuery({
   handler: async (ctx, args) => {
     const limit = args.limit || 50;
 
-    let query = ctx.db.query("webhook_events");
+    // Use the processedAt index for ordering; filter by source if provided
+    let query = ctx.db
+      .query("webhook_events")
+      .withIndex("by_processed_at", (q) => q.gte("processedAt", 0));
 
     if (args.source) {
-      query = query.withIndex("by_source", (q) => q.eq("source", args.source));
+      query = query.filter((q) => q.eq(q.field("source"), args.source as string));
     }
 
-    const events = await query
-      .order("desc")
-      .take(limit);
+    const events = await query.order("desc").take(limit);
 
     return events;
   },

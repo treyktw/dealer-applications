@@ -1,11 +1,12 @@
 import { internalAction } from "./_generated/server";
+import type { ActionCtx } from "./_generated/server";
 import { v } from "convex/values";
 import type Stripe from "stripe";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { stripe, STRIPE_WEBHOOK_SECRET } from "./lib/stripe";
-import { mapStripeStatus } from "./lib/stripe/status";
-import { parsePriceId } from "./lib/stripe/products";
+// import { mapStripeStatus } from "./lib/stripe/status";
+// import { parsePriceId } from "./lib/stripe/products";
 
 if (!STRIPE_WEBHOOK_SECRET) {
   throw new Error("STRIPE_WEBHOOK_SECRET is not set");
@@ -13,14 +14,15 @@ if (!STRIPE_WEBHOOK_SECRET) {
 
 const webhookSecret = STRIPE_WEBHOOK_SECRET;
 
-
-
 export const handleStripeWebhook = internalAction({
   args: {
     signature: v.string(),
     payload: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx: ActionCtx,
+    args: { signature: string; payload: string }
+  ): Promise<{ success: boolean; duplicate?: boolean; processedAt?: string }> => {
     try {
       const event = await stripe.webhooks.constructEventAsync(
         args.payload,
@@ -31,17 +33,20 @@ export const handleStripeWebhook = internalAction({
       console.log("Processing webhook event:", event.type, "at", new Date().toISOString());
 
       // IDEMPOTENCY CHECK: Prevent duplicate processing
-      const alreadyProcessed = await ctx.runQuery(internal.webhooks.checkProcessed, {
+      const alreadyProcessed = (await ctx.runQuery(
+        internal.webhooks.checkProcessed,
+        {
         eventId: event.id,
         source: "stripe",
-      });
+        }
+      )) as unknown as { processed: boolean; event?: { processedAt?: number | string } | null };
 
       if (alreadyProcessed.processed) {
         console.log(`⚠️ Event ${event.id} already processed, skipping duplicate`);
         return {
           success: true,
           duplicate: true,
-          processedAt: alreadyProcessed.event?.processedAt,
+          processedAt: alreadyProcessed.event?.processedAt ? String(alreadyProcessed.event.processedAt) : undefined,
         };
       }
 
@@ -379,9 +384,10 @@ export const handleStripeWebhook = internalAction({
       // Try to mark event as failed (best effort)
       try {
         const errorMessage = error instanceof Error ? error.message : String(error);
+        const err = error as { event?: { id?: string; type?: string } };
         await ctx.runMutation(internal.webhooks.markProcessed, {
-          eventId: (error as any).event?.id || "unknown",
-          type: (error as any).event?.type || "unknown",
+          eventId: err.event?.id ?? "unknown",
+          type: err.event?.type ?? "unknown",
           source: "stripe",
           success: false,
           error: errorMessage,

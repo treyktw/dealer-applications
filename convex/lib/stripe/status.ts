@@ -1,7 +1,7 @@
 // convex/lib/stripe/status.ts
 // Stripe status mapping utilities
 
-import Stripe from "stripe";
+import type Stripe from "stripe";
 import { SubscriptionStatus } from "../../schema";
 
 /**
@@ -41,11 +41,11 @@ export function isActiveStatus(status: string): boolean {
  * Check if a status represents a problematic state that needs user action
  */
 export function requiresUserAction(status: string): boolean {
-  return [
-    SubscriptionStatus.PAST_DUE,
-    SubscriptionStatus.CANCELLED,
-    SubscriptionStatus.EXPIRED,
-  ].includes(status);
+  return (
+    status === SubscriptionStatus.PAST_DUE ||
+    status === SubscriptionStatus.CANCELLED ||
+    status === SubscriptionStatus.EXPIRED
+  );
 }
 
 /**
