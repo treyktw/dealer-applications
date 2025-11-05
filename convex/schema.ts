@@ -1430,4 +1430,289 @@ export default defineSchema({
     .index("by_dealership_status", ["dealershipId", "status"])
     .index("by_dealership_pack", ["dealershipId", "packTemplateId"]) // Check ownership
     .index("by_stripe_session", ["stripeCheckoutSessionId"]),
+
+  // ============================================================================
+  // NOTIFICATIONS & EMAIL SYSTEM
+  // ============================================================================
+
+  /**
+   * In-app notifications for users
+   * Supports real-time alerts and notification center
+   */
+  notifications: defineTable({
+    // Target
+    userId: v.id("users"),
+    dealershipId: v.optional(v.id("dealerships")),
+
+    // Notification Content
+    type: v.union(
+      v.literal("info"),
+      v.literal("success"),
+      v.literal("warning"),
+      v.literal("error"),
+      v.literal("deal_update"),
+      v.literal("payment_received"),
+      v.literal("document_signed"),
+      v.literal("subscription_expiring"),
+      v.literal("new_feature"),
+      v.literal("system_alert")
+    ),
+    title: v.string(),
+    message: v.string(),
+    icon: v.optional(v.string()), // Icon name or emoji
+
+    // Action
+    actionUrl: v.optional(v.string()), // Where to navigate when clicked
+    actionLabel: v.optional(v.string()), // "View Deal", "Upgrade Now", etc.
+
+    // Metadata
+    relatedEntityType: v.optional(
+      v.union(
+        v.literal("deal"),
+        v.literal("vehicle"),
+        v.literal("client"),
+        v.literal("subscription"),
+        v.literal("document")
+      )
+    ),
+    relatedEntityId: v.optional(v.string()),
+    metadata: v.optional(v.any()), // Additional context data
+
+    // Status
+    isRead: v.boolean(),
+    readAt: v.optional(v.number()),
+    isArchived: v.boolean(),
+
+    // Priority
+    priority: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high"),
+      v.literal("urgent")
+    ),
+
+    // Timestamps
+    createdAt: v.number(),
+    expiresAt: v.optional(v.number()), // Auto-delete after this time
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_read", ["userId", "isRead"])
+    .index("by_dealership", ["dealershipId"])
+    .index("by_created_at", ["createdAt"])
+    .index("by_expires_at", ["expiresAt"]),
+
+  /**
+   * Email campaigns for B2B (platform to dealers) and B2C (dealers to clients)
+   */
+  email_campaigns: defineTable({
+    // Campaign Info
+    name: v.string(),
+    subject: v.string(),
+    previewText: v.optional(v.string()),
+
+    // Campaign Type
+    campaignType: v.union(
+      v.literal("b2b_announcement"), // Platform to all dealers
+      v.literal("b2b_feature_update"), // New feature announcement
+      v.literal("b2b_billing"), // Billing related
+      v.literal("b2b_onboarding"), // Onboarding sequence
+      v.literal("b2c_promotion"), // Dealer to clients promotion
+      v.literal("b2c_newsletter"), // Dealer newsletter to clients
+      v.literal("b2c_deal_update"), // Deal status update to client
+      v.literal("transactional") // System emails (receipts, confirmations)
+    ),
+
+    // Content
+    templateId: v.optional(v.string()), // Resend template ID
+    htmlContent: v.optional(v.string()), // Custom HTML if not using template
+    textContent: v.optional(v.string()), // Plain text version
+
+    // Sender (for B2B, this is platform; for B2C, this is dealership)
+    senderType: v.union(v.literal("platform"), v.literal("dealership")),
+    senderDealershipId: v.optional(v.id("dealerships")), // For B2C campaigns
+    senderEmail: v.string(), // From email address
+    senderName: v.string(), // From name
+    replyTo: v.optional(v.string()),
+
+    // Recipients
+    recipientType: v.union(
+      v.literal("all_dealers"), // All dealerships
+      v.literal("specific_dealers"), // Selected dealerships
+      v.literal("all_clients"), // All clients for a dealership
+      v.literal("specific_clients"), // Selected clients
+      v.literal("single_user") // Single recipient
+    ),
+    recipientDealershipIds: v.optional(v.array(v.id("dealerships"))),
+    recipientUserIds: v.optional(v.array(v.id("users"))),
+    recipientClientIds: v.optional(v.array(v.id("clients"))),
+    recipientEmails: v.optional(v.array(v.string())), // Direct email list
+
+    // Scheduling
+    status: v.union(
+      v.literal("draft"),
+      v.literal("scheduled"),
+      v.literal("sending"),
+      v.literal("sent"),
+      v.literal("failed"),
+      v.literal("cancelled")
+    ),
+    scheduledAt: v.optional(v.number()),
+    sentAt: v.optional(v.number()),
+
+    // Analytics
+    totalRecipients: v.number(),
+    totalSent: v.number(),
+    totalDelivered: v.number(),
+    totalOpened: v.number(),
+    totalClicked: v.number(),
+    totalBounced: v.number(),
+    totalUnsubscribed: v.number(),
+
+    // Settings
+    trackOpens: v.boolean(),
+    trackClicks: v.boolean(),
+
+    // Metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.id("users"),
+  })
+    .index("by_sender_dealership", ["senderDealershipId"])
+    .index("by_status", ["status"])
+    .index("by_campaign_type", ["campaignType"])
+    .index("by_scheduled_at", ["scheduledAt"])
+    .index("by_created_by", ["createdBy"]),
+
+  /**
+   * Individual email sends (tracks each email sent)
+   */
+  email_sends: defineTable({
+    campaignId: v.optional(v.id("email_campaigns")),
+
+    // Recipient
+    recipientEmail: v.string(),
+    recipientUserId: v.optional(v.id("users")),
+    recipientClientId: v.optional(v.id("clients")),
+    recipientDealershipId: v.optional(v.id("dealerships")),
+
+    // Email Content
+    subject: v.string(),
+    fromEmail: v.string(),
+    fromName: v.string(),
+
+    // Resend Integration
+    resendEmailId: v.optional(v.string()), // Resend's email ID
+
+    // Status
+    status: v.union(
+      v.literal("queued"),
+      v.literal("sent"),
+      v.literal("delivered"),
+      v.literal("bounced"),
+      v.literal("failed"),
+      v.literal("opened"),
+      v.literal("clicked")
+    ),
+
+    // Tracking
+    sentAt: v.optional(v.number()),
+    deliveredAt: v.optional(v.number()),
+    openedAt: v.optional(v.number()),
+    clickedAt: v.optional(v.number()),
+    bouncedAt: v.optional(v.number()),
+
+    // Error handling
+    errorMessage: v.optional(v.string()),
+
+    // Metadata
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_campaign", ["campaignId"])
+    .index("by_recipient_email", ["recipientEmail"])
+    .index("by_recipient_user", ["recipientUserId"])
+    .index("by_status", ["status"])
+    .index("by_sent_at", ["sentAt"]),
+
+  /**
+   * Email templates for reusable email designs
+   */
+  email_templates: defineTable({
+    // Template Info
+    name: v.string(),
+    description: v.string(),
+    category: v.union(
+      v.literal("b2b_transactional"),
+      v.literal("b2b_marketing"),
+      v.literal("b2c_transactional"),
+      v.literal("b2c_marketing"),
+      v.literal("system")
+    ),
+
+    // Content
+    subject: v.string(),
+    previewText: v.optional(v.string()),
+    htmlContent: v.string(),
+    textContent: v.optional(v.string()),
+
+    // Variables (for template interpolation)
+    variables: v.array(
+      v.object({
+        name: v.string(), // {{dealershipName}}
+        description: v.string(),
+        defaultValue: v.optional(v.string()),
+        required: v.boolean(),
+      })
+    ),
+
+    // Resend Integration
+    resendTemplateId: v.optional(v.string()),
+
+    // Settings
+    isActive: v.boolean(),
+    isSystemTemplate: v.boolean(), // Cannot be deleted
+
+    // Ownership (null = platform template, otherwise dealership template)
+    dealershipId: v.optional(v.id("dealerships")),
+
+    // Metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.id("users"),
+  })
+    .index("by_category", ["category"])
+    .index("by_dealership", ["dealershipId"])
+    .index("by_active", ["isActive"]),
+
+  /**
+   * Email preferences and unsubscribe management
+   */
+  email_preferences: defineTable({
+    // User/Client
+    email: v.string(),
+    userId: v.optional(v.id("users")),
+    clientId: v.optional(v.id("clients")),
+    dealershipId: v.optional(v.id("dealerships")),
+
+    // Preferences
+    emailType: v.union(
+      v.literal("marketing"), // Marketing emails
+      v.literal("transactional"), // Order confirmations, receipts
+      v.literal("notifications"), // Activity notifications
+      v.literal("newsletters"), // Regular newsletters
+      v.literal("promotions") // Special offers
+    ),
+
+    isSubscribed: v.boolean(),
+    unsubscribedAt: v.optional(v.number()),
+    unsubscribeReason: v.optional(v.string()),
+
+    // Metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_user", ["userId"])
+    .index("by_client", ["clientId"])
+    .index("by_email_type", ["emailType", "isSubscribed"]),
 });

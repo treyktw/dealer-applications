@@ -43,6 +43,7 @@ import {
 import { DealershipProvider } from "@/providers/dealership-provider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { Loader2 } from "lucide-react";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { toast } from "sonner";
@@ -445,7 +446,7 @@ export default function DashboardLayout({
         {/* Header */}
         <div className="h-16 border-b flex items-center justify-between px-4">
           <Link href="/dashboard" className="flex items-center gap-3 min-w-0">
-            <span 
+            <span
               className={`font-semibold text-lg truncate transition-all duration-300 ${
                 collapsed ? "opacity-0 w-0" : "opacity-100"
               }`}
@@ -453,6 +454,7 @@ export default function DashboardLayout({
               {currentDealership?.name || "Dealership"}
             </span>
           </Link>
+          {!collapsed && <NotificationBell />}
         </div>
 
         {/* Quick Actions Dropdown */}
