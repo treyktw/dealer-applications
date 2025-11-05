@@ -567,6 +567,10 @@ export default defineSchema({
     dealData: v.optional(v.any()), // Additional custom deal data
     documentStatus: v.optional(v.string()), // "none", "in_progress", "complete"
 
+    // Document Pack Marketplace - Track which purchased pack was used
+    documentPackPurchaseUsed: v.optional(v.id("dealer_document_pack_purchases")),
+    documentPackVersionUsed: v.optional(v.number()), // Version of pack used (for audit)
+
     // Status tracking fields
     statusChangedAt: v.optional(v.number()),
     statusChangedBy: v.optional(v.string()), // user ID
@@ -1324,4 +1328,106 @@ export default defineSchema({
     .index("by_type", ["type"])
     .index("by_source", ["source"])
     .index("by_processed_at", ["processedAt"]),
+
+  // ============================================================================
+  // DOCUMENT PACK MARKETPLACE - Platform-provided document packs for purchase
+  // ============================================================================
+
+  // Master templates available for purchase
+  document_pack_templates: defineTable({
+    // Pack Info
+    name: v.string(), // "California Cash Sale Pack"
+    description: v.string(), // Full description
+    jurisdiction: v.string(), // "california" | "texas" | "federal" | "multi-state"
+    packType: v.string(), // "cash_sale" | "finance" | "lease" | "complete"
+
+    // Pricing
+    price: v.number(), // Price in cents (e.g., 9900 = $99.00)
+    stripeProductId: v.optional(v.string()), // Stripe product ID
+    stripePriceId: v.optional(v.string()), // Stripe price ID
+
+    // Documents included in this pack (stored in Convex, not S3)
+    documents: v.array(
+      v.object({
+        type: v.string(), // "bill_of_sale" | "odometer_disclosure" | etc.
+        name: v.string(), // Display name
+        templateContent: v.string(), // HTML/PDF template content
+        fillableFields: v.array(v.string()), // Field names for data mapping
+        required: v.boolean(), // Must be included in every deal
+        order: v.number(), // Display/generation order
+      })
+    ),
+
+    // Status & Versioning
+    isActive: v.boolean(), // Can be purchased
+    version: v.number(), // Template version for tracking updates
+    changelog: v.optional(v.array(
+      v.object({
+        version: v.number(),
+        changes: v.string(),
+        updatedAt: v.number(),
+        updatedBy: v.id("users"),
+      })
+    )),
+
+    // Sales Tracking
+    totalPurchases: v.number(),
+    totalRevenue: v.number(), // In cents
+
+    // Metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.id("users"), // Master admin who created
+  })
+    .index("by_jurisdiction", ["jurisdiction"])
+    .index("by_pack_type", ["packType"])
+    .index("by_active", ["isActive"])
+    .index("by_jurisdiction_type", ["jurisdiction", "packType", "isActive"]),
+
+  // Dealer purchases of document packs
+  dealer_document_pack_purchases: defineTable({
+    // Ownership
+    dealershipId: v.id("dealerships"),
+    packTemplateId: v.id("document_pack_templates"),
+    packVersion: v.number(), // Version purchased (for tracking if template updates)
+
+    // Purchase Info
+    purchaseDate: v.number(),
+    purchasedBy: v.id("users"), // User who made the purchase
+    amountPaid: v.number(), // Amount in cents
+
+    // Stripe Info
+    stripeCheckoutSessionId: v.optional(v.string()),
+    stripePaymentIntentId: v.optional(v.string()),
+    stripeCustomerId: v.optional(v.string()),
+
+    // Status
+    status: v.union(
+      v.literal("active"), // Can be used
+      v.literal("refunded"), // Refunded, cannot use
+      v.literal("cancelled") // Cancelled, cannot use
+    ),
+
+    // Usage Tracking
+    timesUsed: v.number(), // How many deals used this pack
+    lastUsedAt: v.optional(v.number()),
+
+    // Customization (future feature)
+    customizations: v.optional(
+      v.object({
+        logoOverride: v.optional(v.string()),
+        colorScheme: v.optional(v.string()),
+        customFields: v.optional(v.any()),
+      })
+    ),
+
+    // Metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_dealership", ["dealershipId"])
+    .index("by_pack_template", ["packTemplateId"])
+    .index("by_dealership_status", ["dealershipId", "status"])
+    .index("by_dealership_pack", ["dealershipId", "packTemplateId"]) // Check ownership
+    .index("by_stripe_session", ["stripeCheckoutSessionId"]),
 });

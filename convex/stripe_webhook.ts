@@ -55,6 +55,35 @@ export const handleStripeWebhook = internalAction({
           const session = event.data.object as Stripe.Checkout.Session;
           console.log("Checkout session completed:", session.id);
 
+          // Handle document pack purchases
+          if (session.metadata?.type === "document_pack_purchase") {
+            console.log("Document pack purchase detected");
+
+            const packId = session.metadata.packId;
+            const dealershipId = session.metadata.dealershipId;
+            const userId = session.metadata.userId;
+
+            if (!packId || !dealershipId || !userId) {
+              console.error("Missing metadata for document pack purchase");
+              throw new Error("Missing metadata for document pack purchase");
+            }
+
+            // Record the purchase
+            await ctx.runMutation(internal.dealerDocumentPackPurchases.recordPurchase, {
+              dealershipId: dealershipId as Id<"dealerships">,
+              packTemplateId: packId as Id<"document_pack_templates">,
+              userId: userId as Id<"users">,
+              amountPaid: session.amount_total || 0,
+              stripeCheckoutSessionId: session.id,
+              stripePaymentIntentId: session.payment_intent as string | undefined,
+              stripeCustomerId: session.customer as string | undefined,
+            });
+
+            console.log("Document pack purchase recorded successfully");
+            break;
+          }
+
+          // Handle subscription checkouts
           if (session.mode !== "subscription") {
             console.log("Not a subscription checkout, skipping");
             break;
