@@ -351,15 +351,36 @@ export default defineSchema({
     engine: v.optional(v.string()),
     description: v.optional(v.string()),
     status: v.union(
+      // Available for sale
       v.literal("AVAILABLE"),
+      v.literal("FEATURED"),
+      // In process
+      v.literal("IN_TRANSIT"),
+      v.literal("IN_SERVICE"),
+      v.literal("RESERVED"),
+      v.literal("PENDING_SALE"),
+      // Sold/Off lot
       v.literal("SOLD"),
-      v.literal("PENDING"),
-      v.literal("RESERVED")
+      v.literal("WHOLESALE"),
+      v.literal("TRADED"),
+      // Other
+      v.literal("UNAVAILABLE"),
+      v.literal("ARCHIVED"),
+      // Legacy (for backward compatibility during migration)
+      v.literal("PENDING")
     ),
     featured: v.boolean(),
     features: v.optional(v.string()),
     dealershipId: v.string(),
     clientId: v.optional(v.string()),
+
+    // Status tracking fields
+    statusChangedAt: v.optional(v.number()),
+    statusChangedBy: v.optional(v.string()), // user ID
+    reservedBy: v.optional(v.string()), // client ID
+    reservedAt: v.optional(v.number()),
+    reservedUntil: v.optional(v.number()),
+
     // Additional fields
     costPrice: v.optional(v.number()), // Encrypted
     profit: v.optional(v.number()), // Calculated field
@@ -399,13 +420,34 @@ export default defineSchema({
     zipCode: v.optional(v.string()),
     source: v.optional(v.string()),
     status: v.union(
-      v.literal("LEAD"),
+      // Lead stages
+      v.literal("PROSPECT"),
+      v.literal("CONTACTED"),
+      v.literal("QUALIFIED"),
+      v.literal("NEGOTIATING"),
+      // Customer stages
       v.literal("CUSTOMER"),
-      v.literal("PREVIOUS")
+      v.literal("REPEAT_CUSTOMER"),
+      // Inactive/Lost
+      v.literal("LOST"),
+      v.literal("NOT_INTERESTED"),
+      v.literal("DO_NOT_CONTACT"),
+      v.literal("PREVIOUS"),
+      // Legacy (for backward compatibility during migration)
+      v.literal("LEAD")
     ),
     notes: v.optional(v.string()),
     createdById: v.optional(v.string()),
     dealershipId: v.string(),
+
+    // Status tracking fields
+    statusChangedAt: v.optional(v.number()),
+    statusChangedBy: v.optional(v.string()), // user ID
+    lostReason: v.optional(v.string()),
+    leadSource: v.optional(v.string()),
+    lastContactedAt: v.optional(v.number()),
+    nextFollowUpAt: v.optional(v.number()),
+
     // Additional fields
     creditScore: v.optional(v.string()), // Encrypted
     ssn: v.optional(v.string()), // Encrypted
@@ -480,7 +522,33 @@ export default defineSchema({
     documentUrl: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
-    status: v.string(),
+    status: v.union(
+      // Initial stages
+      v.literal("DRAFT"),
+      v.literal("PENDING_APPROVAL"),
+      v.literal("APPROVED"),
+      // Documentation stages
+      v.literal("DOCS_GENERATING"),
+      v.literal("DOCS_READY"),
+      v.literal("AWAITING_SIGNATURES"),
+      v.literal("PARTIALLY_SIGNED"),
+      // Financing stages (future-proofing)
+      v.literal("FINANCING_PENDING"),
+      v.literal("FINANCING_APPROVED"),
+      v.literal("FINANCING_DECLINED"),
+      // Completion stages
+      v.literal("COMPLETED"),
+      v.literal("DELIVERED"),
+      v.literal("FINALIZED"),
+      // Problem stages
+      v.literal("ON_HOLD"),
+      v.literal("CANCELLED"),
+      v.literal("VOID"),
+      // Legacy (for backward compatibility during migration)
+      v.literal("draft"),
+      v.literal("on_hold"),
+      v.literal("completed")
+    ),
     totalAmount: v.number(),
     dealershipId: v.string(),
     clientEmail: v.optional(v.string()),
@@ -498,6 +566,24 @@ export default defineSchema({
     buyerData: v.optional(v.any()), // Cached buyer info
     dealData: v.optional(v.any()), // Additional custom deal data
     documentStatus: v.optional(v.string()), // "none", "in_progress", "complete"
+
+    // Status tracking fields
+    statusChangedAt: v.optional(v.number()),
+    statusChangedBy: v.optional(v.string()), // user ID
+    statusHistory: v.optional(v.array(
+      v.object({
+        previousStatus: v.string(),
+        newStatus: v.string(),
+        changedAt: v.number(),
+        changedBy: v.optional(v.string()),
+        reason: v.optional(v.string()),
+      })
+    )),
+    approvedBy: v.optional(v.string()),
+    approvedAt: v.optional(v.number()),
+    cancelledBy: v.optional(v.string()),
+    cancelledAt: v.optional(v.number()),
+    cancellationReason: v.optional(v.string())
   })
     .index("by_dealership", ["dealershipId"])
     .index("by_client", ["clientId"])
