@@ -44,7 +44,7 @@ export interface PreparedPdfData {
   fields: PreparedFieldData[];
   validationErrors: ValidationError[];
   missingRequiredFields: string[];
-  signatureFields: string[]; // Fields to fill during signature embedding
+  signatureFields: string[]; // Signature fields identified (left blank for handwritten signatures)
 }
 
 /**

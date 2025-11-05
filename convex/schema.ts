@@ -1147,19 +1147,15 @@ export default defineSchema({
     ),
 
     // S3 storage
-    s3Key: v.optional(v.string()), // Generated PDF (unsigned)
-    signedS3Key: v.optional(v.string()), // Final PDF (with signatures embedded)
+    s3Key: v.optional(v.string()), // Generated PDF (blank template)
+    handSignedS3Key: v.optional(v.string()), // Scanned/uploaded PDF with handwritten signatures
     fileSize: v.optional(v.number()),
 
-    // NEW: Signature tracking (moved from generatedDocuments)
-    requiredSignatures: v.array(v.string()), // ["buyer", "seller", "notary"]
-    signaturesCollected: v.array(
-      v.object({
-        role: v.string(),
-        signatureId: v.id("signatures"),
-        signedAt: v.number(),
-      })
-    ),
+    // Handwritten signature tracking (physical documents only)
+    // No digital signature embedding - all signatures must be handwritten
+    allPartiesSigned: v.optional(v.boolean()), // All required parties have signed physically
+    physicalSignatureDate: v.optional(v.number()), // When physical document was signed
+    physicalSignatureNotes: v.optional(v.string()), // Notes about physical signing
 
     // Audit trail
     audit: v.object({
