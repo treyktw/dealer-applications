@@ -222,6 +222,17 @@ pnpm convex:dev
 pnpm convex:deploy
 ```
 
+
+
+### Version Management
+
+```bash
+chmod +x scripts/updater.sh
+./scripts/updater.sh
+
+```
+To update the version of the application, use these commands:
+
 ## 🏢 Business Model
 
 ### Target Market
