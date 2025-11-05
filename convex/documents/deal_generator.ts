@@ -1,7 +1,7 @@
 // convex/documents/deal-generator.ts - Generate all documents for a deal
 import { v } from "convex/values";
 import { mutation, action, query } from "../_generated/server";
-import { api, internal } from "../_generated/api";
+import { api } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 // import { requireAuth, assertDealershipAccess } from "../guards";
 import { PDFDocument, type PDFTextField, type PDFCheckBox } from "pdf-lib";
@@ -11,6 +11,7 @@ import {
   validateDealData,
   type DealData,
 } from "../lib/pdf_data_preparer";
+import { generateDownloadUrl, generateUploadUrl } from "../lib/s3";
 
 /**
  * Generate all documents for a deal
@@ -328,13 +329,7 @@ export const generateSingleDocument = action({
     );
 
     // Get template PDF download URL
-    const { downloadUrl: templateUrl } = await ctx.runAction(
-      internal.secure_s3.generateDownloadUrl,
-      {
-        s3Key: template.s3Key,
-        expiresIn: 300,
-      }
-    );
+    const templateUrl = await generateDownloadUrl(template.s3Key, 300);
 
     // Download template PDF
     const response = await fetch(templateUrl);
@@ -360,13 +355,10 @@ export const generateSingleDocument = action({
     console.log("S3 key ends with .pdf:", s3Key.endsWith('.pdf'));
 
     // Get upload URL
-    const { uploadUrl } = await ctx.runAction(
-      internal.secure_s3.generateUploadUrl,
-      {
-        s3Key,
-        contentType: "application/pdf",
-        expiresIn: 300,
-      }
+    const uploadUrl = await generateUploadUrl(
+      s3Key,
+      "application/pdf",
+      300
     );
 
     // Upload filled PDF to S3
@@ -490,8 +482,6 @@ export const updateDocumentWithGeneration = mutation({
       fileSize: args.fileSize,
       documentType: args.documentType,
       name: args.name,
-      requiredSignatures: args.requiredSignatures,
-      signaturesCollected: [],
       updatedAt: Date.now(),
     });
 

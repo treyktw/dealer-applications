@@ -8,6 +8,7 @@ import {
   requireDealership,
   assertDealershipAccess,
 } from "../guards";
+import { generateUploadUrl, generateDownloadUrl, deleteFile } from "../lib/s3";
 
 /**
  * Create a new document template
@@ -140,14 +141,11 @@ export const getTemplateUploadUrl = action({
       throw new Error("File size exceeds 25MB limit");
     }
 
-    // Generate presigned URL using secure_s3
-    const { uploadUrl } = await ctx.runAction(
-      internal.secure_s3.generateUploadUrl,
-      {
-        s3Key: template.s3Key,
-        contentType: args.contentType,
-        expiresIn: 900,
-      }
+    // Generate presigned URL using new S3 utilities
+    const uploadUrl = await generateUploadUrl(
+      template.s3Key,
+      args.contentType,
+      900
     );
 
     return {
@@ -658,15 +656,8 @@ export const deleteTemplate = mutation({
     // Delete the template record from Convex
     await ctx.db.delete(args.templateId);
 
-    // Schedule S3 file deletion
-    await ctx.scheduler.runAfter(
-      0,
-      internal.secure_s3.deleteFile,
-      {
-        s3Key: template.s3Key,
-        reason: "template_deleted",
-      }
-    );
+    // Delete S3 file
+    await deleteFile(template.s3Key);
 
     // Log security event
     await ctx.db.insert("security_logs", {
@@ -705,13 +696,7 @@ export const getTemplateDownloadUrl = action({
     if (!template) {
       throw new Error("Template not found");
     }
-    const { downloadUrl } = await ctx.runAction(
-      internal.secure_s3.generateDownloadUrl,
-      {
-        expiresIn: 300,
-        s3Key: template.s3Key,
-      }
-    );
+    const downloadUrl = await generateDownloadUrl(template.s3Key, 300);
 
     return {
       downloadUrl,

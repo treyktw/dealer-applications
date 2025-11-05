@@ -1,12 +1,45 @@
-// src/app/(dashboard)/layout.tsx - REVERTED: Dealership First, Then Subscribe
+// src/app/(dashboard)/layout.tsx - Modern Sidebar with Quick Actions
 "use client";
 
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Car, Users, Settings, Menu, Home, FileText } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
+import { 
+  Car, 
+  Users, 
+  Settings, 
+  Home, 
+  FileText, 
+  Plus, 
+  ChevronLeft, 
+  ChevronRight, 
+  UserPlus, 
+  CarFront, 
+  FileSignature,
+  ChevronDown,
+  Key,
+  CreditCard,
+  Bell,
+  Code,
+  Database,
+  Globe,
+  Shield,
+  Building
+} from "lucide-react";
 import { DealershipProvider } from "@/providers/dealership-provider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { Loader2 } from "lucide-react";
@@ -15,39 +48,156 @@ import { api } from "@/convex/_generated/api";
 import { toast } from "sonner";
 import { useUser } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
-// Navigation items without settings
-const baseNavItems = [
+// Navigation items with sub-routes
+const navItemsWithSubRoutes = [
   {
     href: "/dashboard",
     label: "Dashboard",
-    icon: <Home className="h-5 w-5" />,
+    icon: Home,
   },
   {
     href: "/inventory",
     label: "Inventory",
-    icon: <Car className="h-5 w-5" />,
+    icon: Car,
+    subItems: [
+      {
+        href: "/inventory",
+        label: "All Vehicles",
+        icon: Car,
+      },
+      {
+        href: "/inventory/add",
+        label: "Add Vehicle",
+        icon: Plus,
+      },
+    ],
   },
   {
     href: "/clients",
     label: "Clients",
-    icon: <Users className="h-5 w-5" />,
+    icon: Users,
+    subItems: [
+      {
+        href: "/clients",
+        label: "All Clients",
+        icon: Users,
+      },
+      {
+        href: "/clients/add",
+        label: "Add Client",
+        icon: UserPlus,
+      },
+    ],
   },
   {
     label: "Deals",
     href: "/deals",
-    icon: <FileText className="h-4 w-4" />,
+    icon: FileText,
+    subItems: [
+      {
+        href: "/deals",
+        label: "All Deals",
+        icon: FileText,
+      },
+      {
+        href: "/deals/new",
+        label: "New Deal",
+        icon: FileSignature,
+      },
+    ],
   },
 ];
 
-// Settings navigation item
+// Settings navigation with subdomains
 const settingsNavItem = {
   href: "/settings",
   label: "Settings",
-  icon: <Settings className="h-5 w-5" />,
+  icon: Settings,
+  subItems: [
+    {
+      href: "/settings",
+      label: "Overview",
+      icon: Settings,
+    },
+    {
+      href: "/settings/general",
+      label: "General",
+      icon: Building,
+    },
+    {
+      href: "/settings/users",
+      label: "Users",
+      icon: Users,
+    },
+    {
+      href: "/settings/billing",
+      label: "Billing",
+      icon: CreditCard,
+    },
+    {
+      href: "/settings/notifications",
+      label: "Notifications",
+      icon: Bell,
+    },
+    {
+      href: "/settings/api-keys",
+      label: "API Keys",
+      icon: Key,
+    },
+    {
+      href: "/settings/domain",
+      label: "Domain",
+      icon: Globe,
+    },
+    {
+      href: "/settings/cache",
+      label: "Cache",
+      icon: Database,
+    },
+    {
+      href: "/settings/developer",
+      label: "Developer",
+      icon: Code,
+    },
+    {
+      href: "/settings/document-templates",
+      label: "Document Templates",
+      icon: FileText,
+    },
+    {
+      href: "/settings/ip-management",
+      label: "IP Management",
+      icon: Shield,
+    },
+    {
+      href: "/settings/api-usage",
+      label: "API Usage",
+      icon: Database,
+    },
+  ],
 };
+
+// Quick action items
+const quickActions = [
+  {
+    label: "Add Client",
+    icon: UserPlus,
+    href: "/clients/add",
+  },
+  {
+    label: "Add Vehicle",
+    icon: CarFront,
+    href: "/inventory/add",
+  },
+  {
+    label: "New Deal",
+    icon: FileSignature,
+    href: "/deals/new",
+  },
+];
 
 export default function DashboardLayout({
   children,
@@ -63,7 +213,9 @@ export default function DashboardLayout({
   const { user } = useUser();
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(Date.now());
+  const [collapsed, setCollapsed] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
 
   // Create user when component mounts and user is available
   useEffect(() => {
@@ -114,8 +266,51 @@ export default function DashboardLayout({
     }
   }, [subscriptionStatus?.subscriptionStatus, forceSyncCurrentUser]);
 
+  // State for dropdown menus
+  const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({
+    inventory: false,
+    clients: false,
+    deals: false,
+    settings: false,
+  });
+
+  // Auto-expand dropdowns when on their pages
+  useEffect(() => {
+    setOpenDropdowns((prev) => {
+      const newOpenState = { ...prev };
+      
+      if (pathname?.startsWith("/inventory")) {
+        newOpenState.inventory = true;
+      }
+      if (pathname?.startsWith("/clients")) {
+        newOpenState.clients = true;
+      }
+      if (pathname?.startsWith("/deals")) {
+        newOpenState.deals = true;
+      }
+      if (pathname?.startsWith("/settings")) {
+        newOpenState.settings = true;
+      }
+      
+      // Only update if something changed
+      const hasChanged = Object.keys(newOpenState).some(
+        (key) => newOpenState[key] !== prev[key]
+      );
+      
+      return hasChanged ? newOpenState : prev;
+    });
+  }, [pathname]);
+
   // Combine navigation items based on user role
-  const navItems = isAdmin ? [...baseNavItems, settingsNavItem] : baseNavItems;
+  const navItems = navItemsWithSubRoutes;
+  const showSettings = isAdmin;
+
+  const toggleDropdown = (key: string) => {
+    setOpenDropdowns(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
 
   const handleSubscribe = async () => {
     if (isSubscribing) return;
@@ -169,9 +364,6 @@ export default function DashboardLayout({
       </div>
     );
   }
-
-  // console.log("Current subscription status:", subscriptionStatus);
-  // console.log("Current dealership:", currentDealership);
 
   // REDIRECT: If user needs to create dealership first
   if (subscriptionStatus.subscriptionStatus === "no_dealership") {
@@ -245,64 +437,295 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen flex dark:bg-zinc-950">
       {/* Sidebar for desktop */}
-      <aside className="w-64 border-r hidden lg:block">
-        <div className="p-4 border-b">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <Car className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">
+      <aside 
+        className={`${
+          collapsed ? "w-20" : "w-64"
+        } border-r hidden lg:flex flex-col h-screen sticky top-0 transition-all duration-300 ease-in-out bg-background`}
+      >
+        {/* Header */}
+        <div className="h-16 border-b flex items-center justify-between px-4">
+          <Link href="/dashboard" className="flex items-center gap-3 min-w-0">
+            <span 
+              className={`font-semibold text-lg truncate transition-all duration-300 ${
+                collapsed ? "opacity-0 w-0" : "opacity-100"
+              }`}
+            >
               {currentDealership?.name || "Dealership"}
             </span>
           </Link>
         </div>
 
-        <nav className="p-4 space-y-1">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent group transition-colors"
-            >
-              <div className="text-muted-foreground group-hover:text-primary transition-colors">
-                {item.icon}
-              </div>
-              <span>{item.label}</span>
-            </Link>
-          ))}
+        {/* Quick Actions Dropdown */}
+        <div className="p-4">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button className="w-full justify-center" size={collapsed ? "icon" : "default"}>
+                <Plus className="h-4 w-4" />
+                {!collapsed && <span className="ml-2">Quick Add</span>}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align={collapsed ? "start" : "center"} className="w-48">
+              <DropdownMenuLabel>Quick Actions</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {quickActions.map((action) => (
+                <DropdownMenuItem
+                  key={action.href}
+                  onClick={() => router.push(action.href)}
+                  className="cursor-pointer"
+                >
+                  <action.icon className="mr-2 h-4 w-4" />
+                  <span>{action.label}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 px-3 py-2 overflow-y-auto">
+          <div className="space-y-1">
+            {navItems.map((item) => {
+              const isActive = pathname === item.href || (pathname?.startsWith(item.href + "/") && item.href !== "/dashboard");
+              const Icon = item.icon;
+              const hasSubItems = item.subItems && item.subItems.length > 0;
+              const dropdownKey = item.label.toLowerCase();
+              const isOpen = openDropdowns[dropdownKey];
+              
+              // If item has sub-items, render collapsible
+              if (hasSubItems) {
+                return (
+                  <Collapsible 
+                    key={item.href}
+                    open={isOpen} 
+                    onOpenChange={() => toggleDropdown(dropdownKey)}
+                    className="space-y-1"
+                  >
+                    <div className="flex items-center gap-1">
+                      <Link
+                        href={item.href}
+                        className={`flex-1 flex items-center ${collapsed ? 'justify-center' : 'gap-3 px-3'} py-2.5 rounded-lg transition-all duration-200 group ${
+                          isActive
+                            ? "text-primary-foreground"
+                            : "hover:bg-accent text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <Icon className="h-5 w-5 flex-shrink-0" />
+                        <span 
+                          className={`font-medium transition-all duration-300 ${
+                            collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
+                          }`}
+                        >
+                          {item.label}
+                        </span>
+                      </Link>
+                      
+                      {!collapsed && (
+                        <CollapsibleTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-9 w-9 p-0 hover:bg-accent"
+                          >
+                            <ChevronDown 
+                              className={`h-4 w-4 transition-transform duration-200 ${
+                                isOpen ? "rotate-180" : ""
+                              }`}
+                            />
+                          </Button>
+                        </CollapsibleTrigger>
+                      )}
+                    </div>
+                    
+                    {!collapsed && (
+                      <CollapsibleContent className="space-y-1 pl-4">
+                        {item.subItems?.map((subItem) => {
+                          const isSubActive = pathname === subItem.href;
+                          const SubIcon = subItem.icon;
+                          
+                          return (
+                            <Link
+                              key={subItem.href}
+                              href={subItem.href}
+                              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${
+                                isSubActive
+                                  ? "bg-primary/10 text-primary font-medium"
+                                  : "hover:bg-accent text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              <SubIcon className="h-4 w-4 flex-shrink-0" />
+                              <span>{subItem.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </CollapsibleContent>
+                    )}
+                  </Collapsible>
+                );
+              }
+              
+              // Regular nav item without sub-items
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3 px-3'} py-2.5 rounded-lg transition-all duration-200 group ${
+                    isActive
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-accent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Icon className="h-5 w-5 flex-shrink-0" />
+                  <span 
+                    className={`font-medium transition-all duration-300 ${
+                      collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
+                    }`}
+                  >
+                    {item.label}
+                  </span>
+                </Link>
+              );
+            })}
+
+            {/* Settings with Dropdown - Only for Admin */}
+            {showSettings && (
+              <Collapsible 
+                open={openDropdowns.settings} 
+                onOpenChange={() => toggleDropdown('settings')}
+                className="space-y-1"
+              >
+                <div className="flex items-center gap-1">
+                  <Link
+                    href={settingsNavItem.href}
+                    className={`flex-1 flex items-center ${collapsed ? 'justify-center' : 'gap-3 px-3'} py-2.5 rounded-lg transition-all duration-200 group ${
+                      pathname?.startsWith("/settings")
+                        ? " text-primary-foreground"
+                        : "hover:bg-accent text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Settings className="h-5 w-5 flex-shrink-0" />
+                    {!collapsed && (
+                      <span className="font-medium flex-1 text-left">Settings</span>
+                    )}
+                  </Link>
+                  
+                  {!collapsed && (
+                    <CollapsibleTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-9 p-0 hover:bg-accent"
+                      >
+                        <ChevronDown 
+                          className={`h-4 w-4 transition-transform duration-200 ${
+                            openDropdowns.settings ? "rotate-180" : ""
+                          }`}
+                        />
+                      </Button>
+                    </CollapsibleTrigger>
+                  )}
+                </div>
+                
+                {!collapsed && (
+                  <CollapsibleContent className="space-y-1 pl-4">
+                    {settingsNavItem.subItems.map((subItem) => {
+                      const isActive = pathname === subItem.href;
+                      const SubIcon = subItem.icon;
+                      
+                      return (
+                        <Link
+                          key={subItem.href}
+                          href={subItem.href}
+                          className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${
+                            isActive
+                              ? "bg-primary/10 text-primary font-medium"
+                              : "hover:bg-accent text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <SubIcon className="h-4 w-4 flex-shrink-0" />
+                          <span>{subItem.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </CollapsibleContent>
+                )}
+              </Collapsible>
+            )}
+          </div>
         </nav>
 
-        <div className="mt-auto p-4 border-t">
-          <Card className="bg-accent/50 fixed w-56 bottom-2">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="bg-primary p-2 rounded-md text-primary-foreground">
-                  <Users className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">
-                    {subscriptionStatus.subscription?.plan || "Basic"} Plan
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Status: {subscriptionStatus.subscriptionStatus}
-                  </p>
-                </div>
-              </div>
-              {subscriptionStatus.subscriptionStatus === "pending" && (
+        {/* Bottom Section */}
+        <div className="border-t">
+          {/* Subscription Status */}
+          {subscriptionStatus.subscriptionStatus === "pending" && (
+            <div className="p-4 border-b">
+              <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} gap-2`}>
+                {!collapsed && (
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Loader2 className="h-3 w-3 animate-spin text-yellow-600 flex-shrink-0" />
+                    <span className="text-xs text-muted-foreground truncate">
+                      Payment pending
+                    </span>
+                  </div>
+                )}
                 <Button 
                   onClick={handleRefreshStatus}
-                  className="w-full" 
                   size="sm" 
-                  variant="outline"
+                  variant="ghost"
+                  className={`${collapsed ? "w-full" : "flex-shrink-0"}`}
                 >
-                  Refresh Status
+                  <Loader2 className="h-3 w-3" />
                 </Button>
+              </div>
+            </div>
+          )}
+
+          {/* User Section */}
+          <div className={`p-4 flex items-center ${collapsed ? "justify-center" : "justify-between"} gap-3`}>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="relative flex-shrink-0">
+                <UserButton afterSignOutUrl="/sign-in" />
+              </div>
+              {!collapsed && (
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="text-sm font-medium truncate">
+                    {user?.fullName || "User"}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant={subscriptionStatus.subscriptionStatus === "active" ? "default" : "secondary"}
+                      className="text-xs h-5"
+                    >
+                      {subscriptionStatus.subscriptionStatus === "active" ? "Pro" : "Pending"}
+                    </Badge>
+                  </div>
+                </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+
+          {/* Collapse Toggle */}
+          <div className="p-2 border-t">
+            <Button
+              onClick={() => setCollapsed(!collapsed)}
+              variant="ghost"
+              size="sm"
+              className="w-full justify-center"
+            >
+              {collapsed ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <>
+                  <ChevronLeft className="h-4 w-4 mr-2" />
+                  <span className="text-xs">Collapse</span>
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Pending subscription banner */}
         {showPendingBanner && (
           <div className="bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800">
@@ -327,51 +750,7 @@ export default function DashboardLayout({
           </div>
         )}
 
-        {/* Header */}
-        <header className="border-b h-[61px] flex items-center px-6 sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="lg:hidden">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-0">
-              <div className="p-6 border-b">
-                <Link href="/dashboard" className="flex items-center gap-2">
-                  <Car className="h-6 w-6 text-primary" />
-                  <span className="text-xl font-bold">
-                    {currentDealership?.name || "Dealership"}
-                  </span>
-                </Link>
-              </div>
-              <nav className="p-4 space-y-1">
-                {navItems.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent group transition-colors"
-                  >
-                    <div className="text-muted-foreground group-hover:text-primary transition-colors">
-                      {item.icon}
-                    </div>
-                    <span>{item.label}</span>
-                  </Link>
-                ))}
-              </nav>
-            </SheetContent>
-          </Sheet>
-
-          <div className="lg:hidden ml-2 font-semibold">
-            {currentDealership?.name || "Dealership Admin"}
-          </div>
-
-          <div className="ml-auto flex items-center gap-2">
-            <UserButton afterSignOutUrl="/sign-in" />
-          </div>
-        </header>
-
-        {/* Main content */}
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-6 overflow-x-hidden">
           <DealershipProvider>
             {children}
           </DealershipProvider>

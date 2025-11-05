@@ -7,10 +7,9 @@ import { useDropzone } from "react-dropzone";
 import { toast } from "sonner";
 import { Loader2, ImagePlus, X, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
-import { useAction } from "convex/react";
+import type { Id } from "@/convex/_generated/dataModel";
 import SecureImage from "./inventory/SecureImage";
 
 // Define the image structure to match your database schema
@@ -56,13 +55,14 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
     case 'ADD_IMAGES':
       return { ...state, images: [...state.images, ...action.payload] };
     
-    case 'REMOVE_IMAGE':
+    case 'REMOVE_IMAGE': {
       const updatedImages = state.images.filter((_, i) => i !== action.payload);
       // If removing primary image, set first remaining image as primary
       if (state.images[action.payload]?.isPrimary && updatedImages.length > 0) {
         updatedImages[0].isPrimary = true;
       }
       return { ...state, images: updatedImages };
+    }
     
     case 'SET_PRIMARY_IMAGE':
       return {
@@ -107,9 +107,7 @@ export default function S3ImageUpload({
 
   const { images, isUploading, uploadProgress } = state;
 
-  const getPresignedUrl = useMutation(api.secure_s3.getSecureUploadUrl);
-  const ensureBucket = useAction(api.secure_s3.ensureDealershipBucket);
-  const updateCors = useAction(api.secure_s3.updateBucketCors);
+  const getPresignedUrl = useAction(api.s3.getVehicleImageUploadUrl);
   const vehicle = useQuery(api.inventory.getVehicle, 
     vehicleId && vehicleId.trim() !== "" && !vehicleId.startsWith("test-") ? { id: vehicleId as Id<"vehicles"> } : "skip"
   );
@@ -127,22 +125,26 @@ export default function S3ImageUpload({
         dispatch({ type: 'SET_UPLOADING', payload: true });
         dispatch({ type: 'CLEAR_ERROR' });
 
-        // Ensure bucket exists and CORS is configured
-        await ensureBucket({
-          dealershipId: vehicle.dealershipId as Id<"dealerships">,
-          dealershipName: dealership.name,
-        });
-        await updateCors({
-          dealershipId: vehicle.dealershipId as Id<"dealerships">,
-        });
+        // Client-side validation to prevent unsupported types before calling server
+        const allowedTypes = [
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "image/jpg",
+        ];
+        if (!allowedTypes.includes(file.type)) {
+          const msg = `Unsupported file type: ${file.type}. Allowed: JPG, PNG, WEBP.`;
+          toast.error(msg);
+          dispatch({ type: 'SET_ERROR', payload: msg });
+          return null;
+        }
 
         // Get presigned URL from Convex
-        const { uploadUrl, filePath } = await getPresignedUrl({
-          dealershipId: vehicle.dealershipId as Id<"dealerships">,
+        const { uploadUrl, s3Key } = await getPresignedUrl({
+          vehicleId: vehicle._id as Id<"vehicles">,
           fileName: file.name,
           fileType: file.type,
           fileSize: file.size,
-          category: "vehicles",
         });
 
         // Use fetch instead of XMLHttpRequest to avoid header issues
@@ -159,26 +161,20 @@ export default function S3ImageUpload({
           throw new Error(`Upload failed with status ${response.status}`);
         }
 
-        return {
-          url: filePath,
-          isPrimary: false,
-        };
-      } catch {
-        console.error("Error uploading to S3");
-        dispatch({ type: 'SET_ERROR', payload: "Upload failed" });
+        return { url: s3Key, isPrimary: false };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // Surface server-side validation errors (e.g., invalid content type) as toast
+        toast.error(message.includes('Invalid content type') ?
+          'Unsupported file type. Please upload JPG, PNG, or WEBP.' : message);
+        console.error("Error uploading to S3:", message);
+        dispatch({ type: 'SET_ERROR', payload: message });
         return null;
       } finally {
         dispatch({ type: 'RESET_UPLOAD_STATE' });
       }
     },
-    [
-      vehicle?.dealershipId,
-      dealership,
-      getPresignedUrl,
-      ensureBucket,
-      updateCors,
-      dispatch,
-    ]
+    [vehicle?._id, vehicle?.dealershipId, dealership, getPresignedUrl]
   );
 
 
@@ -201,7 +197,7 @@ export default function S3ImageUpload({
         }
 
         if (newImages.length === 0) {
-          toast.error("No files were uploaded successfully");
+          toast.error("No files were uploaded. Please check the file type and size.");
           dispatch({ type: 'SET_UPLOADING', payload: false });
           return;
         }
@@ -223,7 +219,7 @@ export default function S3ImageUpload({
         dispatch({ type: 'RESET_UPLOAD_STATE' });
       }
     },
-    [images, onImagesChange, uploadToS3, dispatch]
+    [images, onImagesChange, uploadToS3]
   );
 
   // Set an image as primary
@@ -324,7 +320,7 @@ export default function S3ImageUpload({
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {images.map((img, index) => (
               <div
-                key={index}
+                key={img.url || index}
                 className="group relative rounded-lg overflow-hidden border"
               >
                 <div

@@ -1,9 +1,9 @@
 // components/SecureImage.tsx - Enhanced version with better loading states
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { useMutation } from "convex/react";
+import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+ 
 import { Loader2, ImageIcon, AlertCircle } from "lucide-react";
 
 interface SecureImageProps {
@@ -34,7 +34,7 @@ export default function SecureImage({
   const [error, setError] = useState<string | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false); // Track when actual image loads
 
-  const getImageUrl = useMutation(api.secure_s3.getImageUrl);
+  const getViewUrl = useAction(api.s3.getViewUrl);
 
   useEffect(() => {
     const fetchImageUrl = async () => {
@@ -43,12 +43,8 @@ export default function SecureImage({
         setError(null);
         setImageLoaded(false);
         
-        const result = await getImageUrl({
-          filePath,
-          dealershipId: dealershipId as Id<"dealerships">,
-        });
-        
-        setImageUrl(result.imageUrl);
+        const result = await getViewUrl({ s3Key: filePath });
+        setImageUrl(result.url);
       } catch (err) {
         console.error("Failed to get image URL:", err);
         setError("Failed to load image");
@@ -60,7 +56,7 @@ export default function SecureImage({
     if (filePath && dealershipId) {
       fetchImageUrl();
     }
-  }, [filePath, dealershipId, getImageUrl]);
+  }, [filePath, dealershipId, getViewUrl]);
 
   // Loading state - while fetching signed URL
   if (isLoading) {
@@ -130,7 +126,7 @@ export function SecureImageWithSkeleton({
   const [error, setError] = useState<string | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
 
-  const getImageUrl = useMutation(api.secure_s3.getImageUrl);
+  const getViewUrl = useAction(api.s3.getViewUrl);
 
   useEffect(() => {
     const fetchImageUrl = async () => {
@@ -139,12 +135,8 @@ export function SecureImageWithSkeleton({
         setError(null);
         setImageLoaded(false);
         
-        const result = await getImageUrl({
-          filePath,
-          dealershipId: dealershipId as Id<"dealerships">,
-        });
-        
-        setImageUrl(result.imageUrl);
+        const result = await getViewUrl({ s3Key: filePath });
+        setImageUrl(result.url);
       } catch (err) {
         console.error("Failed to get image URL:", err);
         setError("Failed to load image");
@@ -156,7 +148,7 @@ export function SecureImageWithSkeleton({
     if (filePath && dealershipId) {
       fetchImageUrl();
     }
-  }, [filePath, dealershipId, getImageUrl]);
+  }, [filePath, dealershipId, getViewUrl]);
 
   // Skeleton loading state
   if (isLoading) {

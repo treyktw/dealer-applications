@@ -27,11 +27,7 @@ export const metadata = {
   description: "Modern platform for managing car dealership operations",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning className="dark">
       <head />
@@ -42,33 +38,36 @@ export default function RootLayout({
           fontMono.variable
         )}
       >
-         <ClerkProvider
-      appearance={{
-        baseTheme: dark,
-        variables: {
-          colorPrimary: "#404040", // neutral-600
-          colorBackground: "#171717", // neutral-900
-          colorInputBackground: "#404040", // neutral-600
-          colorInputText: "#f5f5f5", // neutral-100
-        },
-        elements: {
-          formButtonPrimary: "bg-neutral-600 hover:bg-neutral-500 text-neutral-100",
-          card: "bg-neutral-800 border-neutral-700",
-          headerTitle: "text-neutral-100",
-          headerSubtitle: "text-neutral-400",
-          socialButtonsBlockButton: "bg-neutral-700 border-neutral-600 text-neutral-200 hover:bg-neutral-600",
-          formFieldLabel: "text-neutral-200",
-          formFieldInput: "bg-neutral-700 border-neutral-600 text-neutral-100",
-          footerActionLink: "text-neutral-400 hover:text-neutral-200",
-        },
-      }}
-    >
+        <ClerkProvider
+          appearance={{
+            baseTheme: dark,
+            variables: {
+              colorPrimary: "#404040", // neutral-600
+              colorBackground: "#171717", // neutral-900
+              colorInputBackground: "#404040", // neutral-600
+              colorInputText: "#f5f5f5", // neutral-100
+            },
+            elements: {
+              formButtonPrimary:
+                "bg-neutral-600 hover:bg-neutral-500 text-neutral-100",
+              card: "bg-neutral-800 border-neutral-700",
+              headerTitle: "text-neutral-100",
+              headerSubtitle: "text-neutral-400",
+              socialButtonsBlockButton:
+                "bg-neutral-700 border-neutral-600 text-neutral-200 hover:bg-neutral-600",
+              formFieldLabel: "text-neutral-200",
+              formFieldInput:
+                "bg-neutral-700 border-neutral-600 text-neutral-100",
+              footerActionLink: "text-neutral-400 hover:text-neutral-200",
+            },
+          }}
+        >
           <ConvexClientProvider>
             {/* <QueryProvider> */}
-              <SubscriptionProvider>
-                {children}
-                <Toaster />
-              </SubscriptionProvider>
+            <SubscriptionProvider>
+              {children}
+              <Toaster />
+            </SubscriptionProvider>
             {/* </QueryProvider> */}
             <div id={useId()} className="hidden"></div>
           </ConvexClientProvider>

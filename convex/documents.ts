@@ -1,9 +1,10 @@
 import { query, mutation, action } from "./_generated/server";
 import { v } from "convex/values";
-import { api, internal } from "./_generated/api";
+import { api } from "./_generated/api";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { Doc, Id } from "./_generated/dataModel";
+import { generateDownloadUrl as generateS3DownloadUrl } from "./lib/s3";
 // Helper function for custom document path (inline since we can't import from web app)
 function generateCustomDocumentPath(dealershipId: string, dealId: string, fileName: string): string {
   return `${dealershipId}/custom-documents/${dealId}/${fileName}`;
@@ -859,13 +860,7 @@ export const sendDealDocumentsEmail = action({
       
       try {
         // Get download URL
-        const { downloadUrl } = await ctx.runAction(
-          internal.secure_s3.generateDownloadUrl,
-          {
-            s3Key: doc.s3Key,
-            expiresIn: 300,
-          }
-        );
+        const downloadUrl = await generateS3DownloadUrl(doc.s3Key, 300);
 
         // Download PDF
         const response = await fetch(downloadUrl);

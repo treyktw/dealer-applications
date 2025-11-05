@@ -6,7 +6,7 @@ import {
   action,
   type QueryCtx,
 } from "../_generated/server";
-import { api, internal } from "../_generated/api";
+import { api } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import { requireDealership, assertDealershipAccess } from "../guards";
 import {
@@ -16,6 +16,7 @@ import {
   PDFDropdown,
   PDFRadioGroup,
 } from "pdf-lib";
+import { generateDownloadUrl, generateUploadUrl } from "../lib/s3";
 
 /**
  * Authentication helper that works for both desktop and web apps
@@ -157,10 +158,6 @@ export const createDocumentInstance = mutation({
       status: "DRAFT",
       name: template.name,
       documentType: template.category,
-      requiredSignatures: template.pdfFields
-        .filter((field) => field.type === "signature")
-        .map((field) => field.name),
-      signaturesCollected: [],
       audit: {
         createdBy: user._id,
         createdAt: Date.now(),
@@ -306,13 +303,7 @@ export const generateDocument = action({
     }
 
     // Get template PDF download URL
-    const { downloadUrl: templateUrl } = await ctx.runAction(
-      internal.secure_s3.generateDownloadUrl,
-      {
-        s3Key: template.s3Key,
-        expiresIn: 300,
-      }
-    );
+    const templateUrl = await generateDownloadUrl(template.s3Key, 300);
 
     try {
       // Download template PDF
@@ -339,13 +330,10 @@ export const generateDocument = action({
       // console.log("S3 key ends with .pdf:", s3Key.endsWith('.pdf'));
 
       // Get upload URL
-      const { uploadUrl } = await ctx.runAction(
-        internal.secure_s3.generateUploadUrl,
-        {
-          s3Key,
-          contentType: "application/pdf",
-          expiresIn: 300,
-        }
+      const uploadUrl = await generateUploadUrl(
+        s3Key,
+        "application/pdf",
+        300
       );
 
       // Upload filled PDF to S3
@@ -1172,13 +1160,7 @@ export const extractFieldValuesFromDocument = action({
     }
 
     // Get download URL for the generated PDF
-    const { downloadUrl } = await ctx.runAction(
-      internal.secure_s3.generateDownloadUrl,
-      {
-        s3Key: document.s3Key,
-        expiresIn: 300,
-      }
-    );
+    const downloadUrl = await generateDownloadUrl(document.s3Key, 300);
 
     try {
       // Download the generated PDF
@@ -1330,13 +1312,7 @@ export const updateDocumentFieldValues = action({
     }
 
     // Get download URL for the current PDF
-    const { downloadUrl } = await ctx.runAction(
-      internal.secure_s3.generateDownloadUrl,
-      {
-        s3Key: document.s3Key,
-        expiresIn: 300,
-      }
-    );
+    const downloadUrl = await generateDownloadUrl(document.s3Key, 300);
 
     try {
       // Download the current PDF
@@ -1359,13 +1335,10 @@ export const updateDocumentFieldValues = action({
       const s3Key = `org/${orgId}/docs/instances/${document.dealId}/${document._id}-v${timestamp}.pdf`;
 
       // Get upload URL
-      const { uploadUrl } = await ctx.runAction(
-        internal.secure_s3.generateUploadUrl,
-        {
-          s3Key,
-          contentType: "application/pdf",
-          expiresIn: 300,
-        }
+      const uploadUrl = await generateUploadUrl(
+        s3Key,
+        "application/pdf",
+        300
       );
 
       // Upload updated PDF to S3
@@ -1609,12 +1582,9 @@ export const getDocumentDownloadUrl = action({
     });
 
     // Generate presigned download URL
-    const { downloadUrl } = await ctx.runAction(
-      internal.secure_s3.generateDownloadUrl,
-      {
-        s3Key,
-        expiresIn: args.expiresIn || 300,
-      }
+    const downloadUrl = await generateDownloadUrl(
+      s3Key,
+      args.expiresIn || 300
     );
 
     return {
@@ -1669,13 +1639,10 @@ export const getDocumentUploadUrl = action({
     );
 
     // Generate presigned upload URL
-    const { uploadUrl } = await ctx.runAction(
-      internal.secure_s3.generateUploadUrl,
-      {
-        s3Key,
-        contentType: "application/pdf",
-        expiresIn: 900,
-      }
+    const uploadUrl = await generateUploadUrl(
+      s3Key,
+      "application/pdf",
+      900
     );
 
     return {

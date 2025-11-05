@@ -10,7 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useUser } from "@clerk/nextjs";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { toast } from "sonner";
 import { 
@@ -26,52 +26,19 @@ import {
   ExternalLink
 } from "lucide-react";
 
-interface BucketCheckResult {
-  totalDealerships: number;
-  dealershipsWithBuckets: number;
-  dealershipsWithoutBuckets: number;
-  created: string[];
-  failed: string[];
-}
-
 export default function DeveloperToolsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [showDangerZone, setShowDangerZone] = useState(false);
-  const [bucketCheckResult, setBucketCheckResult] = useState<BucketCheckResult | null>(null);
   
   const { user } = useUser();
   const currentDealership = useQuery(api.dealerships.getCurrentDealership, {});
   const deleteUserData = useMutation(api.developer.deleteCurrentUserData);
-  const checkAndCreateMissingBuckets = useAction(api.secure_s3.checkAndCreateMissingBuckets);
 
   const confirmDeleteId = useId();
 
-  const handleBulkBucketCheck = async (dryRun: boolean = true) => {
-    try {
-      toast.loading(dryRun ? "Checking all dealership buckets..." : "Creating missing buckets...");
-      
-      const result = await checkAndCreateMissingBuckets({ dryRun });
-      setBucketCheckResult(result);
-      
-      toast.dismiss();
-      
-      if (dryRun) {
-        toast.success(`Found ${result.dealershipsWithoutBuckets} dealerships missing buckets`);
-      } else {
-        if (result.created.length > 0) {
-          toast.success(`Created ${result.created.length} buckets successfully!`);
-        } else if (result.dealershipsWithoutBuckets === 0) {
-          toast.success("All dealerships already have buckets!");
-        } else {
-          toast.warning(`${result.failed.length} bucket creations failed`);
-        }
-      }
-    } catch (error) {
-      toast.dismiss();
-      console.error("Bucket check error:", error);
-      toast.error("Failed to check buckets: " + (error instanceof Error ? error.message : "Unknown error"));
-    }
+  const handleBulkBucketCheck = async () => {
+    toast.info("S3 storage is centrally managed. No per-dealership buckets to manage.");
   };
 
   // Get API endpoints for this dealership
@@ -221,78 +188,22 @@ export default function DeveloperToolsPage() {
         </CardContent>
       </Card>
 
-      {/* S3 Bucket Management */}
+      {/* S3 Storage Info */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <Shield className="h-5 w-5" />
-            <CardTitle>S3 Bucket Management</CardTitle>
+            <CardTitle>S3 Storage</CardTitle>
           </div>
           <CardDescription>
-            Manage S3 buckets for all dealerships
+            Centralized S3 storage is managed automatically
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Button 
-              onClick={() => handleBulkBucketCheck(true)}
-              variant="outline"
-              className="w-full"
-            >
-              <Shield className="mr-2 h-4 w-4" />
-              Check All Buckets (Dry Run)
-            </Button>
-            <Button 
-              onClick={() => handleBulkBucketCheck(false)}
-              variant="default"
-              className="w-full"
-            >
-              <Shield className="mr-2 h-4 w-4" />
-              Create Missing Buckets
-            </Button>
-          </div>
-          
-          {bucketCheckResult && (
-            <div className="mt-4 p-4 bg-zinc-900 rounded-lg">
-              <h4 className="font-medium text-sm mb-2">Last Bucket Check Results:</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <div className="font-medium text-blue-600">{bucketCheckResult.totalDealerships}</div>
-                  <div className="text-muted-foreground">Total</div>
-                </div>
-                <div>
-                  <div className="font-medium text-green-600">{bucketCheckResult.dealershipsWithBuckets}</div>
-                  <div className="text-muted-foreground">With Buckets</div>
-                </div>
-                <div>
-                  <div className="font-medium text-yellow-600">{bucketCheckResult.dealershipsWithoutBuckets}</div>
-                  <div className="text-muted-foreground">Missing Buckets</div>
-                </div>
-                <div>
-                  <div className="font-medium text-purple-600">{bucketCheckResult.created.length}</div>
-                  <div className="text-muted-foreground">Created</div>
-                </div>
-              </div>
-              
-              {bucketCheckResult.created.length > 0 && (
-                <div className="mt-3">
-                  <div className="text-xs font-medium text-green-700 mb-1">Created Buckets:</div>
-                  <div className="text-xs text-green-600">
-                    {bucketCheckResult.created.join(', ')}
-                  </div>
-                </div>
-              )}
-              
-              {bucketCheckResult.failed.length > 0 && (
-                <div className="mt-3">
-                  <div className="text-xs font-medium text-red-700 mb-1">Failed:</div>
-                  <div className="text-xs text-red-600">
-                    {bucketCheckResult.failed.join(', ')}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          <Button onClick={() => handleBulkBucketCheck()} variant="outline" className="w-full">
+            <Shield className="mr-2 h-4 w-4" />
+            Storage is auto-managed
+          </Button>
         </CardContent>
       </Card>
       <Card>
