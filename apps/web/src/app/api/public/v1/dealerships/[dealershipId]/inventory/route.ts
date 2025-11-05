@@ -5,37 +5,77 @@ import { fetchQuery } from 'convex/nextjs';
 import { api } from '@/convex/_generated/api';
 import { getRateLimitStatus } from '@/lib/rate-limit';
 import { validateApiKey } from '@/lib/api-auth';
+import { isVerifiedOrigin, applyCorsHeaders } from '@/lib/cors';
+
+// Route segment config for Next.js 15
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+// Handle OPTIONS preflight requests
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': origin || '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, X-API-Key, Authorization',
+      'Access-Control-Max-Age': '86400',
+      'Access-Control-Allow-Credentials': 'false',
+    },
+  });
+}
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ dealershipId: string }> }
 ) {
+  let dealershipId: string | undefined;
+  let origin: string | null = null;
+  
   try {
-    const { dealershipId } = await params;
+    // Await params first
+    const resolvedParams = await params;
+    dealershipId = resolvedParams.dealershipId;
+    
+    // Get origin for CORS
+    origin = request.headers.get('origin');
+    
+    // Log request for debugging (only in development)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Inventory API] GET request for dealership: ${dealershipId}`);
+    }
     
     // 1. Validate API Key
     const apiKey = request.headers.get('x-api-key');
     if (!apiKey) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: 'Missing API key', code: 'UNAUTHORIZED' },
         { status: 401 }
       );
+      // Add CORS headers even for errors
+      if (dealershipId) {
+        return applyCorsHeaders(response, origin, await isVerifiedOrigin(origin, dealershipId));
+      }
+      return response;
     }
     
     // Validates and tracks usage automatically
     const keyValidation = await validateApiKey(apiKey, dealershipId);
     if (!keyValidation.valid) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: keyValidation.error, code: 'INVALID_API_KEY' },
         { status: 410 }
       );
+      return applyCorsHeaders(response, origin, await isVerifiedOrigin(origin, dealershipId));
     }
 
     if (!keyValidation.apiKeyDoc) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: 'Invalid API key', code: 'INVALID_API_KEY' },
         { status: 411 }
       );
+      return applyCorsHeaders(response, origin, await isVerifiedOrigin(origin, dealershipId));
     }
     
     // 2. Check Rate Limit
@@ -45,7 +85,7 @@ export async function GET(
     );
     
     if (rateLimitStatus.limited) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { 
           error: 'Rate limit exceeded', 
           code: 'RATE_LIMITED',
@@ -61,6 +101,7 @@ export async function GET(
           }
         }
       );
+      return applyCorsHeaders(response, origin, await isVerifiedOrigin(origin, dealershipId));
     }
     
     // 3. Parse Query Params
@@ -88,8 +129,11 @@ export async function GET(
       ...filters
     });
     
-    // 5. Return with cache headers
-    return NextResponse.json(result, {
+    // Check if domain is verified for CORS
+    const verified = await isVerifiedOrigin(origin, dealershipId);
+    
+    // 5. Return with cache headers and CORS
+    const response = NextResponse.json(result, {
       status: 200,
       headers: {
         'Cache-Control': 'public, max-age=300, s-maxage=600, stale-while-revalidate=3600',
@@ -98,11 +142,35 @@ export async function GET(
       }
     });
     
+    return applyCorsHeaders(response, origin, verified);
+    
   } catch (error) {
-    console.error('Public API error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error', code: 'INTERNAL_ERROR' },
+    console.error('[Inventory API] Error:', error);
+    console.error('[Inventory API] Error details:', {
+      dealershipId,
+      url: request.url,
+      method: request.method,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    
+    const response = NextResponse.json(
+      { 
+        error: 'Internal server error', 
+        code: 'INTERNAL_ERROR',
+        message: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined
+      },
       { status: 500 }
     );
+    
+    // Add CORS headers if we have dealershipId
+    if (dealershipId && origin) {
+      try {
+        return applyCorsHeaders(response, origin, await isVerifiedOrigin(origin, dealershipId));
+      } catch (corsError) {
+        console.error('[Inventory API] CORS error:', corsError);
+      }
+    }
+    
+    return response;
   }
 }
