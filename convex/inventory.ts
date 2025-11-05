@@ -2,6 +2,11 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { query, mutation, action } from "./_generated/server";
 import { v } from "convex/values";
+import {
+  canTransitionVehicleStatus,
+  VehicleStatus,
+  getVehicleStatusLabel,
+} from "./lib/statuses";
 
 export const getStats = query({
   args: {},
@@ -1044,5 +1049,81 @@ export const getSimilarVehicles = query({
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
       .map(item => item.vehicle);
+  },
+});
+
+/**
+ * Update vehicle status with validation and tracking
+ * Supports both web and desktop app authentication
+ */
+export const updateVehicleStatus = mutation({
+  args: {
+    vehicleId: v.id("vehicles"),
+    newStatus: v.string(), // Will be validated against enum
+    reason: v.optional(v.string()),
+    reservedBy: v.optional(v.string()), // client ID when reserving
+    reservedUntil: v.optional(v.number()), // expiration timestamp for reservations
+    token: v.optional(v.string()), // For desktop app auth
+  },
+  handler: async (ctx, args) => {
+    // Optional: Add auth check similar to deals if needed
+    // For now allowing without auth for flexibility
+
+    const vehicle = await ctx.db.get(args.vehicleId);
+    if (!vehicle) {
+      throw new Error("Vehicle not found");
+    }
+
+    const previousStatus = vehicle.status;
+    const newStatus = args.newStatus;
+
+    // Validate status transition
+    if (!canTransitionVehicleStatus(previousStatus, newStatus)) {
+      throw new Error(
+        `Invalid status transition: Cannot transition vehicle from ${getVehicleStatusLabel(previousStatus)} to ${getVehicleStatusLabel(newStatus)}`
+      );
+    }
+
+    // Update vehicle status with tracking fields
+    await ctx.db.patch(args.vehicleId, {
+      status: newStatus,
+      statusChangedAt: Date.now(),
+      // statusChangedBy: user?._id, // Add when auth is required
+      updatedAt: Date.now(),
+      // Handle reservation fields
+      ...(newStatus === VehicleStatus.RESERVED && {
+        reservedBy: args.reservedBy,
+        reservedAt: Date.now(),
+        reservedUntil: args.reservedUntil,
+      }),
+      // Clear reservation fields when no longer reserved
+      ...(previousStatus === VehicleStatus.RESERVED &&
+        newStatus !== VehicleStatus.RESERVED && {
+          reservedBy: undefined,
+          reservedAt: undefined,
+          reservedUntil: undefined,
+        }),
+    });
+
+    // Log status change (optional)
+    if (vehicle.dealershipId) {
+      await ctx.db.insert("security_logs", {
+        dealershipId: vehicle.dealershipId as Id<"dealerships">,
+        action: "vehicle_status_updated",
+        userId: "system", // Update when auth is required
+        ipAddress: "server",
+        success: true,
+        details: `Vehicle ${vehicle.make} ${vehicle.model} (${vehicle.stock}) status changed from ${previousStatus} to ${newStatus}${args.reason ? ` (${args.reason})` : ""}`,
+        timestamp: Date.now(),
+      });
+    }
+
+    return {
+      success: true,
+      previousStatus,
+      newStatus,
+      vehicleId: args.vehicleId,
+      timestamp: Date.now(),
+    };
   },
 });

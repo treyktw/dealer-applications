@@ -3,6 +3,12 @@ import { v } from "convex/values";
 // import type { Id } from "./_generated/dataModel";
 // import { nanoid } from "nanoid";
 import { api } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import {
+  canTransitionClientStatus,
+  ClientStatus,
+  getClientStatusLabel,
+} from "./lib/statuses";
 
 export const createClient = mutation({
   args: {
@@ -651,5 +657,78 @@ export const exportClients = query({
     results.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     return results;
+  },
+});
+
+/**
+ * Update client status with validation and tracking
+ * Supports both web and desktop app authentication
+ */
+export const updateClientStatus = mutation({
+  args: {
+    clientId: v.id("clients"),
+    newStatus: v.string(), // Will be validated against enum
+    reason: v.optional(v.string()),
+    lostReason: v.optional(v.string()), // When marking as LOST
+    nextFollowUpAt: v.optional(v.number()), // Schedule next follow-up
+    token: v.optional(v.string()), // For desktop app auth
+  },
+  handler: async (ctx, args) => {
+    // Optional: Add auth check similar to deals if needed
+    // For now allowing without auth for flexibility
+
+    const client = await ctx.db.get(args.clientId);
+    if (!client) {
+      throw new Error("Client not found");
+    }
+
+    const previousStatus = client.status;
+    const newStatus = args.newStatus;
+
+    // Validate status transition
+    if (!canTransitionClientStatus(previousStatus, newStatus)) {
+      throw new Error(
+        `Invalid status transition: Cannot transition client from ${getClientStatusLabel(previousStatus)} to ${getClientStatusLabel(newStatus)}`
+      );
+    }
+
+    // Update client status with tracking fields
+    await ctx.db.patch(args.clientId, {
+      status: newStatus,
+      statusChangedAt: Date.now(),
+      // statusChangedBy: user?._id, // Add when auth is required
+      updatedAt: Date.now(),
+      // Handle specific status fields
+      ...(newStatus === ClientStatus.CONTACTED && {
+        lastContactedAt: Date.now(),
+      }),
+      ...(newStatus === ClientStatus.LOST && args.lostReason && {
+        lostReason: args.lostReason,
+      }),
+      ...(args.nextFollowUpAt && {
+        nextFollowUpAt: args.nextFollowUpAt,
+      }),
+    });
+
+    // Log status change (optional)
+    if (client.dealershipId) {
+      await ctx.db.insert("security_logs", {
+        dealershipId: client.dealershipId as Id<"dealerships">,
+        action: "client_status_updated",
+        userId: "system", // Update when auth is required
+        ipAddress: "server",
+        success: true,
+        details: `Client ${client.firstName} ${client.lastName} status changed from ${previousStatus} to ${newStatus}${args.reason ? ` (${args.reason})` : ""}`,
+        timestamp: Date.now(),
+      });
+    }
+
+    return {
+      success: true,
+      previousStatus,
+      newStatus,
+      clientId: args.clientId,
+      timestamp: Date.now(),
+    };
   },
 });

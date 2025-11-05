@@ -3,6 +3,8 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { api } from "./_generated/api";
+import { DealStatus } from "./lib/statuses";
 
 // Create a new document pack for a deal
 export const createDocumentPack = mutation({
@@ -360,3 +362,61 @@ function getRequiredTemplates(packType: string, _jurisdiction: string) {
 
   return templates[packType] || templates.cash_sale;
 }
+
+/**
+ * Mark document pack as signed and automatically update deal status
+ * This enables desktop → web real-time sync when documents are signed
+ */
+export const markDocumentPackSigned = mutation({
+  args: {
+    documentPackId: v.id("document_packs"),
+    signatureNotes: v.optional(v.string()),
+    token: v.optional(v.string()), // For desktop app auth
+  },
+  handler: async (ctx, args) => {
+    const docPack = await ctx.db.get(args.documentPackId);
+    if (!docPack) {
+      throw new Error("Document pack not found");
+    }
+
+    // Mark document pack as all signed
+    await ctx.db.patch(args.documentPackId, {
+      allPartiesSigned: true,
+      physicalSignatureDate: Date.now(),
+      physicalSignatureNotes: args.signatureNotes || "Signed via application",
+    });
+
+    // =========================================================================
+    // AUTO-UPDATE DEAL STATUS - Enables real-time sync to web app
+    // =========================================================================
+    if (docPack.dealId) {
+      const deal = await ctx.db.get(docPack.dealId);
+      if (deal) {
+        // Only auto-update if deal is in a signing-related status
+        const signingStatuses = [
+          DealStatus.AWAITING_SIGNATURES,
+          DealStatus.PARTIALLY_SIGNED,
+          DealStatus.DOCS_READY,
+        ];
+
+        if (signingStatuses.includes(deal.status)) {
+          // Call updateDealStatus to trigger cascading updates
+          // This will also update vehicle → SOLD and client → CUSTOMER
+          await ctx.runMutation(api.deals.updateDealStatus, {
+            dealId: deal._id,
+            newStatus: DealStatus.COMPLETED,
+            reason: "All documents signed",
+            token: args.token,
+          });
+        }
+      }
+    }
+
+    return {
+      success: true,
+      documentPackId: args.documentPackId,
+      dealAutoUpdated: !!docPack.dealId,
+      timestamp: Date.now(),
+    };
+  },
+});

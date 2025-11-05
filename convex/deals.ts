@@ -3,6 +3,14 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { api } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
+import {
+  canTransitionDealStatus,
+  canTransitionVehicleStatus,
+  canTransitionClientStatus,
+  DealStatus,
+  VehicleStatus,
+  ClientStatus,
+} from "./lib/statuses";
 
 // Helper function to require authentication (supports desktop token or web identity)
 async function requireAuth(ctx: QueryCtx, token?: string): Promise<Doc<"users">> {
@@ -170,42 +178,164 @@ export const getDeal = query({
   },
 });
 
+/**
+ * Comprehensive status update function with:
+ * - Status transition validation
+ * - Full audit trail (status history)
+ * - Cascading updates to vehicle and client
+ * - Real-time sync (Convex automatically pushes to all clients)
+ */
 export const updateDealStatus = mutation({
   args: {
     dealId: v.id("deals"),
-    status: v.union(
-      v.literal("draft"),
-      v.literal("pending_documents"),
-      v.literal("ready_to_finalize"),
-      v.literal("completed"),
-      v.literal("cancelled"),
-      v.literal("on_hold")
-    ),
+    newStatus: v.string(), // Will be validated against enum
+    reason: v.optional(v.string()),
+    token: v.optional(v.string()), // For desktop app auth
   },
   handler: async (ctx, args) => {
+    // Require auth (desktop token or web identity)
+    const user = await requireAuth(ctx, args.token);
+
     const deal = await ctx.db.get(args.dealId);
     if (!deal) {
       throw new Error("Deal not found");
     }
 
-    // Update status
+    // Verify user has access to this deal
+    if (deal.dealershipId !== user.dealershipId) {
+      throw new Error("Unauthorized: Deal belongs to different dealership");
+    }
+
+    const previousStatus = deal.status;
+    const newStatus = args.newStatus;
+
+    // Validate status transition
+    if (!canTransitionDealStatus(previousStatus, newStatus)) {
+      throw new Error(
+        `Invalid status transition: Cannot transition from ${previousStatus} to ${newStatus}`
+      );
+    }
+
+    // Build status history entry
+    const historyEntry = {
+      previousStatus,
+      newStatus,
+      changedAt: Date.now(),
+      changedBy: user._id,
+      reason: args.reason,
+    };
+
+    // Update deal status with tracking fields
     await ctx.db.patch(args.dealId, {
-      status: args.status,
+      status: newStatus,
+      statusChangedAt: Date.now(),
+      statusChangedBy: user._id,
+      statusHistory: [...(deal.statusHistory || []), historyEntry],
       updatedAt: Date.now(),
+      // Track approvals
+      ...(newStatus === DealStatus.APPROVED && {
+        approvedBy: user._id,
+        approvedAt: Date.now(),
+      }),
+      // Track cancellations
+      ...(newStatus === DealStatus.CANCELLED && {
+        cancelledBy: user._id,
+        cancelledAt: Date.now(),
+        cancellationReason: args.reason,
+      }),
     });
+
+    // =========================================================================
+    // CASCADING UPDATES - Auto-update related records
+    // =========================================================================
+
+    // When deal is COMPLETED → Update vehicle to SOLD
+    if (newStatus === DealStatus.COMPLETED && deal.vehicleId) {
+      const vehicle = await ctx.db.get(deal.vehicleId);
+      if (vehicle) {
+        const canTransition = canTransitionVehicleStatus(
+          vehicle.status,
+          VehicleStatus.SOLD
+        );
+        if (canTransition) {
+          await ctx.db.patch(vehicle._id, {
+            status: VehicleStatus.SOLD,
+            statusChangedAt: Date.now(),
+            statusChangedBy: user._id,
+            clientId: deal.clientId ? String(deal.clientId) : undefined,
+            updatedAt: Date.now(),
+          });
+        }
+      }
+    }
+
+    // When deal is COMPLETED → Update client to CUSTOMER
+    if (newStatus === DealStatus.COMPLETED && deal.clientId) {
+      const client = await ctx.db.get(deal.clientId);
+      if (client) {
+        // Only update if currently a lead stage (not already a customer)
+        const leadStatuses = [
+          ClientStatus.PROSPECT,
+          ClientStatus.CONTACTED,
+          ClientStatus.QUALIFIED,
+          ClientStatus.NEGOTIATING,
+          "LEAD", // Legacy
+        ];
+        if (leadStatuses.includes(client.status)) {
+          const canTransition = canTransitionClientStatus(
+            client.status,
+            ClientStatus.CUSTOMER
+          );
+          if (canTransition) {
+            await ctx.db.patch(client._id, {
+              status: ClientStatus.CUSTOMER,
+              statusChangedAt: Date.now(),
+              statusChangedBy: user._id,
+              updatedAt: Date.now(),
+            });
+          }
+        }
+      }
+    }
+
+    // When deal is CANCELLED → Update vehicle back to AVAILABLE (if was PENDING_SALE)
+    if (newStatus === DealStatus.CANCELLED && deal.vehicleId) {
+      const vehicle = await ctx.db.get(deal.vehicleId);
+      if (vehicle && vehicle.status === VehicleStatus.PENDING_SALE) {
+        const canTransition = canTransitionVehicleStatus(
+          vehicle.status,
+          VehicleStatus.AVAILABLE
+        );
+        if (canTransition) {
+          await ctx.db.patch(vehicle._id, {
+            status: VehicleStatus.AVAILABLE,
+            statusChangedAt: Date.now(),
+            statusChangedBy: user._id,
+            clientId: undefined, // Remove client link
+            updatedAt: Date.now(),
+          });
+        }
+      }
+    }
 
     // Log status change
     await ctx.db.insert("security_logs", {
       dealershipId: deal.dealershipId as Id<"dealerships">,
       action: "deal_status_updated",
-      userId: "system",
+      userId: user._id,
       ipAddress: "server",
       success: true,
-      details: `Deal status changed to ${args.status}`,
+      details: `Deal status changed from ${previousStatus} to ${newStatus}${args.reason ? ` (${args.reason})` : ""}`,
       timestamp: Date.now(),
     });
 
-    return { success: true, newStatus: args.status };
+    return {
+      success: true,
+      previousStatus,
+      newStatus,
+      dealId: args.dealId,
+      timestamp: Date.now(),
+    };
   },
 });
 
@@ -304,13 +434,13 @@ export const createDeal = mutation({
       throw new Error("Vehicle not found");
     }
 
-    // Create deal
+    // Create deal with new DRAFT status
     const dealId = await ctx.db.insert("deals", {
       clientId: args.clientId,
       vehicleId: args.vehicleId,
       dealershipId: args.dealershipId,
       type: args.type,
-      status: "draft",
+      status: DealStatus.DRAFT, // Use new status constant
       saleAmount: args.saleAmount,
       salesTax: args.salesTax,
       docFee: args.docFee,
@@ -329,6 +459,9 @@ export const createDeal = mutation({
       dealerSigned: false,
       notarized: false,
       documentStatus: "none",
+      // Status tracking fields
+      statusChangedAt: Date.now(),
+      statusHistory: [], // Initialize empty history
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
