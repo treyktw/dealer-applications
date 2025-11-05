@@ -129,13 +129,6 @@ const navItemsWithSubRoutes = [
     href: "/communications",
     label: "Communications",
     icon: Mail,
-    subItems: [
-      {
-        href: "/communications/email/b2c",
-        label: "Email",
-        icon: Mail,
-      },
-    ],
   }
 ];
 

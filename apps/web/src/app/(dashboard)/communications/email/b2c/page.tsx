@@ -30,7 +30,7 @@ function EmailPreview({ content }: { content: string }) {
   const textContent = content.replace(/<[^>]*>/g, "").trim();
   
   return (
-    <div className="text-sm text-gray-700 whitespace-pre-wrap">
+    <div className="text-sm text-zinc-700 whitespace-pre-wrap">
       {textContent || content}
     </div>
   );
@@ -142,11 +142,11 @@ export default function B2CEmailPage() {
       <div className="flex items-center justify-center min-h-[60vh]">
         <Card className="max-w-md">
           <CardContent className="pt-6 text-center">
-            <Mail className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            <Mail className="w-12 h-12 text-zinc-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-zinc-900 mb-2">
               No Dealership Found
             </h3>
-            <p className="text-gray-600 mb-4">
+            <p className="text-zinc-600 mb-4">
               Please contact support to associate your account with a dealership.
             </p>
           </CardContent>
@@ -159,10 +159,10 @@ export default function B2CEmailPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">
+        <h1 className="text-3xl font-bold text-zinc-100">
           Email Your Clients (B2C)
         </h1>
-        <p className="text-gray-600 mt-1">
+        <p className="text-zinc-600 mt-1">
           Send promotional emails, newsletters, or updates to your clients
         </p>
       </div>
@@ -192,7 +192,7 @@ export default function B2CEmailPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-zinc-600">
                     {selectedClients.length} selected
                   </span>
                   <Button
@@ -208,11 +208,11 @@ export default function B2CEmailPage() {
 
                 <div className="max-h-96 overflow-y-auto space-y-2 border rounded-lg p-2">
                   {clientsResult === undefined ? (
-                    <p className="text-sm text-gray-600 text-center py-4">
+                    <p className="text-sm text-zinc-600 text-center py-4">
                       Loading clients...
                     </p>
                   ) : clients.length === 0 ? (
-                    <p className="text-sm text-gray-600 text-center py-4">
+                    <p className="text-sm text-zinc-600 text-center py-4">
                       No clients found
                     </p>
                   ) : (
@@ -221,7 +221,7 @@ export default function B2CEmailPage() {
                       return (
                         <label
                           key={client._id}
-                          className={`flex items-center space-x-2 p-2 rounded cursor-pointer hover:bg-gray-100 ${
+                          className={`flex items-center space-x-2 p-2 rounded cursor-pointer hover:bg-zinc-900 ${
                             selectedClients.includes(client._id)
                               ? "bg-blue-50 border border-blue-300"
                               : "border border-transparent"
@@ -231,13 +231,13 @@ export default function B2CEmailPage() {
                             type="checkbox"
                             checked={selectedClients.includes(client._id)}
                             onChange={() => handleSelectClient(client._id)}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
                           />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">
+                            <p className="text-sm font-medium text-zinc-100 truncate">
                               {clientName}
                             </p>
-                            <p className="text-xs text-gray-600 truncate">
+                            <p className="text-xs text-zinc-600 truncate">
                               {client.email || "No email"}
                             </p>
                           </div>
@@ -269,7 +269,7 @@ export default function B2CEmailPage() {
                       onChange={(e) => setFromEmail(e.target.value)}
                       placeholder="sales@yourdealership.com"
                     />
-                    <p className="text-xs text-gray-600">
+                    <p className="text-xs text-zinc-600">
                       Leave blank to use default
                     </p>
                   </div>
@@ -319,7 +319,7 @@ export default function B2CEmailPage() {
                     rows={12}
                     required
                   />
-                  <p className="text-xs text-gray-600">
+                  <p className="text-xs text-zinc-600">
                     You can use HTML for formatting. Variables: {"{"}
                     {"{"}clientName{"}"}{"}"}
                   </p>
@@ -327,11 +327,11 @@ export default function B2CEmailPage() {
 
                 {/* Preview */}
                 {htmlContent && (
-                  <div className="border rounded-lg p-4 bg-gray-50">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">
+                  <div className="border rounded-lg p-4 ">
+                    <h4 className="text-sm font-medium text-zinc-700 mb-2">
                       Preview
                     </h4>
-                    <div className="bg-white border rounded p-4">
+                    <div className=" border rounded p-4">
                       <p className="text-sm font-semibold mb-2">{subject || "(No subject)"}</p>
                       {/* Preview of HTML email content - safe as it's user-generated preview */}
                       <EmailPreview content={htmlContent} />
@@ -341,7 +341,7 @@ export default function B2CEmailPage() {
 
                 {/* Send Button */}
                 <div className="flex items-center justify-between pt-4 border-t">
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-zinc-600">
                     <Users className="w-4 h-4 inline mr-1" />
                     Sending to {selectedClients.length} recipient
                     {selectedClients.length !== 1 ? "s" : ""}
@@ -373,12 +373,12 @@ export default function B2CEmailPage() {
               {emailHistory === undefined ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="mt-2 text-sm text-gray-600">Loading...</p>
+                  <p className="mt-2 text-sm text-zinc-600">Loading...</p>
                 </div>
               ) : emailHistory.length === 0 ? (
                 <div className="text-center py-8">
-                  <Mail className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-600">
+                  <Mail className="w-12 h-12 text-zinc-400 mx-auto mb-2" />
+                  <p className="text-sm text-zinc-600">
                     No emails sent yet
                   </p>
                 </div>
@@ -387,17 +387,17 @@ export default function B2CEmailPage() {
                   {emailHistory.map((email) => (
                     <div
                       key={email._id}
-                      className="border rounded-lg p-4 hover:bg-gray-50"
+                      className="border rounded-lg p-4 hover:bg-zinc-50"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <p className="font-medium text-sm">
                             {email.subject}
                           </p>
-                          <p className="text-xs text-gray-600 mt-1">
+                          <p className="text-xs text-zinc-600 mt-1">
                             To: {email.recipientEmail}
                           </p>
-                          <p className="text-xs text-gray-500 mt-1">
+                          <p className="text-xs text-zinc-500 mt-1">
                             {new Date(email.createdAt).toLocaleString()}
                           </p>
                         </div>

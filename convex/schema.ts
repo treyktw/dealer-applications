@@ -1130,6 +1130,7 @@ export default defineSchema({
 
     // Verification details
     verifiedAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()),
     lastCheckedAt: v.optional(v.number()),
     verificationAttempts: v.number(),
 

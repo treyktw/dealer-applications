@@ -10,7 +10,7 @@ import type { DocumentType } from "@/types/documents";
 import { toast } from "sonner";
 import { DealForm, type DealFormValues } from "@/components/forms/deal-form";
 import { VehicleAssignmentDialog } from "@/app/(dashboard)/clients/_components/vehicle-assignment";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -37,8 +37,8 @@ export function DocumentGenerator({ clientId, onBack }: DocumentGeneratorProps) 
     selectedVehicleId ? { vehicleId: selectedVehicleId } : "skip"
   );
   
-  // Mutation for generating documents
-  const generateDocuments = useMutation(api.documents.generateDocuments);
+  // Action for generating documents (changed from mutation to action)
+  const generateDocuments = useAction(api.documents.generateDocuments);
   
   // Handle vehicle selection
   const handleVehicleSelected = useCallback((vehicleId: Id<"vehicles">) => {

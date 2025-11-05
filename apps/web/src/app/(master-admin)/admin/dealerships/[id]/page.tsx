@@ -1,7 +1,7 @@
-// apps/web/src/app/(master-admin)/dealerships/[id]/page.tsx
+// apps/web/src/app/(admin)/dealerships/[id]/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -43,15 +43,12 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   Building2,
-  Database,
   Key,
   Globe,
   Mail,
   Settings,
   AlertTriangle,
   Check,
-  X,
-  Copy,
 } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -64,6 +61,11 @@ interface PageProps {
 export default function DealershipDetailPage({ params }: PageProps) {
   const router = useRouter();
   const dealershipId = params.id as Id<"dealerships">;
+
+  const nameId = useId();
+  const emailId = useId();
+  const storageLimitId = useId();
+  const notesId = useId();
 
   const [editMode, setEditMode] = useState(false);
   const [editedName, setEditedName] = useState("");
@@ -155,7 +157,7 @@ export default function DealershipDetailPage({ params }: PageProps) {
         reason: "Deleted by master admin",
       });
       toast.success("Dealership deleted");
-      router.push("/master-admin/dealerships");
+      router.push("/admin/dealerships");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete");
     }
@@ -170,7 +172,7 @@ export default function DealershipDetailPage({ params }: PageProps) {
     }
   };
 
-  const handleVerifyDomain = async (domainId: Id<"verified_domains">) => {
+  const handleVerifyDomain = async (domainId: Id<"verifiedDomains">) => {
     try {
       await verifyDomain({ domainId });
       toast.success("Domain verified");
@@ -179,7 +181,7 @@ export default function DealershipDetailPage({ params }: PageProps) {
     }
   };
 
-  const handleRevokeDomain = async (domainId: Id<"verified_domains">) => {
+  const handleRevokeDomain = async (domainId: Id<"verifiedDomains">) => {
     try {
       await revokeDomain({ domainId });
       toast.success("Domain revoked");
@@ -212,7 +214,7 @@ export default function DealershipDetailPage({ params }: PageProps) {
     );
   }
 
-  const { dealership, analytics, subscription, users, recentActivity } = dealershipDetails;
+  const { dealership, analytics, subscription, users } = dealershipDetails;
 
   // Initialize edit fields
   if (editMode && !editedName) {
@@ -376,7 +378,7 @@ export default function DealershipDetailPage({ params }: PageProps) {
                     <div className="space-y-2">
                       <Label htmlFor="name" className="text-zinc-300">Name</Label>
                       <Input
-                        id="name"
+                        id={nameId}
                         value={editedName}
                         onChange={(e) => setEditedName(e.target.value)}
                         className="bg-zinc-800 border-zinc-700 text-zinc-100"
@@ -385,7 +387,7 @@ export default function DealershipDetailPage({ params }: PageProps) {
                     <div className="space-y-2">
                       <Label htmlFor="email" className="text-zinc-300">Contact Email</Label>
                       <Input
-                        id="email"
+                        id={emailId}
                         type="email"
                         value={editedContactEmail}
                         onChange={(e) => setEditedContactEmail(e.target.value)}
@@ -397,7 +399,7 @@ export default function DealershipDetailPage({ params }: PageProps) {
                   <div className="space-y-2">
                     <Label htmlFor="storageLimit" className="text-zinc-300">Storage Limit (GB)</Label>
                     <Input
-                      id="storageLimit"
+                      id={storageLimitId}
                       type="number"
                       value={storageLimit}
                       onChange={(e) => setStorageLimit(e.target.value)}
@@ -408,7 +410,7 @@ export default function DealershipDetailPage({ params }: PageProps) {
                   <div className="space-y-2">
                     <Label htmlFor="notes" className="text-zinc-300">Master Admin Notes</Label>
                     <Textarea
-                      id="notes"
+                      id={notesId}
                       value={editedNotes}
                       onChange={(e) => setEditedNotes(e.target.value)}
                       rows={4}
@@ -520,7 +522,7 @@ export default function DealershipDetailPage({ params }: PageProps) {
                       <TableRow key={apiKey._id} className="border-zinc-800">
                         <TableCell className="text-zinc-100">{apiKey.name}</TableCell>
                         <TableCell className="font-mono text-xs text-zinc-400">
-                          {apiKey.key.substring(0, 20)}...
+                          {apiKey.keyPrefix}...
                         </TableCell>
                         <TableCell>
                           {apiKey.isActive ? (

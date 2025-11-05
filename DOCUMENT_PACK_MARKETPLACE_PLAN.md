@@ -211,23 +211,23 @@ Create a marketplace where dealers can purchase professionally crafted document 
 
 **New Pages/Components:**
 
-1. `/master-admin/document-packs` (List view)
+1. `/admin/document-packs` (List view)
    - Table of all packs
    - Columns: Name, Jurisdiction, Type, Price, Purchases, Revenue, Status
    - Actions: Edit, Deactivate, View Purchases
 
-2. `/master-admin/document-packs/new` (Create pack)
+2. `/admin/document-packs/new` (Create pack)
    - Form for pack details
    - Document editor/uploader
    - Preview feature
    - Publish button
 
-3. `/master-admin/document-packs/[id]/edit` (Edit pack)
+3. `/admin/document-packs/[id]/edit` (Edit pack)
    - Same as create, but pre-filled
    - Version management
    - Publish updates
 
-4. `/master-admin/document-packs/[id]/purchases` (View purchases)
+4. `/admin/document-packs/[id]/purchases` (View purchases)
    - List of dealers who purchased
    - Purchase date, amount, usage stats
 

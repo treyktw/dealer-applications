@@ -44,7 +44,10 @@ export const generateDealDocuments = action({
     }
 
     // Verify user has access to this dealership
-    if (user.dealershipId !== deal.dealershipId) {
+    // Note: deal.dealershipId is stored as string, user.dealershipId is Id<"dealerships">
+    const userDealershipIdStr = user.dealershipId as string;
+    const dealDealershipIdStr = deal.dealershipId as string;
+    if (userDealershipIdStr !== dealDealershipIdStr) {
       throw new Error("User does not have access to this deal");
     }
 

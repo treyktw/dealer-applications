@@ -222,6 +222,15 @@ export const settingsItems: SettingsItem[] = [
     category: "api",
     keywords: ["packs", "documents", "pdf", "forms", "purchase", "bill of sale"],
   },
+  {
+    id: "my-document-packs",
+    title: "My Document Packs",
+    description: "Purchase and manage document packs for your dealership",
+    icon: Package,
+    href: "/settings/my-document-packs",
+    category: "api",
+    keywords: ["packs", "documents", "pdf", "forms", "purchase", "bill of sale"],
+  },
 
   // BILLING CATEGORY
   {

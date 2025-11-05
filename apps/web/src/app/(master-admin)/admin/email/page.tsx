@@ -1,7 +1,7 @@
-// apps/web/src/app/(master-admin)/communications/email/page.tsx
+// apps/web/src/app/(admin)/communications/email/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useQuery, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -15,16 +15,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { Mail, Send, Users, AlertCircle } from "lucide-react";
+import { Send, Users, AlertCircle } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 
 export default function B2BEmailPage() {
@@ -77,7 +70,7 @@ export default function B2BEmailPage() {
     setIsSending(true);
 
     try {
-      let result;
+      let result: { sent: number };
 
       if (recipientType === "all_dealers") {
         result = await sendToAll({
@@ -153,18 +146,18 @@ export default function B2BEmailPage() {
           <CardContent className="space-y-4">
             <RadioGroup
               value={recipientType}
-              onValueChange={(value: any) => setRecipientType(value)}
+              onValueChange={(value: "all_dealers" | "specific_dealers") => setRecipientType(value)}
             >
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="all_dealers" id="all" />
-                <Label htmlFor="all" className="font-normal cursor-pointer">
+                <RadioGroupItem value="all_dealers" id={useId()} />
+                <Label htmlFor={useId()} className="font-normal cursor-pointer">
                   All Dealerships
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="specific_dealers" id="specific" />
+                <RadioGroupItem value="specific_dealers" id={useId()} />
                 <Label
-                  htmlFor="specific"
+                  htmlFor={useId()}
                   className="font-normal cursor-pointer"
                 >
                   Specific Dealerships
@@ -210,7 +203,8 @@ export default function B2BEmailPage() {
                     </p>
                   ) : (
                     dealerships.map((dealership) => (
-                      <div
+                      <button
+                        type="button"
                         key={dealership._id}
                         className={`flex items-center space-x-2 p-2 rounded cursor-pointer hover:bg-gray-100 ${
                           selectedDealerships.includes(dealership._id)
@@ -235,7 +229,7 @@ export default function B2BEmailPage() {
                             {dealership.contactEmail}
                           </p>
                         </div>
-                      </div>
+                      </button>
                     ))
                   )}
                 </div>
@@ -255,9 +249,9 @@ export default function B2BEmailPage() {
           <CardContent className="space-y-4">
             {/* Subject */}
             <div className="space-y-2">
-              <Label htmlFor="subject">Subject *</Label>
+              <Label htmlFor={useId()}>Subject *</Label>
               <Input
-                id="subject"
+                id={useId()}
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Important announcement from DealerApps"
@@ -267,9 +261,9 @@ export default function B2BEmailPage() {
 
             {/* Message */}
             <div className="space-y-2">
-              <Label htmlFor="message">Message *</Label>
+              <Label htmlFor={useId()}>Message *</Label>
               <Textarea
-                id="message"
+                id={useId()}
                 value={htmlContent}
                 onChange={(e) => setHtmlContent(e.target.value)}
                 placeholder="Write your email message here..."
@@ -291,14 +285,9 @@ export default function B2BEmailPage() {
               <div className="bg-white border rounded p-4">
                 <p className="text-sm font-semibold mb-2">{subject}</p>
                 <div
-                  className="text-sm text-gray-700"
-                  dangerouslySetInnerHTML={{
-                    __html: htmlContent.replace(
-                      /\{\{dealershipName\}\}/g,
-                      "Sample Dealership"
-                    ),
-                  }}
-                />
+                  className="text-sm text-gray-700"                >
+                  {htmlContent.replace(/<[^>]*>/g, "").trim()}
+                </div>
               </div>
             </div>
 

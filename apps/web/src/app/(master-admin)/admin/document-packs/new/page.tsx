@@ -1,4 +1,4 @@
-// apps/web/src/app/(master-admin)/document-packs/new/page.tsx
+// apps/web/src/app/(admin)/document-packs/new/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -143,7 +143,7 @@ export default function NewDocumentPackPage() {
       });
 
       toast.success("Document pack created successfully!");
-      router.push("/master-admin/document-packs");
+      router.push("/admin/document-packs");
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to create pack"

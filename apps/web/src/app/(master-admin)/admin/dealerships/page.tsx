@@ -1,4 +1,4 @@
-// apps/web/src/app/(master-admin)/dealerships/page.tsx
+// apps/web/src/app/(admin)/dealerships/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -206,7 +206,7 @@ export default function MasterAdminDealershipsPage() {
             <Select
               value={statusFilter || "all"}
               onValueChange={(value) =>
-                setStatusFilter(value === "all" ? undefined : value as any)
+                setStatusFilter(value === "all" ? undefined : value as "active" | "suspended" | "deleted")
               }
             >
               <SelectTrigger className="w-[180px] bg-zinc-800 border-zinc-700 text-zinc-100">
@@ -265,7 +265,7 @@ export default function MasterAdminDealershipsPage() {
                     <TableRow
                       key={dealership._id}
                       className="border-zinc-800 hover:bg-zinc-800/50 cursor-pointer"
-                      onClick={() => router.push(`/master-admin/dealerships/${dealership._id}`)}
+                      onClick={() => router.push(`/admin/dealerships/${dealership._id}`)}
                     >
                       <TableCell>
                         <div>
@@ -355,7 +355,7 @@ export default function MasterAdminDealershipsPage() {
                             <DropdownMenuItem
                               onClick={(e) => {
                                 e.stopPropagation();
-                                router.push(`/master-admin/dealerships/${dealership._id}`);
+                                router.push(`/admin/dealerships/${dealership._id}`);
                               }}
                               className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100"
                             >

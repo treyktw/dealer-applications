@@ -1,7 +1,7 @@
 // apps/web/src/components/notifications/NotificationBell.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Bell, Check, CheckCheck, Trash2, ExternalLink } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type { Id } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 
 export function NotificationBell() {
   const router = useRouter();
@@ -38,7 +38,9 @@ export function NotificationBell() {
     try {
       await markAsRead({ notificationId });
     } catch (error) {
-      toast.error("Failed to mark as read");
+      toast.error("Failed to mark as read", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
     }
   };
 
@@ -47,7 +49,9 @@ export function NotificationBell() {
       await markAllAsRead();
       toast.success("All notifications marked as read");
     } catch (error) {
-      toast.error("Failed to mark all as read");
+      toast.error("Failed to mark all as read", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
     }
   };
 
@@ -56,14 +60,16 @@ export function NotificationBell() {
       await deleteNotification({ notificationId });
       toast.success("Notification deleted");
     } catch (error) {
-      toast.error("Failed to delete notification");
+      toast.error("Failed to delete notification", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
     }
   };
 
-  const handleNotificationClick = async (notification: any) => {
+  const handleNotificationClick = async (notification: Doc<"notifications">) => {
     // Mark as read
     if (!notification.isRead) {
-      await handleMarkAsRead(notification._id);
+      await handleMarkAsRead(notification._id); 
     }
 
     // Navigate if there's an action URL
@@ -125,7 +131,7 @@ export function NotificationBell() {
         className="w-96 max-h-[600px] overflow-hidden flex flex-col p-0"
       >
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b px-4 py-3 flex items-center justify-between z-10">
+        <div className="sticky top-0  border-b px-4 py-3 flex items-center justify-between z-10">
           <div>
             <h3 className="font-semibold text-sm">Notifications</h3>
             {unreadCount !== undefined && unreadCount > 0 && (
@@ -160,12 +166,20 @@ export function NotificationBell() {
           ) : (
             <div className="divide-y">
               {notifications.map((notification) => (
-                <div
+                <button
                   key={notification._id}
                   className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${getPriorityColor(
                     notification.priority
                   )} ${!notification.isRead ? "bg-blue-50/50" : ""}`}
                   onClick={() => handleNotificationClick(notification)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleNotificationClick(notification);
+                    }
+                  }}
+                  tabIndex={0}
+                  type="button"
                 >
                   <div className="flex items-start space-x-3">
                     {/* Icon */}
@@ -189,7 +203,7 @@ export function NotificationBell() {
 
                       {/* Action Button */}
                       {notification.actionUrl && notification.actionLabel && (
-                        <button className="text-xs text-blue-600 hover:text-blue-700 font-medium mt-2 flex items-center">
+                        <button type="button" className="text-xs text-blue-600 hover:text-blue-700 font-medium mt-2 flex items-center">
                           {notification.actionLabel}
                           <ExternalLink className="h-3 w-3 ml-1" />
                         </button>
@@ -229,7 +243,7 @@ export function NotificationBell() {
                       </Button>
                     </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}

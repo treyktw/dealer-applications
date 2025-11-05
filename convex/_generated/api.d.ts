@@ -55,6 +55,7 @@ import type * as lib_stripe_client from "../lib/stripe/client.js";
 import type * as lib_stripe_index from "../lib/stripe/index.js";
 import type * as lib_stripe_products from "../lib/stripe/products.js";
 import type * as lib_stripe_status from "../lib/stripe/status.js";
+import type * as masterAdmin from "../masterAdmin.js";
 import type * as notifications from "../notifications.js";
 import type * as permissions from "../permissions.js";
 import type * as public_api from "../public_api.js";
@@ -129,6 +130,7 @@ declare const fullApi: ApiFromModules<{
   "lib/stripe/index": typeof lib_stripe_index;
   "lib/stripe/products": typeof lib_stripe_products;
   "lib/stripe/status": typeof lib_stripe_status;
+  masterAdmin: typeof masterAdmin;
   notifications: typeof notifications;
   permissions: typeof permissions;
   public_api: typeof public_api;

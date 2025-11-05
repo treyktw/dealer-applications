@@ -4,7 +4,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireMasterAdmin } from "./lib/helpers/auth_helpers";
-import type { Id } from "./_generated/dataModel";
 
 // ============================================================================
 // DEALERSHIP MANAGEMENT
@@ -88,7 +87,7 @@ export const getAllDealerships = query({
 
         // Get verified domains
         const domains = await ctx.db
-          .query("verified_domains")
+          .query("verifiedDomains")
           .withIndex("by_dealership", (q) => q.eq("dealershipId", dealership._id))
           .collect();
 
@@ -115,7 +114,7 @@ export const getAllDealerships = query({
           subscription: subscription ? {
             status: subscription.status,
             plan: subscription.plan,
-            currentPeriodEnd: subscription.currentPeriodEnd,
+            currentPeriodEnd: subscription.currentPeriodStart,
           } : null,
         };
       })
@@ -168,7 +167,7 @@ export const getDealershipDetails = query({
       .collect();
 
     const domains = await ctx.db
-      .query("verified_domains")
+      .query("verifiedDomains")
       .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId))
       .collect();
 
@@ -186,7 +185,7 @@ export const getDealershipDetails = query({
     // Deal statistics
     const dealStats = {
       total: deals.length,
-      pending: deals.filter((d) => d.status === "PENDING").length,
+      pending: deals.filter((d) => d.status === "PENDING_APPROVAL").length,
       approved: deals.filter((d) => d.status === "APPROVED").length,
       completed: deals.filter((d) => d.status === "COMPLETED").length,
       cancelled: deals.filter((d) => d.status === "CANCELLED").length,
@@ -244,7 +243,18 @@ export const updateDealership = mutation({
   handler: async (ctx, args) => {
     await requireMasterAdmin(ctx);
 
-    const updates: any = {
+    const updates: Partial<{
+      name: string;
+      contactEmail: string;
+      contactPhone: string;
+      address: string;
+      city: string;
+      state: string;
+      zipCode: string;
+      storageLimit: number;
+      notes: string;
+      updatedAt: number;
+    }> = {
       updatedAt: Date.now(),
     };
 
@@ -422,7 +432,7 @@ export const getDealershipDomains = query({
     await requireMasterAdmin(ctx);
 
     const domains = await ctx.db
-      .query("verified_domains")
+      .query("verifiedDomains")
       .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId))
       .collect();
 
@@ -435,7 +445,7 @@ export const getDealershipDomains = query({
  */
 export const verifyDomain = mutation({
   args: {
-    domainId: v.id("verified_domains"),
+    domainId: v.id("verifiedDomains"),
   },
   handler: async (ctx, args) => {
     await requireMasterAdmin(ctx);
@@ -455,7 +465,7 @@ export const verifyDomain = mutation({
  */
 export const revokeDomain = mutation({
   args: {
-    domainId: v.id("verified_domains"),
+    domainId: v.id("verifiedDomains"),
   },
   handler: async (ctx, args) => {
     await requireMasterAdmin(ctx);

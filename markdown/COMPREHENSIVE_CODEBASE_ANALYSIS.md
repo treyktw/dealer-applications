@@ -14,7 +14,7 @@
 4. [Security Improvements](#security-improvements)
 5. [Code Cleanup & Refactoring](#code-cleanup--refactoring)
 6. [Stripe Management Consolidation](#stripe-management-consolidation)
-7. [Master Admin System](#master-admin-system)
+7. [Master Admin System](#admin-system)
 8. [S3 Bucket Cleanup & Optimization](#s3-bucket-cleanup--optimization)
 9. [Technical Debt & Known Issues](#technical-debt--known-issues)
 10. [Priority Matrix](#priority-matrix)
@@ -374,11 +374,11 @@ orgMembers: defineTable({
 ```
 **Effort:** 2 days
 
-**2. `apps/web/src/app/(master-admin)/` - Master admin UI (NEW DIRECTORY)**
+**2. `apps/web/src/app/(admin)/` - Master admin UI (NEW DIRECTORY)**
 
 Required pages:
 ```
-(master-admin)/
+(admin)/
 ├── layout.tsx              → Guard for super admin only
 ├── page.tsx                → Dashboard with org overview
 ├── orgs/
