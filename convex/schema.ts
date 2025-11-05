@@ -1227,4 +1227,19 @@ export default defineSchema({
     .index("by_deal", ["dealId"])
     .index("by_dealership_status", ["dealershipId", "status"])
     .index("by_template", ["templateId"]),
+
+  // Webhook Events - Idempotency tracking
+  webhook_events: defineTable({
+    eventId: v.string(), // Stripe event ID (evt_xxx)
+    type: v.string(), // Event type (checkout.session.completed, etc.)
+    source: v.string(), // "stripe" | "clerk" | etc.
+    processedAt: v.number(),
+    success: v.boolean(),
+    error: v.optional(v.string()),
+    metadata: v.optional(v.any()), // Additional event metadata
+  })
+    .index("by_event_id", ["eventId"])
+    .index("by_type", ["type"])
+    .index("by_source", ["source"])
+    .index("by_processed_at", ["processedAt"]),
 });

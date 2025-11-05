@@ -35,6 +35,21 @@ export const handleStripeWebhook = internalAction({
 
       console.log("Processing webhook event:", event.type, "at", new Date().toISOString());
 
+      // IDEMPOTENCY CHECK: Prevent duplicate processing
+      const alreadyProcessed = await ctx.runQuery(internal.webhooks.checkProcessed, {
+        eventId: event.id,
+        source: "stripe",
+      });
+
+      if (alreadyProcessed.processed) {
+        console.log(`⚠️ Event ${event.id} already processed, skipping duplicate`);
+        return {
+          success: true,
+          duplicate: true,
+          processedAt: alreadyProcessed.event?.processedAt,
+        };
+      }
+
       switch (event.type) {
         case "checkout.session.completed": {
           const session = event.data.object as Stripe.Checkout.Session;
@@ -349,9 +364,37 @@ export const handleStripeWebhook = internalAction({
           console.log("Unhandled webhook event type:", event.type);
       }
 
+      // Mark event as successfully processed
+      await ctx.runMutation(internal.webhooks.markProcessed, {
+        eventId: event.id,
+        type: event.type,
+        source: "stripe",
+        success: true,
+        metadata: {
+          processedAt: new Date().toISOString(),
+        },
+      });
+
+      console.log(`✅ Successfully processed event ${event.id}`);
+
       return { success: true };
     } catch (error) {
       console.error("Error processing webhook:", error);
+
+      // Try to mark event as failed (best effort)
+      try {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await ctx.runMutation(internal.webhooks.markProcessed, {
+          eventId: (error as any).event?.id || "unknown",
+          type: (error as any).event?.type || "unknown",
+          source: "stripe",
+          success: false,
+          error: errorMessage,
+        });
+      } catch (markError) {
+        console.error("Failed to mark webhook as failed:", markError);
+      }
+
       throw error;
     }
   },

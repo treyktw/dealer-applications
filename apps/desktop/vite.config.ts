@@ -23,7 +23,26 @@ export default defineConfig({
   build: {
     sourcemap: false,
     minify: "esbuild",
+    rollupOptions: {
+      output: {
+        // Ensure PDF.js worker files are properly named and accessible
+        assetFileNames: (assetInfo) => {
+          // Keep worker files with their original names for easier loading
+          if (assetInfo.name?.endsWith('.worker.js') || assetInfo.name?.endsWith('.worker.mjs')) {
+            return 'assets/[name].[ext]'
+          }
+          return 'assets/[name]-[hash][extname]'
+        },
+        // Ensure chunks are properly named
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+      }
+    },
+    // Copy PDF.js viewer files to the build output
+    copyPublicDir: true,
   },
+  // Ensure public directory assets are accessible
+  publicDir: 'public',
   envPrefix: "VITE_",
   clearScreen: false,
   server: {

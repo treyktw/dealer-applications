@@ -1,0 +1,136 @@
+name: Release Desktop App
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Triggers on version tags like v1.0.0, v0.2.0, etc.
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS Apple Silicon
+          - platform: 'macos-latest'
+            args: '--target aarch64-apple-darwin'
+            target: 'aarch64-apple-darwin'
+
+          # macOS Intel
+          - platform: 'macos-latest'
+            args: '--target x86_64-apple-darwin'
+            target: 'x86_64-apple-darwin'
+
+          # Linux
+          - platform: 'ubuntu-22.04'
+            args: ''
+            target: 'x86_64-unknown-linux-gnu'
+
+          # Windows
+          - platform: 'windows-latest'
+            args: ''
+            target: 'x86_64-pc-windows-msvc'
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install dependencies (Ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build desktop app with Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+
+          # Convex
+          VITE_CONVEX_URL: ${{ secrets.VITE_CONVEX_URL }}
+
+          # Environment
+          NODE_ENV: production
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Dealer Software ${{ github.ref_name }}'
+          releaseBody: |
+            ## What's New in ${{ github.ref_name }}
+
+            See the [CHANGELOG](https://github.com/treyktw/dealer-applications/blob/main/CHANGELOG.md) for full release notes.
+
+            ### Installation
+
+            **macOS:**
+            - Download the `.dmg` file for your processor (Apple Silicon or Intel)
+            - Open and drag to Applications folder
+            - If you see "unidentified developer" warning, go to System Preferences → Security & Privacy → Open Anyway
+
+            **Windows:**
+            - Download the `.msi` installer
+            - Run the installer
+            - Updates will be installed automatically
+
+            **Linux:**
+            - Download the `.deb` (Debian/Ubuntu) or `.AppImage` (universal)
+            - For `.deb`: `sudo dpkg -i dealer-software_*.deb`
+            - For `.AppImage`: `chmod +x dealer-software_*.AppImage && ./dealer-software_*.AppImage`
+
+            ### Auto-Updates
+
+            This release includes automatic update functionality. Future updates will be downloaded and installed automatically.
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          args: ${{ matrix.args }}
+
+  # Verify release was created successfully
+  verify-release:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check release
+        run: |
+          echo "✅ Release ${{ github.ref_name }} created successfully"
+          echo "🔗 https://github.com/treyktw/dealer-applications/releases/tag/${{ github.ref_name }}"
