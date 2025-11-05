@@ -1,22 +1,17 @@
 import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
-import Stripe from "stripe";
+import type Stripe from "stripe";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { stripe, STRIPE_WEBHOOK_SECRET } from "./lib/stripe";
+import { mapStripeStatus } from "./lib/stripe/status";
+import { parsePriceId } from "./lib/stripe/products";
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("STRIPE_SECRET_KEY is not set");
-}
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-08-27.basil",
-});
-
-if (!process.env.STRIPE_WEBHOOK_SECRET) {
+if (!STRIPE_WEBHOOK_SECRET) {
   throw new Error("STRIPE_WEBHOOK_SECRET is not set");
 }
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const webhookSecret = STRIPE_WEBHOOK_SECRET;
 
 
 
