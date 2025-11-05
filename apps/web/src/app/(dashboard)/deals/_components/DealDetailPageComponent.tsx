@@ -480,6 +480,13 @@ export default function DealDetailPage({ params }: DealDetailPageProps) {
             <p className="text-sm text-muted-foreground">
               Documents will appear here once generated
             </p>
+            <p className="text-sm text-muted-foreground mb-4">
+              Dont have any documents yet? Click the button below to generate them.
+            </p>
+            <Button variant="outline" onClick={() => router.push("/deals")}>
+              <FileText className="mr-2 w-4 h-4" />
+              Generate Documents
+            </Button>
           </CardContent>
         </Card>
       )}

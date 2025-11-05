@@ -532,22 +532,68 @@ export const logTemplateError = mutation({
 
 /**
  * Get generation status for a deal
+ * Checks both documentInstances (new system) and document_packs (legacy system)
  */
 export const getDealGenerationStatus = query({
   args: {
     dealId: v.id("deals"),
   },
   handler: async (ctx, args) => {
-    const documents = await ctx.db
+    // Verify authentication
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    // Get user to verify dealership access
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Get deal to verify access
+    const deal = await ctx.db.get(args.dealId);
+    if (!deal) {
+      throw new Error("Deal not found");
+    }
+
+    // Verify user has access to this dealership
+    if (user.dealershipId !== deal.dealershipId) {
+      throw new Error("Access denied: Deal belongs to different dealership");
+    }
+
+    // Query documentInstances (new system)
+    const documentInstances = await ctx.db
       .query("documentInstances")
       .withIndex("by_deal", (q) => q.eq("dealId", args.dealId))
       .collect();
 
-    const total = documents.length;
-    const ready = documents.filter((d) => d.status === "READY").length;
-    const signed = documents.filter((d) => d.status === "SIGNED").length;
-    const draft = documents.filter((d) => d.status === "DRAFT").length;
-    const voided = documents.filter((d) => d.status === "VOID").length;
+    // Also check document_packs (legacy system) for backward compatibility
+    const documentPack = await ctx.db
+      .query("document_packs")
+      .withIndex("by_deal", (q) => q.eq("dealId", args.dealId))
+      .first();
+
+    // Count documents from both systems
+    let total = documentInstances.length;
+    let ready = documentInstances.filter((d) => d.status === "READY").length;
+    let signed = documentInstances.filter((d) => d.status === "SIGNED").length;
+    let draft = documentInstances.filter((d) => d.status === "DRAFT").length;
+    let voided = documentInstances.filter((d) => d.status === "VOID").length;
+
+    // If we have a document pack but no instances, count from the pack
+    if (documentPack && documentInstances.length === 0) {
+      const packDocuments = documentPack.documents || [];
+      total = packDocuments.length;
+      ready = packDocuments.filter((d) => d.status === "generated" || d.status === "ready").length;
+      signed = packDocuments.filter((d) => d.status === "signed").length;
+      draft = packDocuments.filter((d) => d.status === "pending" || d.status === "draft").length;
+      voided = packDocuments.filter((d) => d.status === "void" || d.status === "voided").length;
+    }
 
     return {
       total,

@@ -1,6 +1,6 @@
 // convex/documents/templates.ts - Template CRUD Operations
 import { v } from "convex/values";
-import { mutation, query, action, internalMutation } from "../_generated/server";
+import { mutation, query, action, internalAction, internalMutation } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
 import {
@@ -653,11 +653,15 @@ export const deleteTemplate = mutation({
       s3Key: template.s3Key,
     };
 
+    // Schedule S3 file deletion as an action (since mutations can't use fetch)
+    if (template.s3Key) {
+      await ctx.scheduler.runAfter(0, internal.documents.templates.deleteTemplateFromS3, {
+        s3Key: template.s3Key,
+      });
+    }
+
     // Delete the template record from Convex
     await ctx.db.delete(args.templateId);
-
-    // Delete S3 file
-    await deleteFile(template.s3Key);
 
     // Log security event
     await ctx.db.insert("security_logs", {
@@ -702,5 +706,26 @@ export const getTemplateDownloadUrl = action({
       downloadUrl,
       expiresIn: 300,
     };
+  },
+});
+
+/**
+ * Internal action to delete template file from S3
+ * Called asynchronously from deleteTemplate mutation
+ * Must be an action (not mutation) because it uses fetch() via S3 client
+ */
+export const deleteTemplateFromS3 = internalAction({
+  args: {
+    s3Key: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    try {
+      await deleteFile(args.s3Key);
+      console.log(`✅ Successfully deleted template file from S3: ${args.s3Key}`);
+    } catch (error) {
+      console.error(`❌ Failed to delete template file from S3: ${args.s3Key}`, error);
+      // Don't throw - we don't want to fail the mutation if S3 deletion fails
+      // The file will be orphaned but that's acceptable
+    }
   },
 });
