@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { api } from "./_generated/api";
-import { DealStatus } from "./lib/statuses";
+import { DealStatus, type DealStatusType } from "./lib/statuses";
 
 // Create a new document pack for a deal
 export const createDocumentPack = mutation({
@@ -379,11 +379,10 @@ export const markDocumentPackSigned = mutation({
       throw new Error("Document pack not found");
     }
 
-    // Mark document pack as all signed
+    // Mark document pack as finalized
     await ctx.db.patch(args.documentPackId, {
-      allPartiesSigned: true,
-      physicalSignatureDate: Date.now(),
-      physicalSignatureNotes: args.signatureNotes || "Signed via application",
+      status: "finalized",
+      updatedAt: Date.now(),
     });
 
     // =========================================================================
@@ -393,13 +392,13 @@ export const markDocumentPackSigned = mutation({
       const deal = await ctx.db.get(docPack.dealId);
       if (deal) {
         // Only auto-update if deal is in a signing-related status
-        const signingStatuses = [
+        const signingStatuses: DealStatusType[] = [
           DealStatus.AWAITING_SIGNATURES,
           DealStatus.PARTIALLY_SIGNED,
           DealStatus.DOCS_READY,
         ];
 
-        if (signingStatuses.includes(deal.status)) {
+        if (signingStatuses.includes(deal.status as DealStatusType)) {
           // Call updateDealStatus to trigger cascading updates
           // This will also update vehicle → SOLD and client → CUSTOMER
           await ctx.runMutation(api.deals.updateDealStatus, {

@@ -3,8 +3,9 @@ import { v } from "convex/values";
 import { api } from "./_generated/api";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
-import { Doc, Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { generateDownloadUrl as generateS3DownloadUrl } from "./lib/s3";
+import { DealStatus, type DealStatusType } from "./lib/statuses";
 // Helper function for custom document path (inline since we can't import from web app)
 function generateCustomDocumentPath(dealershipId: string, dealId: string, fileName: string): string {
   return `${dealershipId}/custom-documents/${dealId}/${fileName}`;
@@ -87,7 +88,7 @@ export const generateDocuments = mutation({
       clientId: args.clientId,
       vehicleId: args.vehicleId,
       dealershipId: args.dealershipId,
-      status: "PENDING_SIGNATURE",
+      status: DealStatus.AWAITING_SIGNATURES as DealStatusType,
       saleAmount: args.saleAmount,
       totalAmount: args.totalAmount,
       generated: false,

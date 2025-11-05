@@ -12,6 +12,7 @@ import {
   type DealData,
 } from "../lib/pdf_data_preparer";
 import { generateDownloadUrl, generateUploadUrl } from "../lib/s3";
+import { DealStatus } from "../lib/statuses";
 
 /**
  * Generate all documents for a deal
@@ -47,10 +48,10 @@ export const generateDealDocuments = action({
       throw new Error("User does not have access to this deal");
     }
 
-    // Update deal status to pending_documents
+    // Update deal status to DOCS_GENERATING
     await ctx.runMutation(api.deals.updateDealStatus, {
       dealId: args.dealId,
-      status: "pending_documents",
+      newStatus: DealStatus.DOCS_GENERATING,
     });
 
     try {
@@ -141,7 +142,7 @@ export const generateDealDocuments = action({
       // Update deal status
       await ctx.runMutation(api.deals.updateDealStatus, {
         dealId: args.dealId,
-        status: "ready_to_finalize",
+        newStatus: DealStatus.DOCS_READY,
       });
 
       return {
@@ -153,7 +154,7 @@ export const generateDealDocuments = action({
       // Update deal status to draft on error
       await ctx.runMutation(api.deals.updateDealStatus, {
         dealId: args.dealId,
-        status: "draft",
+        newStatus: DealStatus.DRAFT,
       });
 
       throw error;

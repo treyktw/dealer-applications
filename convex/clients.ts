@@ -8,6 +8,7 @@ import {
   canTransitionClientStatus,
   ClientStatus,
   getClientStatusLabel,
+  ClientStatusType,
 } from "./lib/statuses";
 
 export const createClient = mutation({
@@ -692,9 +693,16 @@ export const updateClientStatus = mutation({
       );
     }
 
+    // Type assertion: newStatus is validated and matches schema union type
+    // Schema includes: PROSPECT, CONTACTED, QUALIFIED, NEGOTIATING, CUSTOMER, 
+    // REPEAT_CUSTOMER, LOST, NOT_INTERESTED, DO_NOT_CONTACT, PREVIOUS, LEAD
+    type ClientStatusSchemaType = 
+      | ClientStatusType 
+      | "LEAD"; // Legacy status from schema
+    
     // Update client status with tracking fields
     await ctx.db.patch(args.clientId, {
-      status: newStatus,
+      status: newStatus as ClientStatusSchemaType,
       statusChangedAt: Date.now(),
       // statusChangedBy: user?._id, // Add when auth is required
       updatedAt: Date.now(),

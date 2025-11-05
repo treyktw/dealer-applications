@@ -10,6 +10,7 @@ import {
   DealStatus,
   VehicleStatus,
   ClientStatus,
+  type DealStatusType,
 } from "./lib/statuses";
 
 // Helper function to require authentication (supports desktop token or web identity)
@@ -225,9 +226,10 @@ export const updateDealStatus = mutation({
       reason: args.reason,
     };
 
+    // Type assertion: newStatus is validated and matches schema union type
     // Update deal status with tracking fields
     await ctx.db.patch(args.dealId, {
-      status: newStatus,
+      status: newStatus as DealStatusType,
       statusChangedAt: Date.now(),
       statusChangedBy: user._id,
       statusHistory: [...(deal.statusHistory || []), historyEntry],

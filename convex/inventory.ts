@@ -6,6 +6,7 @@ import {
   canTransitionVehicleStatus,
   VehicleStatus,
   getVehicleStatusLabel,
+  type VehicleStatusType,
 } from "./lib/statuses";
 
 export const getStats = query({
@@ -1084,9 +1085,10 @@ export const updateVehicleStatus = mutation({
       );
     }
 
+    // Type assertion: newStatus is validated and matches schema union type
     // Update vehicle status with tracking fields
     await ctx.db.patch(args.vehicleId, {
-      status: newStatus,
+      status: newStatus as VehicleStatusType,
       statusChangedAt: Date.now(),
       // statusChangedBy: user?._id, // Add when auth is required
       updatedAt: Date.now(),

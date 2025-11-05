@@ -45,6 +45,7 @@ import type * as lib_s3_operations from "../lib/s3/operations.js";
 import type * as lib_s3_paths from "../lib/s3/paths.js";
 import type * as lib_s3_presign from "../lib/s3/presign.js";
 import type * as lib_s3_validation from "../lib/s3/validation.js";
+import type * as lib_statuses from "../lib/statuses.js";
 import type * as lib_stripe_client from "../lib/stripe/client.js";
 import type * as lib_stripe_index from "../lib/stripe/index.js";
 import type * as lib_stripe_products from "../lib/stripe/products.js";
@@ -112,6 +113,7 @@ declare const fullApi: ApiFromModules<{
   "lib/s3/paths": typeof lib_s3_paths;
   "lib/s3/presign": typeof lib_s3_presign;
   "lib/s3/validation": typeof lib_s3_validation;
+  "lib/statuses": typeof lib_statuses;
   "lib/stripe/client": typeof lib_stripe_client;
   "lib/stripe/index": typeof lib_stripe_index;
   "lib/stripe/products": typeof lib_stripe_products;
