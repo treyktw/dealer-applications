@@ -174,6 +174,10 @@ export default defineSchema({
     s3AccessKeyId: v.optional(v.string()), // Encrypted
     s3SecretKey: v.optional(v.string()), // Encrypted
 
+    // Storage Management
+    storageUsed: v.optional(v.number()), // Bytes
+    storageLimit: v.optional(v.number()), // Bytes (default 5GB = 5368709120)
+
     // Business info
     taxId: v.optional(v.string()), // Encrypted
     businessHours: v.optional(v.string()),
@@ -194,6 +198,17 @@ export default defineSchema({
     allowedDomains: v.optional(v.array(v.string())),
     apiKeysEnabled: v.optional(v.boolean()),
     ipWhitelist: v.optional(v.array(v.string())),
+
+    // Service Management (Master Admin)
+    isSuspended: v.optional(v.boolean()),
+    suspendedAt: v.optional(v.number()),
+    suspensionReason: v.optional(v.string()),
+    isDeleted: v.optional(v.boolean()),
+    deletedAt: v.optional(v.number()),
+    deletionReason: v.optional(v.string()),
+    notes: v.optional(v.string()), // Master admin notes
+    contactEmail: v.optional(v.string()), // Primary contact email
+    contactPhone: v.optional(v.string()), // Primary contact phone
 
     // Timestamps
     createdAt: v.number(),
