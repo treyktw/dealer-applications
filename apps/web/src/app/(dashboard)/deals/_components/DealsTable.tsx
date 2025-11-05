@@ -61,6 +61,8 @@ import type { Doc } from "@/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { DealStatusBadge } from "@/components/shared/StatusBadge";
+import { dealStatusOptions } from "@/lib/status-utils";
 
 // Extended Deal type with relations
 interface DealWithRelations extends Doc<"deals"> {
@@ -100,66 +102,6 @@ export function DealsTable() {
   const deleteDeal = useMutation(api.deals.deleteDeal);
 
   const isLoading = dealsData === undefined;
-
-  // Get status configuration
-  const getStatusConfig = (status: string) => {
-    const configs: Record<string, { 
-      label: string; 
-      variant: "default" | "secondary" | "destructive" | "outline";
-      icon: React.ReactNode;
-      className?: string;
-    }> = {
-      draft: {
-        label: "Draft",
-        variant: "outline",
-        icon: <FileText className="w-3 h-3" />,
-        className: "border-gray-300 text-gray-700"
-      },
-      pending_documents: {
-        label: "Generating",
-        variant: "secondary",
-        icon: <Loader2 className="w-3 h-3 animate-spin" />,
-        className: "bg-blue-100 text-blue-700 border-blue-200"
-      },
-      ready_for_signatures: {
-        label: "Ready",
-        variant: "default",
-        icon: <CheckCircle2 className="w-3 h-3" />,
-        className: "bg-green-100 text-green-700 border-green-200"
-      },
-      partially_signed: {
-        label: "Ready",
-        variant: "default",
-        icon: <CheckCircle2 className="w-3 h-3" />,
-        className: "bg-green-100 text-green-700 border-green-200"
-      },
-      ready_to_finalize: {
-        label: "Ready",
-        variant: "default",
-        icon: <CheckCircle2 className="w-3 h-3" />,
-        className: "bg-green-100 text-green-700 border-green-200"
-      },
-      completed: {
-        label: "Completed",
-        variant: "default",
-        icon: <CheckCircle2 className="w-3 h-3" />,
-        className: "bg-green-600 text-white border-green-600"
-      },
-      cancelled: {
-        label: "Cancelled",
-        variant: "destructive",
-        icon: <XCircle className="w-3 h-3" />,
-      },
-      on_hold: {
-        label: "On Hold",
-        variant: "outline",
-        icon: <Clock className="w-3 h-3" />,
-        className: "border-gray-300 text-gray-600"
-      }
-    };
-
-    return configs[status] || configs.draft;
-  };
 
   // Handle search
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -244,14 +186,11 @@ export function DealsTable() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="pending_documents">Generating</SelectItem>
-            <SelectItem value="ready_for_signatures">Ready to Sign</SelectItem>
-            <SelectItem value="partially_signed">Partial</SelectItem>
-            <SelectItem value="ready_to_finalize">Ready</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-            <SelectItem value="on_hold">On Hold</SelectItem>
+            {dealStatusOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -274,7 +213,6 @@ export function DealsTable() {
               </TableHeader>
               <TableBody>
                 {deals.map((deal: DealWithRelations) => {
-                  const statusConfig = getStatusConfig(deal.status || "draft");
                   const client = deal.client;
                   const vehicle = deal.vehicle;
 
@@ -323,16 +261,7 @@ export function DealsTable() {
                       </TableCell>
                       
                       <TableCell>
-                        <Badge 
-                          variant={statusConfig.variant}
-                          className={cn(
-                            "flex gap-1 items-center w-fit",
-                            statusConfig.className
-                          )}
-                        >
-                          {statusConfig.icon}
-                          {statusConfig.label}
-                        </Badge>
+                        <DealStatusBadge status={deal.status || "DRAFT"} />
                       </TableCell>
                       
                       <TableCell className="text-muted-foreground">
