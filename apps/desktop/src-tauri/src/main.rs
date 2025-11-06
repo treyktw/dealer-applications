@@ -6,6 +6,7 @@ mod file_permissions;
 mod security;
 mod file_operations;
 mod storage;
+mod license;
 
 use encryption::{decrypt_data, encrypt_data, generate_encryption_key};
 use file_permissions::{check_file_permissions, get_storage_file_path, set_file_permissions};
@@ -13,6 +14,10 @@ use file_operations::{
     batch_print_pdfs, cleanup_temp_print_dir, create_temp_print_dir, get_documents_dir,
     get_downloads_dir, open_file_with_default_app, print_pdf, reveal_in_explorer,
     write_file_to_path,
+};
+use license::{
+    get_app_version, get_hostname, get_machine_id, get_machine_info, get_platform,
+    get_stored_license, remove_stored_license, store_license,
 };
 use log::{error, info};
 use security::{remove_secure, retrieve_secure, store_secure};
@@ -145,6 +150,15 @@ fn main() {
             get_all_storage_paths,
             cleanup_cache,
             get_storage_stats,
+            // License management
+            get_machine_id,
+            get_platform,
+            get_app_version,
+            get_hostname,
+            get_machine_info,
+            store_license,
+            get_stored_license,
+            remove_stored_license,
         ]);
 
     info!("🚀 Starting Tauri runtime...");
