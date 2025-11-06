@@ -1709,4 +1709,60 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_client", ["clientId"])
     .index("by_email_type", ["emailType", "isSubscribed"]),
+
+  /**
+   * Desktop app license keys (Polar.sh integration)
+   * For standalone desktop app monetization
+   */
+  licenses: defineTable({
+    // Purchase info
+    orderId: v.string(), // Polar order ID
+    licenseKey: v.string(), // Format: DEALER-XXXX-XXXX-XXXX
+    customerEmail: v.string(),
+    customerId: v.string(), // Polar customer ID
+    productId: v.string(), // Polar product ID
+
+    // License tier
+    tier: v.union(
+      v.literal("single"), // Single user/machine
+      v.literal("team"), // Small team (5 users)
+      v.literal("enterprise") // Unlimited users
+    ),
+
+    // Activation limits
+    maxActivations: v.number(), // 1, 5, or unlimited (-1)
+    activations: v.array(
+      v.object({
+        machineId: v.string(), // Unique machine identifier
+        activatedAt: v.number(),
+        lastSeen: v.number(),
+        platform: v.string(), // windows, macos, linux
+        appVersion: v.string(),
+        hostname: v.optional(v.string()),
+      })
+    ),
+
+    // Status
+    isActive: v.boolean(),
+    issuedAt: v.number(),
+    expiresAt: v.optional(v.number()), // null for perpetual licenses
+
+    // Payment info
+    amount: v.number(), // Amount paid in cents
+    currency: v.string(), // USD, EUR, etc.
+
+    // Association
+    dealershipId: v.optional(v.id("dealerships")), // Linked after activation
+    userId: v.optional(v.id("users")), // Primary user
+
+    // Metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    notes: v.optional(v.string()), // Admin notes
+  })
+    .index("by_license_key", ["licenseKey"])
+    .index("by_customer", ["customerEmail"])
+    .index("by_dealership", ["dealershipId"])
+    .index("by_order", ["orderId"])
+    .index("by_status", ["isActive"]),
 });

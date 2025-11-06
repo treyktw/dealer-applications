@@ -5,6 +5,7 @@ mod encryption;
 mod file_permissions;
 mod security;
 mod file_operations;
+mod storage;
 
 use encryption::{decrypt_data, encrypt_data, generate_encryption_key};
 use file_permissions::{check_file_permissions, get_storage_file_path, set_file_permissions};
@@ -15,6 +16,10 @@ use file_operations::{
 };
 use log::{error, info};
 use security::{remove_secure, retrieve_secure, store_secure};
+use storage::{
+    cleanup_cache, get_all_storage_paths, get_backup_path, get_cache_path,
+    get_database_path, get_documents_storage_path, get_logs_path, get_storage_stats,
+};
 use tauri::{Emitter, Manager};
 
 fn main() {
@@ -131,6 +136,15 @@ fn main() {
             cleanup_temp_print_dir,
             reveal_in_explorer,
             write_file_to_path,
+            // Storage paths
+            get_database_path,
+            get_documents_storage_path,
+            get_cache_path,
+            get_logs_path,
+            get_backup_path,
+            get_all_storage_paths,
+            cleanup_cache,
+            get_storage_stats,
         ]);
 
     info!("🚀 Starting Tauri runtime...");
