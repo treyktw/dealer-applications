@@ -3,6 +3,7 @@ import { action, query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { api } from "./_generated/api";
+import { FeatureFlags, planHasFeature } from "./lib/subscription/config";
 
 // Store token mutation
 export const storeToken = mutation({
@@ -55,9 +56,14 @@ export const generateDeepLinkToken = action({
       throw new Error("Premium subscription required for deal management and desktop app access");
     }
 
-    // Check for specific features
-    const hasDealsManagement = subscriptionStatus.subscription?.features?.includes("deals_management");
-    const hasDesktopAccess = subscriptionStatus.subscription?.features?.includes("desktop_app_access");
+    // Check for specific features (based on centralized config)
+    const subscription = subscriptionStatus.subscription;
+    const hasDealsManagement =
+      planHasFeature(subscription?.plan, FeatureFlags.DEALS_MANAGEMENT) ||
+      subscription?.features?.includes(FeatureFlags.DEALS_MANAGEMENT);
+    const hasDesktopAccess =
+      planHasFeature(subscription?.plan, FeatureFlags.DESKTOP_APP_ACCESS) ||
+      subscription?.features?.includes(FeatureFlags.DESKTOP_APP_ACCESS);
     
     if (!hasDealsManagement || !hasDesktopAccess) {
       throw new Error("Premium subscription with deals management and desktop app access required");

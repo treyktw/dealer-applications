@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useId } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -50,6 +50,9 @@ export function ClientImportDialog({
   // State for preview data
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [importStep, setImportStep] = useState<'upload' | 'preview'>('upload');
+  
+  // Generate unique IDs
+  const fileUploadId = useId();
 
   // Get current user and dealership ID
   const currentUser = useQuery(api.users.getCurrentUser);
@@ -147,8 +150,9 @@ export function ClientImportDialog({
       if (!result.success) {
         throw new Error(result.errors?.join(', ') || 'Failed to import clients');
       }
-      if (result.importedCount! > 0) {
-        onImportComplete(result.importedCount!);
+      const importedCount = result.importedCount ?? 0;
+      if (importedCount > 0) {
+        onImportComplete(importedCount);
         handleOpenChange(false);
       } else {
         setImportErrors(result.errors as string[]);
@@ -187,14 +191,14 @@ export function ClientImportDialog({
             <div className="border-2 border-dashed border-muted rounded-lg p-6 text-center">
               <input
                 type="file"
-                id="file-upload"
+                id={fileUploadId}
                 className="hidden"
                 accept=".csv,.xls,.xlsx"
                 onChange={handleFileSelect}
                 ref={fileInputRef}
               />
               <Label
-                htmlFor="file-upload"
+                htmlFor={fileUploadId}
                 className="flex flex-col items-center gap-2 cursor-pointer"
               >
                 <UploadCloud className="h-10 w-10 text-muted-foreground" />
@@ -245,8 +249,22 @@ export function ClientImportDialog({
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Your file should include these columns: 
-                First Name, Last Name, Email, Phone, Address, City, State, Zip Code, Source, Status
+                Your file should include these columns (flexible naming supported):
+              </p>
+              <ul className="text-xs text-muted-foreground mt-2 space-y-1 ml-4 list-disc">
+                <li><strong>First Name</strong> - accepts: First Name, first_name, firstname, first, fname</li>
+                <li><strong>Last Name</strong> - accepts: Last Name, last_name, lastname, last, lname, surname</li>
+                <li><strong>Email</strong> - accepts: Email, email, e-mail, emailaddress</li>
+                <li><strong>Phone</strong> - accepts: Phone, phone, telephone, tel, mobile, cell</li>
+                <li><strong>Address</strong> - accepts: Address, address, street, street_address</li>
+                <li><strong>City</strong> - accepts: City, city, town</li>
+                <li><strong>State</strong> - accepts: State, state, province, region</li>
+                <li><strong>Zip Code</strong> - accepts: Zip, zip, zipcode, zip_code, postal, postalcode</li>
+                <li><strong>Source</strong> - accepts: Source, source, leadsource</li>
+                <li><strong>Status</strong> - accepts: Status, status, clientstatus</li>
+              </ul>
+              <p className="text-xs text-muted-foreground mt-2">
+                <strong>Note:</strong> Column names are case-insensitive and can use spaces, underscores, or hyphens. Only First Name and Last Name are required.
               </p>
             </div>
             
@@ -305,7 +323,7 @@ export function ClientImportDialog({
                 </TableHeader>
                 <TableBody>
                   {importErrors.map((error, index) => (
-                    <TableRow key={index}>
+                    <TableRow key={`error-${index}-${error.substring(0, 20)}`}>
                       <TableCell className="font-mono">{index + 1}</TableCell>
                       <TableCell>{error}</TableCell>
                     </TableRow>

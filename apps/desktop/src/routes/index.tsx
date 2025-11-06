@@ -80,7 +80,10 @@ function HomePage() {
     enabled: !!user?.dealershipId && !!session?.token,
   });
 
-  const deals: Deal[] = Array.isArray(dealsData) ? dealsData : dealsData?.deals || [];
+  // Handle subscription requirement - return empty array if subscription required
+  const deals: Deal[] = dealsData?.subscriptionRequired 
+    ? [] 
+    : (Array.isArray(dealsData) ? dealsData : dealsData?.deals || []);
 
   // Calculate stats
   const stats = {

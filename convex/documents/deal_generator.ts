@@ -1,7 +1,7 @@
 // convex/documents/deal-generator.ts - Generate all documents for a deal
 import { v } from "convex/values";
 import { mutation, action, query } from "../_generated/server";
-import { api, internal } from "../_generated/api";
+import { api } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 // import { requireAuth, assertDealershipAccess } from "../guards";
 import { PDFDocument, type PDFTextField, type PDFCheckBox } from "pdf-lib";
@@ -11,6 +11,13 @@ import {
   validateDealData,
   type DealData,
 } from "../lib/pdf_data_preparer";
+import { generateDownloadUrl, generateUploadUrl } from "../lib/s3";
+import { DealStatus } from "../lib/statuses";
+import {
+  generateDealDocumentPath,
+  validateS3Key,
+  cleanS3Key
+} from "../lib/s3/document_paths";
 
 /**
  * Generate all documents for a deal
@@ -21,19 +28,9 @@ export const generateDealDocuments = action({
     dealId: v.id("deals"),
   },
   handler: async (ctx, args) => {
-    // Get authenticated user
-    const user = await ctx.runQuery(api.users.getCurrentUser, {});
-    
-    if (!user) {
-      throw new Error("Authentication required");
-    }
-
-    if (!user.dealershipId) {
-      throw new Error("User not associated with a dealership");
-    }
-
-    // Get deal
-    const deal = await ctx.runQuery(api.deals.getDeal, {
+    // Get deal directly from database (works in both authenticated and scheduled contexts)
+    // We can't use getDeal query because it requires authentication
+    const deal = await ctx.runQuery(api.deals.getDealForGeneration, {
       dealId: args.dealId,
     });
 
@@ -41,21 +38,40 @@ export const generateDealDocuments = action({
       throw new Error("Deal not found");
     }
 
-    // Verify user has access to this dealership
-    if (user.dealershipId !== deal.dealershipId) {
-      throw new Error("User does not have access to this deal");
+    // Get dealershipId from deal (for scheduled actions, we can't rely on user auth)
+    if (!deal.dealershipId) {
+      throw new Error("Deal does not have a dealership ID");
+    }
+    const dealershipId = deal.dealershipId as Id<"dealerships">;
+    
+    // Try to get authenticated user (may be null if called from scheduler)
+    let user = null;
+    try {
+      user = await ctx.runQuery(api.users.getCurrentUser, {});
+    } catch {
+      // If authentication fails (e.g., in scheduled context), continue without user
+      console.log("Running document generation in scheduled context (no user auth)");
     }
 
-    // Update deal status to pending_documents
+    // If we have a user, verify they have access to this dealership
+    if (user) {
+      const userDealershipIdStr = user.dealershipId as string;
+      const dealDealershipIdStr = deal.dealershipId as string;
+      if (userDealershipIdStr !== dealDealershipIdStr) {
+        throw new Error("User does not have access to this deal");
+      }
+    }
+
+    // Update deal status to DOCS_GENERATING
     await ctx.runMutation(api.deals.updateDealStatus, {
       dealId: args.dealId,
-      status: "pending_documents",
+      newStatus: DealStatus.DOCS_GENERATING,
     });
 
     try {
       // Get active templates for this dealership
       const templates = await ctx.runQuery(api.documents.templates.getActiveTemplates, {
-        dealershipId: user.dealershipId,
+        dealershipId: dealershipId,
       });
 
       if (!templates || templates.length === 0) {
@@ -101,11 +117,28 @@ export const generateDealDocuments = action({
           }
 
           // Generate document instance for this template
+          // If no user available (scheduled context), find a user from the dealership
+          let userId = user?._id;
+          if (!userId) {
+            // Find any user from the dealership to use as the creator (for scheduled actions)
+            // Use an internal query that doesn't require auth
+            const dealershipUsersResult = await ctx.runQuery(api.users.getUsersByDealership, {
+              dealershipId: dealershipId,
+            });
+            if (dealershipUsersResult && dealershipUsersResult.length > 0) {
+              userId = dealershipUsersResult[0]._id;
+            } else {
+              // If no users found, skip this template (shouldn't happen in normal operation)
+              console.warn(`No users found for dealership ${dealershipId}, skipping template ${template.name}`);
+              continue;
+            }
+          }
+          
           const result = await ctx.runAction(api.documents.deal_generator.generateSingleDocument, {
             dealId: args.dealId,
             templateId: template._id,
             dealData,
-            userId: user._id,
+            userId: userId,
           });
 
           generatedDocuments.push({
@@ -140,7 +173,7 @@ export const generateDealDocuments = action({
       // Update deal status
       await ctx.runMutation(api.deals.updateDealStatus, {
         dealId: args.dealId,
-        status: "ready_to_finalize",
+        newStatus: DealStatus.DOCS_READY,
       });
 
       return {
@@ -152,7 +185,7 @@ export const generateDealDocuments = action({
       // Update deal status to draft on error
       await ctx.runMutation(api.deals.updateDealStatus, {
         dealId: args.dealId,
-        status: "draft",
+        newStatus: DealStatus.DRAFT,
       });
 
       throw error;
@@ -284,17 +317,18 @@ export const generateSingleDocument = action({
     userId: v.id("users"),
   },
   handler: async (ctx, args): Promise<{ success: boolean; documentId?: string; error?: string }> => {
-    // Get template
+    // Get template (skip auth check since this is called from scheduled action)
     const template = await ctx.runQuery(api.documents.templates.getTemplateById, {
       templateId: args.templateId,
+      skipAuth: true,
     });
 
     if (!template) {
       throw new Error("Template not found");
     }
 
-    // Get deal
-    const deal = await ctx.runQuery(api.deals.getDeal, {
+    // Get deal (use getDealForGeneration since this is called from scheduled action)
+    const deal = await ctx.runQuery(api.deals.getDealForGeneration, {
       dealId: args.dealId,
     });
 
@@ -316,7 +350,7 @@ export const generateSingleDocument = action({
       );
     }
 
-    // Create document instance
+    // Create document instance (pass userId for scheduled actions)
     const documentId: { documentId: string } = await ctx.runMutation(
       api.documents.generator.createDocumentInstance,
       {
@@ -324,17 +358,12 @@ export const generateSingleDocument = action({
         templateId: args.templateId,
         dealId: args.dealId,
         data: args.dealData,
+        userId: args.userId, // Pass userId for scheduled actions
       }
     );
 
     // Get template PDF download URL
-    const { downloadUrl: templateUrl } = await ctx.runAction(
-      internal.secure_s3.generateDownloadUrl,
-      {
-        s3Key: template.s3Key,
-        expiresIn: 300,
-      }
-    );
+    const templateUrl = await generateDownloadUrl(template.s3Key, 300);
 
     // Download template PDF
     const response = await fetch(templateUrl);
@@ -350,9 +379,19 @@ export const generateSingleDocument = action({
       preparedData.fields
     );
 
-    // Generate S3 key for filled document
-    const orgId = (deal as { orgId?: Id<"orgs"> }).orgId || (deal.dealershipId as unknown as Id<"dealerships">);
-    const s3Key = `org/${orgId}/deals/${args.dealId}/documents/${documentId.documentId}.pdf`;
+    // Generate S3 key for filled document using centralized path generator
+    const s3Key = generateDealDocumentPath(
+      deal.dealershipId as Id<"dealerships">,
+      args.dealId,
+      documentId.documentId,
+      "pdf"
+    );
+
+    // Validate S3 key format
+    const validation = validateS3Key(s3Key);
+    if (!validation.valid) {
+      throw new Error(`Invalid S3 key format: ${validation.error}`);
+    }
 
     // Log S3 key generation
     console.log("Generated S3 key (deal_generator):", s3Key);
@@ -360,13 +399,10 @@ export const generateSingleDocument = action({
     console.log("S3 key ends with .pdf:", s3Key.endsWith('.pdf'));
 
     // Get upload URL
-    const { uploadUrl } = await ctx.runAction(
-      internal.secure_s3.generateUploadUrl,
-      {
-        s3Key,
-        contentType: "application/pdf",
-        expiresIn: 300,
-      }
+    const uploadUrl = await generateUploadUrl(
+      s3Key,
+      "application/pdf",
+      300
     );
 
     // Upload filled PDF to S3
@@ -479,19 +515,26 @@ export const updateDocumentWithGeneration = mutation({
       throw new Error("Document not found");
     }
 
-    // Log S3 key before storing
-    console.log("Storing S3 key (deal_generator):", args.s3Key);
-    console.log("S3 key length:", args.s3Key.length);
-    console.log("S3 key ends with .pdf:", args.s3Key.endsWith('.pdf'));
+    // Clean and validate S3 key before storing
+    const cleanedKey = cleanS3Key(args.s3Key);
+    const validation = validateS3Key(cleanedKey);
+
+    if (!validation.valid) {
+      console.error("Invalid S3 key format:", cleanedKey);
+      console.error("Validation error:", validation.error);
+      throw new Error(`Invalid S3 key format: ${validation.error}`);
+    }
+
+    console.log("Storing S3 key (deal_generator):", cleanedKey);
+    console.log("S3 key length:", cleanedKey.length);
+    console.log("S3 key ends with .pdf:", cleanedKey.endsWith('.pdf'));
 
     await ctx.db.patch(args.documentId, {
       status: "READY",
-      s3Key: args.s3Key.trim(), // Add trim() to remove any whitespace
+      s3Key: cleanedKey,
       fileSize: args.fileSize,
       documentType: args.documentType,
       name: args.name,
-      requiredSignatures: args.requiredSignatures,
-      signaturesCollected: [],
       updatedAt: Date.now(),
     });
 
@@ -541,22 +584,68 @@ export const logTemplateError = mutation({
 
 /**
  * Get generation status for a deal
+ * Checks both documentInstances (new system) and document_packs (legacy system)
  */
 export const getDealGenerationStatus = query({
   args: {
     dealId: v.id("deals"),
   },
   handler: async (ctx, args) => {
-    const documents = await ctx.db
+    // Verify authentication
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    // Get user to verify dealership access
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Get deal to verify access
+    const deal = await ctx.db.get(args.dealId);
+    if (!deal) {
+      throw new Error("Deal not found");
+    }
+
+    // Verify user has access to this dealership
+    if (user.dealershipId !== deal.dealershipId) {
+      throw new Error("Access denied: Deal belongs to different dealership");
+    }
+
+    // Query documentInstances (new system)
+    const documentInstances = await ctx.db
       .query("documentInstances")
       .withIndex("by_deal", (q) => q.eq("dealId", args.dealId))
       .collect();
 
-    const total = documents.length;
-    const ready = documents.filter((d) => d.status === "READY").length;
-    const signed = documents.filter((d) => d.status === "SIGNED").length;
-    const draft = documents.filter((d) => d.status === "DRAFT").length;
-    const voided = documents.filter((d) => d.status === "VOID").length;
+    // Also check document_packs (legacy system) for backward compatibility
+    const documentPack = await ctx.db
+      .query("document_packs")
+      .withIndex("by_deal", (q) => q.eq("dealId", args.dealId))
+      .first();
+
+    // Count documents from both systems
+    let total = documentInstances.length;
+    let ready = documentInstances.filter((d) => d.status === "READY").length;
+    let signed = documentInstances.filter((d) => d.status === "SIGNED").length;
+    let draft = documentInstances.filter((d) => d.status === "DRAFT").length;
+    let voided = documentInstances.filter((d) => d.status === "VOID").length;
+
+    // If we have a document pack but no instances, count from the pack
+    if (documentPack && documentInstances.length === 0) {
+      const packDocuments = documentPack.documents || [];
+      total = packDocuments.length;
+      ready = packDocuments.filter((d) => d.status === "generated" || d.status === "ready").length;
+      signed = packDocuments.filter((d) => d.status === "signed").length;
+      draft = packDocuments.filter((d) => d.status === "pending" || d.status === "draft").length;
+      voided = packDocuments.filter((d) => d.status === "void" || d.status === "voided").length;
+    }
 
     return {
       total,

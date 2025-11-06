@@ -56,7 +56,7 @@ function DealsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
 
   // Fetch deals using the same pattern as subscription page
-  const { data: dealsData, isLoading, error } = useQuery({
+  const { data: dealsData, isLoading } = useQuery({
     queryKey: ["deals", user?.dealershipId, statusFilter, searchQuery],
     queryFn: async () => {
       if (!user?.dealershipId) {
@@ -102,11 +102,6 @@ function DealsPage() {
     },
   });
 
-  const deals = dealsData?.deals || [];
-
-  // Check for premium subscription error
-  const isPremiumError = error?.message?.includes("Premium subscription required");
-
   if (isLoading) {
     return (
       <Layout>
@@ -120,8 +115,8 @@ function DealsPage() {
     );
   }
 
-  // Show premium subscription required error
-  if (isPremiumError) {
+  // Handle subscription requirement gracefully
+  if (dealsData?.subscriptionRequired) {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
@@ -131,7 +126,7 @@ function DealsPage() {
             </div>
             <h2 className="text-xl font-semibold mb-2">Premium Subscription Required</h2>
             <p className="text-muted-foreground mb-6">
-              Deal management is a premium feature. Please upgrade your subscription to access deals.
+              {dealsData.subscriptionError || "Deal management is a premium feature. Please upgrade your subscription to access deals."}
             </p>
             <Button onClick={() => navigate({ to: "/subscription" })}>
               View Subscription
@@ -141,6 +136,30 @@ function DealsPage() {
       </Layout>
     );
   }
+
+  // Type definition for deals
+  type Deal = {
+    id: string;
+    type: string;
+    status: string;
+    totalAmount?: number;
+    saleAmount?: number;
+    createdAt: number;
+    updatedAt?: number;
+    client?: {
+      _id: string;
+      firstName: string;
+      lastName: string;
+    } | null;
+    vehicle?: {
+      year: number;
+      make: string;
+      model: string;
+    } | null;
+    vin?: string;
+  };
+
+  const deals: Deal[] = dealsData?.deals || [];
 
   return (
     <Layout>

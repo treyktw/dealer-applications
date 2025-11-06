@@ -87,3 +87,45 @@ export async function verifyDealershipAccess(
 
   return user;
 }
+
+/**
+ * Check if user is a master/platform admin
+ * Master admins have ADMIN role and no dealershipId (platform-level access)
+ * OR have MASTERADMIN role (bypass check)
+ */
+export async function isMasterAdmin(ctx: QueryCtx) {
+  const user = await getCurrentUser(ctx);
+  if (!user) {
+    return false;
+  }
+
+  // MASTERADMIN role bypasses all checks
+  if (user.role === "MASTERADMIN") {
+    return true;
+  }
+
+  // Master admin = ADMIN role + no dealershipId (platform level)
+  return user.role === "ADMIN" && !user.dealershipId;
+}
+
+/**
+ * Require master admin access (throws if not master admin)
+ * MASTERADMIN role bypasses all checks
+ */
+export async function requireMasterAdmin(ctx: QueryCtx) {
+  const user = await getCurrentUser(ctx);
+  if (!user) {
+    throw new Error("Authentication required");
+  }
+
+  // MASTERADMIN role bypasses all checks
+  if (user.role === "MASTERADMIN") {
+    return user;
+  }
+
+  if (user.role !== "ADMIN" || user.dealershipId) {
+    throw new Error("Master admin access required. This feature is only available to platform administrators.");
+  }
+
+  return user;
+}

@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Building2, Cloud, CreditCard, ArrowRight } from 'lucide-react';
-import { useMutation, useQuery, useAction } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
 export default function OnboardingPage() {
@@ -37,7 +37,6 @@ export default function OnboardingPage() {
   const createDealership = useMutation(api.dealerships.createDealership);
   const updateCurrentUserByClerkId = useMutation(api.users.updateCurrentUserByClerkId);
   const createUser = useMutation(api.users.createUser);
-  const ensureDealershipBucket = useAction(api.secure_s3.ensureDealershipBucket);
   const currentDealership = useQuery(api.dealerships.getCurrentDealership, {});
 
   // Create user when component mounts
@@ -104,28 +103,8 @@ export default function OnboardingPage() {
 
       console.log("Updated user successfully");
 
-      // Step 3: Create S3 bucket for file storage
+      // Step 3 used to create buckets; now storage is centrally managed.
       setCurrentStep(3);
-      console.log("Creating S3 bucket for dealership");
-      
-      try {
-        const bucketResult = await ensureDealershipBucket({
-          dealershipId: convexDealershipId,
-          dealershipName: dealershipName,
-        });
-        
-        console.log("S3 bucket setup result:", bucketResult);
-        
-        if (bucketResult.created) {
-          toast.success(`Secure storage created: ${bucketResult.bucketName}`);
-        } else {
-          console.log("Bucket already exists:", bucketResult.message);
-        }
-      } catch (bucketError) {
-        console.error("S3 bucket creation failed:", bucketError);
-        // Don't fail the entire onboarding for S3 issues
-        toast.warning("File storage setup encountered an issue, but you can continue. Contact support if needed.");
-      }
 
       // Step 4: Update Clerk metadata
       setCurrentStep(4);
@@ -180,7 +159,7 @@ export default function OnboardingPage() {
     switch (step) {
       case 1: return "Creating dealership...";
       case 2: return "Setting up user account...";
-      case 3: return "Configuring secure file storage...";
+      case 3: return "Configuring your account...";
       case 4: return "Finalizing setup...";
       default: return "Processing...";
     }

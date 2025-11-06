@@ -1,31 +1,28 @@
 import { internalAction } from "./_generated/server";
+import type { ActionCtx } from "./_generated/server";
 import { v } from "convex/values";
-import Stripe from "stripe";
+import type Stripe from "stripe";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { stripe, STRIPE_WEBHOOK_SECRET } from "./lib/stripe";
+// import { mapStripeStatus } from "./lib/stripe/status";
+// import { parsePriceId } from "./lib/stripe/products";
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("STRIPE_SECRET_KEY is not set");
-}
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-08-27.basil",
-});
-
-if (!process.env.STRIPE_WEBHOOK_SECRET) {
+if (!STRIPE_WEBHOOK_SECRET) {
   throw new Error("STRIPE_WEBHOOK_SECRET is not set");
 }
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-
+const webhookSecret = STRIPE_WEBHOOK_SECRET;
 
 export const handleStripeWebhook = internalAction({
   args: {
     signature: v.string(),
     payload: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx: ActionCtx,
+    args: { signature: string; payload: string }
+  ): Promise<{ success: boolean; duplicate?: boolean; processedAt?: string }> => {
     try {
       const event = await stripe.webhooks.constructEventAsync(
         args.payload,
@@ -35,11 +32,58 @@ export const handleStripeWebhook = internalAction({
 
       console.log("Processing webhook event:", event.type, "at", new Date().toISOString());
 
+      // IDEMPOTENCY CHECK: Prevent duplicate processing
+      const alreadyProcessed = (await ctx.runQuery(
+        internal.webhooks.checkProcessed,
+        {
+        eventId: event.id,
+        source: "stripe",
+        }
+      )) as unknown as { processed: boolean; event?: { processedAt?: number | string } | null };
+
+      if (alreadyProcessed.processed) {
+        console.log(`⚠️ Event ${event.id} already processed, skipping duplicate`);
+        return {
+          success: true,
+          duplicate: true,
+          processedAt: alreadyProcessed.event?.processedAt ? String(alreadyProcessed.event.processedAt) : undefined,
+        };
+      }
+
       switch (event.type) {
         case "checkout.session.completed": {
           const session = event.data.object as Stripe.Checkout.Session;
           console.log("Checkout session completed:", session.id);
 
+          // Handle document pack purchases
+          if (session.metadata?.type === "document_pack_purchase") {
+            console.log("Document pack purchase detected");
+
+            const packId = session.metadata.packId;
+            const dealershipId = session.metadata.dealershipId;
+            const userId = session.metadata.userId;
+
+            if (!packId || !dealershipId || !userId) {
+              console.error("Missing metadata for document pack purchase");
+              throw new Error("Missing metadata for document pack purchase");
+            }
+
+            // Record the purchase
+            await ctx.runMutation(internal.dealerDocumentPackPurchases.recordPurchase, {
+              dealershipId: dealershipId as Id<"dealerships">,
+              packTemplateId: packId as Id<"document_pack_templates">,
+              userId: userId as Id<"users">,
+              amountPaid: session.amount_total || 0,
+              stripeCheckoutSessionId: session.id,
+              stripePaymentIntentId: session.payment_intent as string | undefined,
+              stripeCustomerId: session.customer as string | undefined,
+            });
+
+            console.log("Document pack purchase recorded successfully");
+            break;
+          }
+
+          // Handle subscription checkouts
           if (session.mode !== "subscription") {
             console.log("Not a subscription checkout, skipping");
             break;
@@ -349,9 +393,38 @@ export const handleStripeWebhook = internalAction({
           console.log("Unhandled webhook event type:", event.type);
       }
 
+      // Mark event as successfully processed
+      await ctx.runMutation(internal.webhooks.markProcessed, {
+        eventId: event.id,
+        type: event.type,
+        source: "stripe",
+        success: true,
+        metadata: {
+          processedAt: new Date().toISOString(),
+        },
+      });
+
+      console.log(`✅ Successfully processed event ${event.id}`);
+
       return { success: true };
     } catch (error) {
       console.error("Error processing webhook:", error);
+
+      // Try to mark event as failed (best effort)
+      try {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const err = error as { event?: { id?: string; type?: string } };
+        await ctx.runMutation(internal.webhooks.markProcessed, {
+          eventId: err.event?.id ?? "unknown",
+          type: err.event?.type ?? "unknown",
+          source: "stripe",
+          success: false,
+          error: errorMessage,
+        });
+      } catch (markError) {
+        console.error("Failed to mark webhook as failed:", markError);
+      }
+
       throw error;
     }
   },

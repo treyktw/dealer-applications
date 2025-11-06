@@ -223,7 +223,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sessionStorage.setItem(STATE_KEY, state);
 
     // Production web URL
-    const webUrl = "https://dealer.universalautobrokers.net";
+    // const webUrl = "https://dealer.universalautobrokers.net";
+    // local web url
+    const webUrl = "http://localhost:3000";
     const authUrl = `${webUrl}/desktop-sso?state=${state}`;
 
     // Open in system browser

@@ -6,7 +6,7 @@ import {
   action,
   type QueryCtx,
 } from "../_generated/server";
-import { api, internal } from "../_generated/api";
+import { api } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import { requireDealership, assertDealershipAccess } from "../guards";
 import {
@@ -16,6 +16,12 @@ import {
   PDFDropdown,
   PDFRadioGroup,
 } from "pdf-lib";
+import { generateDownloadUrl, generateUploadUrl } from "../lib/s3";
+import {
+  generateDealDocumentPath,
+  validateS3Key,
+  cleanS3Key
+} from "../lib/s3/document_paths";
 
 /**
  * Authentication helper that works for both desktop and web apps
@@ -113,9 +119,25 @@ export const createDocumentInstance = mutation({
     templateId: v.id("documentTemplates"),
     dealId: v.id("deals"),
     data: v.any(), // Initial form data (schema-flexible)
+    userId: v.optional(v.id("users")), // Optional: for scheduled actions
   },
   handler: async (ctx, args) => {
-    const user = await requireDealership(ctx, args.dealershipId);
+    // If userId is provided (from scheduled action), get user directly
+    // Otherwise, require authentication
+    let user: Doc<"users">;
+    if (args.userId) {
+      const foundUser = await ctx.db.get(args.userId);
+      if (!foundUser) {
+        throw new Error("User not found");
+      }
+      // Verify user belongs to the dealership
+      if (foundUser.dealershipId !== args.dealershipId) {
+        throw new Error("User does not belong to this dealership");
+      }
+      user = foundUser;
+    } else {
+      user = await requireDealership(ctx, args.dealershipId);
+    }
 
     // Verify template exists and belongs to dealership
     const template = await ctx.db.get(args.templateId);
@@ -157,10 +179,6 @@ export const createDocumentInstance = mutation({
       status: "DRAFT",
       name: template.name,
       documentType: template.category,
-      requiredSignatures: template.pdfFields
-        .filter((field) => field.type === "signature")
-        .map((field) => field.name),
-      signaturesCollected: [],
       audit: {
         createdBy: user._id,
         createdAt: Date.now(),
@@ -306,13 +324,7 @@ export const generateDocument = action({
     }
 
     // Get template PDF download URL
-    const { downloadUrl: templateUrl } = await ctx.runAction(
-      internal.secure_s3.generateDownloadUrl,
-      {
-        s3Key: template.s3Key,
-        expiresIn: 300,
-      }
-    );
+    const templateUrl = await generateDownloadUrl(template.s3Key, 300);
 
     try {
       // Download template PDF
@@ -330,22 +342,30 @@ export const generateDocument = action({
         document.data
       );
 
-      // Generate S3 key for filled document
-      const orgId = document.orgId || document.dealershipId;
-      const s3Key = `org/${orgId}/docs/instances/${document.dealId}/${document._id}.pdf`;
+      // Generate S3 key for filled document using centralized path generator
+      const s3Key = generateDealDocumentPath(
+        document.dealershipId as Id<"dealerships">,
+        document.dealId,
+        document._id,
+        "pdf"
+      );
+
+      // Validate S3 key format
+      const validation = validateS3Key(s3Key);
+      if (!validation.valid) {
+        throw new Error(`Invalid S3 key format: ${validation.error}`);
+      }
+
       // Log S3 key generation
       // console.log("Generated S3 key:", s3Key);
       // console.log("S3 key length:", s3Key.length);
       // console.log("S3 key ends with .pdf:", s3Key.endsWith('.pdf'));
 
       // Get upload URL
-      const { uploadUrl } = await ctx.runAction(
-        internal.secure_s3.generateUploadUrl,
-        {
-          s3Key,
-          contentType: "application/pdf",
-          expiresIn: 300,
-        }
+      const uploadUrl = await generateUploadUrl(
+        s3Key,
+        "application/pdf",
+        300
       );
 
       // Upload filled PDF to S3
@@ -824,14 +844,23 @@ export const markDocumentGenerated = mutation({
       throw new Error("Document not found");
     }
 
-    // Log S3 key before storing
-    console.log("Storing S3 key:", args.s3Key);
-    console.log("S3 key length:", args.s3Key.length);
-    console.log("S3 key ends with .pdf:", args.s3Key.endsWith(".pdf"));
+    // Clean and validate S3 key before storing
+    const cleanedKey = cleanS3Key(args.s3Key);
+    const validation = validateS3Key(cleanedKey);
+
+    if (!validation.valid) {
+      console.error("Invalid S3 key format:", cleanedKey);
+      console.error("Validation error:", validation.error);
+      throw new Error(`Invalid S3 key format: ${validation.error}`);
+    }
+
+    console.log("Storing S3 key:", cleanedKey);
+    console.log("S3 key length:", cleanedKey.length);
+    console.log("S3 key ends with .pdf:", cleanedKey.endsWith(".pdf"));
 
     await ctx.db.patch(args.documentId, {
       status: "READY",
-      s3Key: args.s3Key.trim(), // Add trim() to remove any whitespace
+      s3Key: cleanedKey,
       fileSize: args.fileSize,
       updatedAt: Date.now(),
     });
@@ -1172,13 +1201,7 @@ export const extractFieldValuesFromDocument = action({
     }
 
     // Get download URL for the generated PDF
-    const { downloadUrl } = await ctx.runAction(
-      internal.secure_s3.generateDownloadUrl,
-      {
-        s3Key: document.s3Key,
-        expiresIn: 300,
-      }
-    );
+    const downloadUrl = await generateDownloadUrl(document.s3Key, 300);
 
     try {
       // Download the generated PDF
@@ -1330,13 +1353,7 @@ export const updateDocumentFieldValues = action({
     }
 
     // Get download URL for the current PDF
-    const { downloadUrl } = await ctx.runAction(
-      internal.secure_s3.generateDownloadUrl,
-      {
-        s3Key: document.s3Key,
-        expiresIn: 300,
-      }
-    );
+    const downloadUrl = await generateDownloadUrl(document.s3Key, 300);
 
     try {
       // Download the current PDF
@@ -1353,19 +1370,26 @@ export const updateDocumentFieldValues = action({
         args.fieldValues
       );
 
-      // Generate new S3 key (versioned)
+      // Generate new S3 key (versioned) using centralized path generator
       const timestamp = Date.now();
-      const orgId = document.orgId || document.dealershipId;
-      const s3Key = `org/${orgId}/docs/instances/${document.dealId}/${document._id}-v${timestamp}.pdf`;
+      const s3Key = generateDealDocumentPath(
+        document.dealershipId as Id<"dealerships">,
+        document.dealId,
+        `${document._id}-v${timestamp}`,
+        "pdf"
+      );
+
+      // Validate S3 key format
+      const validation = validateS3Key(s3Key);
+      if (!validation.valid) {
+        throw new Error(`Invalid S3 key format: ${validation.error}`);
+      }
 
       // Get upload URL
-      const { uploadUrl } = await ctx.runAction(
-        internal.secure_s3.generateUploadUrl,
-        {
-          s3Key,
-          contentType: "application/pdf",
-          expiresIn: 300,
-        }
+      const uploadUrl = await generateUploadUrl(
+        s3Key,
+        "application/pdf",
+        300
       );
 
       // Upload updated PDF to S3
@@ -1609,12 +1633,9 @@ export const getDocumentDownloadUrl = action({
     });
 
     // Generate presigned download URL
-    const { downloadUrl } = await ctx.runAction(
-      internal.secure_s3.generateDownloadUrl,
-      {
-        s3Key,
-        expiresIn: args.expiresIn || 300,
-      }
+    const downloadUrl = await generateDownloadUrl(
+      s3Key,
+      args.expiresIn || 300
     );
 
     return {
@@ -1661,21 +1682,25 @@ export const getDocumentUploadUrl = action({
       );
     }
 
-    // Generate S3 key
-    const s3Key = generateDocumentS3Key(
+    // Generate S3 key using centralized path generator
+    const s3Key = generateDealDocumentPath(
       document.dealershipId,
       document.dealId,
-      args.documentId
+      args.documentId,
+      "pdf"
     );
 
+    // Validate S3 key format
+    const validation = validateS3Key(s3Key);
+    if (!validation.valid) {
+      throw new Error(`Invalid S3 key format: ${validation.error}`);
+    }
+
     // Generate presigned upload URL
-    const { uploadUrl } = await ctx.runAction(
-      internal.secure_s3.generateUploadUrl,
-      {
-        s3Key,
-        contentType: "application/pdf",
-        expiresIn: 900,
-      }
+    const uploadUrl = await generateUploadUrl(
+      s3Key,
+      "application/pdf",
+      900
     );
 
     return {
@@ -1741,16 +1766,9 @@ export const updateDocumentFields = mutation({
 
 // ==================== HELPER FUNCTIONS ====================
 
-/**
- * Generate S3 key for document
- */
-function generateDocumentS3Key(
-  dealershipId: Id<"dealerships">,
-  dealId: Id<"deals">,
-  documentId: Id<"documentInstances">
-): string {
-  return `org/${dealershipId}/docs/instances/${dealId}/${documentId}.pdf`;
-}
+// S3 key generation now handled by centralized path generator
+// See: lib/s3/document-paths.ts
+
 // Signature/signing utilities removed
 
 export {

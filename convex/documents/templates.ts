@@ -1,6 +1,6 @@
 // convex/documents/templates.ts - Template CRUD Operations
 import { v } from "convex/values";
-import { mutation, query, action, internalMutation } from "../_generated/server";
+import { mutation, query, action, internalAction, internalMutation } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
 import {
@@ -8,6 +8,11 @@ import {
   requireDealership,
   assertDealershipAccess,
 } from "../guards";
+import { generateUploadUrl, generateDownloadUrl, deleteFile } from "../lib/s3";
+import {
+  generateTemplatePath,
+  validateS3Key,
+} from "../lib/s3/document_paths";
 
 /**
  * Create a new document template
@@ -59,14 +64,25 @@ export const createTemplate = mutation({
 
     const version = allVersions.length + 1;
 
-    // Generate S3 key using new org-based path structure
-    const orgId = dealership.orgId || args.dealershipId; // Fallback to dealership if no org
+    // Generate S3 key using centralized path generator
     const timestamp = Date.now();
     const sanitizedFileName = args.fileName
       .replace(/[^a-zA-Z0-9.-]/g, "-")
       .toLowerCase();
 
-    const s3Key = `org/${orgId}/docs/templates/${args.category}/v${version}-${timestamp}-${sanitizedFileName}`;
+    // Create a unique template ID with version and timestamp
+    const templateIdentifier = `${args.category}-v${version}-${timestamp}-${sanitizedFileName}`;
+    const s3Key = generateTemplatePath(
+      args.dealershipId,
+      templateIdentifier.replace(/\.pdf$/i, ""), // Remove .pdf if present, will be added by generator
+      "pdf"
+    );
+
+    // Validate S3 key format
+    const validation = validateS3Key(s3Key);
+    if (!validation.valid) {
+      throw new Error(`Invalid S3 key format: ${validation.error}`);
+    }
 
     // Create template record (initially inactive until PDF is uploaded)
     const templateId = await ctx.db.insert("documentTemplates", {
@@ -140,14 +156,11 @@ export const getTemplateUploadUrl = action({
       throw new Error("File size exceeds 25MB limit");
     }
 
-    // Generate presigned URL using secure_s3
-    const { uploadUrl } = await ctx.runAction(
-      internal.secure_s3.generateUploadUrl,
-      {
-        s3Key: template.s3Key,
-        contentType: args.contentType,
-        expiresIn: 900,
-      }
+    // Generate presigned URL using new S3 utilities
+    const uploadUrl = await generateUploadUrl(
+      template.s3Key,
+      args.contentType,
+      900
     );
 
     return {
@@ -655,18 +668,15 @@ export const deleteTemplate = mutation({
       s3Key: template.s3Key,
     };
 
+    // Schedule S3 file deletion as an action (since mutations can't use fetch)
+    if (template.s3Key) {
+      await ctx.scheduler.runAfter(0, internal.documents.templates.deleteTemplateFromS3, {
+        s3Key: template.s3Key,
+      });
+    }
+
     // Delete the template record from Convex
     await ctx.db.delete(args.templateId);
-
-    // Schedule S3 file deletion
-    await ctx.scheduler.runAfter(
-      0,
-      internal.secure_s3.deleteFile,
-      {
-        s3Key: template.s3Key,
-        reason: "template_deleted",
-      }
-    );
 
     // Log security event
     await ctx.db.insert("security_logs", {
@@ -705,17 +715,32 @@ export const getTemplateDownloadUrl = action({
     if (!template) {
       throw new Error("Template not found");
     }
-    const { downloadUrl } = await ctx.runAction(
-      internal.secure_s3.generateDownloadUrl,
-      {
-        expiresIn: 300,
-        s3Key: template.s3Key,
-      }
-    );
+    const downloadUrl = await generateDownloadUrl(template.s3Key, 300);
 
     return {
       downloadUrl,
       expiresIn: 300,
     };
+  },
+});
+
+/**
+ * Internal action to delete template file from S3
+ * Called asynchronously from deleteTemplate mutation
+ * Must be an action (not mutation) because it uses fetch() via S3 client
+ */
+export const deleteTemplateFromS3 = internalAction({
+  args: {
+    s3Key: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    try {
+      await deleteFile(args.s3Key);
+      console.log(`✅ Successfully deleted template file from S3: ${args.s3Key}`);
+    } catch (error) {
+      console.error(`❌ Failed to delete template file from S3: ${args.s3Key}`, error);
+      // Don't throw - we don't want to fail the mutation if S3 deletion fails
+      // The file will be orphaned but that's acceptable
+    }
   },
 });

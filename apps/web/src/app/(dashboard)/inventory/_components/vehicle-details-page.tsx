@@ -177,12 +177,12 @@ export default function VehicleDetailPage({
         </div>
 
         <div className="flex items-center gap-2">
-          <Select value={vehicle.status} onValueChange={handleStatusChange}>
+          <Select value={vehicle.status?.toLowerCase()} onValueChange={handleStatusChange}>
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="Update Status" />
             </SelectTrigger>
             <SelectContent>
-              {["available", "pending", "sold", "maintenance"].map((item) => (
+              {["available", "pending", "sold", "reserved", "maintenance"].map((item) => (
                 <SelectItem key={item} value={item}>
                   {item.charAt(0).toUpperCase() + item.slice(1)}
                 </SelectItem>
@@ -248,8 +248,8 @@ export default function VehicleDetailPage({
                     { label: "Trim", value: vehicle.trim || "N/A" },
                     { label: "Stock Number", value: vehicle.stock },
                     { label: "VIN", value: vehicle.vin },
-                  ].map((item, index) => (
-                    <div key={index}>
+                  ].map((item) => (
+                    <div key={item.label}>
                       <p className="text-sm font-medium">{item.label}</p>
                       <p className="text-sm">{item.value}</p>
                     </div>
@@ -280,8 +280,8 @@ export default function VehicleDetailPage({
                       label: "Interior Color",
                       value: vehicle.interiorColor || "N/A",
                     },
-                  ].map((item, index) => (
-                    <div key={index}>
+                  ].map((item) => (
+                    <div key={item.label}>
                       <p className="text-sm font-medium">{item.label}</p>
                       <p className="text-sm">{item.value}</p>
                     </div>
@@ -315,7 +315,7 @@ export default function VehicleDetailPage({
                       index: number
                     ) => (
                       <div
-                        key={index}
+                        key={image.url}
                         className="relative aspect-[4/3] border rounded-md overflow-hidden"
                       >
                         {/* Replace Image with SecureImage */}
@@ -360,11 +360,11 @@ export default function VehicleDetailPage({
             <CardHeader>
               <CardTitle>Features & Options</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent> 
               {featuresArr.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2">
-                  {featuresArr.map((feature, index) => (
-                    <div key={index} className="flex items-center gap-2 py-1">
+                  {featuresArr.map((feature) => (
+                    <div key={feature} className="flex items-center gap-2 py-1">
                       <Check className="h-4 w-4 text-primary" />
                       <span>{feature}</span>
                     </div>

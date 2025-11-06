@@ -110,11 +110,32 @@ export default function NewDealPage() {
       return;
     }
 
+    // Validate required fields
+    if (!saleAmount || parseFloat(saleAmount) <= 0) {
+      toast.error("Sale amount must be greater than 0");
+      return;
+    }
+
     try {
-      const result = await createDeal({
+      console.log("Creating deal with data:", {
         clientId: selectedClientId,
         vehicleId: selectedVehicleId,
         dealershipId,
+        type: dealType,
+        saleAmount: parseFloat(saleAmount),
+        salesTax: parseFloat(salesTax) || 0,
+        docFee: parseFloat(docFee) || 0,
+        tradeInValue: parseFloat(tradeInValue) || 0,
+        downPayment: parseFloat(downPayment) || 0,
+        financedAmount: parseFloat(saleAmount) - parseFloat(downPayment || "0"),
+        totalAmount: calculateTotal(),
+        saleDate: Date.now(),
+      });
+
+      const result = await createDeal({
+        clientId: selectedClientId,
+        vehicleId: selectedVehicleId,
+        dealershipId: dealershipId as string, // Ensure it's a string
         type: dealType,
         saleAmount: parseFloat(saleAmount) || 0,
         salesTax: parseFloat(salesTax) || 0,
@@ -126,11 +147,33 @@ export default function NewDealPage() {
         saleDate: Date.now(),
       });
 
+      console.log("Deal created successfully:", result);
       toast.success("Deal created successfully!");
       router.push(`/deals/${result.dealId}`);
     } catch (error) {
       console.error("Error creating deal:", error);
-      toast.error("Failed to create deal");
+      
+      // Extract error message from Convex error
+      let errorMessage = "Failed to create deal";
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === "string") {
+        errorMessage = error;
+      } else if (error && typeof error === "object" && "message" in error) {
+        errorMessage = String(error.message);
+      }
+      
+      console.error("Detailed error:", {
+        error,
+        errorMessage,
+        errorType: typeof error,
+        errorKeys: error && typeof error === "object" ? Object.keys(error) : [],
+      });
+      
+      toast.error(errorMessage, {
+        duration: 5000,
+      });
     }
   };
 

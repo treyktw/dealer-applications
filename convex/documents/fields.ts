@@ -5,6 +5,7 @@ import { internal, api } from "../_generated/api";
 import { requireAuth, assertDealershipAccess } from "../guards";
 import { PDFDocument, PDFButton, PDFCheckBox, PDFDropdown, PDFRadioGroup, PDFTextField } from "pdf-lib";
 import type { PDFField } from "pdf-lib";
+import { generateDownloadUrl } from "../lib/s3";
 
 // Strongly-typed field models used during extraction and normalization
 type AllowedFieldType = "text" | "number" | "date" | "checkbox" | "signature";
@@ -53,13 +54,7 @@ export const extractFieldsFromTemplate = internalAction({
     }
 
     // Get download URL for the PDF
-    const { downloadUrl } = await ctx.runAction(
-      internal.secure_s3.generateDownloadUrl,
-      {
-        s3Key: template.s3Key,
-        expiresIn: 300,
-      }
-    );
+    const downloadUrl = await generateDownloadUrl(template.s3Key, 300);
 
     try {
       // Fetch PDF from S3

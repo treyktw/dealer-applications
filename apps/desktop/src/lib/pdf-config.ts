@@ -12,13 +12,32 @@ import 'react-pdf/dist/Page/TextLayer.css';
  * This ensures the worker version matches the library version
  */
 export function initializePdfJs() {
-  // Use CDN with exact version match
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-  
-  console.log(`📚 PDF.js initialized with version ${pdfjs.version}`);
+  try {
+    // In production builds, use CDN with exact version match
+    // The CDN URL is reliable and automatically matches the pdfjs version
+    const workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
+    pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+
+    // Configure additional options for better performance
+    pdfjs.GlobalWorkerOptions.workerPort = null; // Let browser choose
+
+    console.log(`📚 PDF.js initialized successfully`);
+    console.log(`   Version: ${pdfjs.version}`);
+    console.log(`   Worker: ${workerSrc}`);
+
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to initialize PDF.js:', error);
+    return false;
+  }
 }
 
 // Auto-initialize on import
-initializePdfJs();
+const initialized = initializePdfJs();
+
+if (!initialized) {
+  console.warn('⚠️ PDF.js initialization failed. PDFs may not render correctly.');
+}
 
 export { pdfjs };
