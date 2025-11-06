@@ -80,22 +80,30 @@ export const webhook = httpAction(async (ctx, request) => {
 async function handleOrderCreated(ctx: any, event: any) {
   const data = event.data;
 
-  // Determine license tier from product/price
+  // Determine license tier from product ID using pricing config
   let tier: "single" | "team" | "enterprise" = "single";
 
-  // Parse tier from product name or metadata
-  if (data.product_name) {
-    const name = data.product_name.toLowerCase();
-    if (name.includes("team")) {
-      tier = "team";
-    } else if (name.includes("enterprise")) {
-      tier = "enterprise";
-    }
-  }
+  // Import pricing config dynamically
+  const { getTierByPolarProductId } = await import("./lib/pricing");
+  const tierFromProduct = getTierByPolarProductId(data.product_id);
 
-  // Or from custom metadata if you set it in Polar
-  if (data.metadata?.tier) {
-    tier = data.metadata.tier as any;
+  if (tierFromProduct) {
+    tier = tierFromProduct as any;
+  } else {
+    // Fallback: Parse tier from product name or metadata
+    if (data.product_name) {
+      const name = data.product_name.toLowerCase();
+      if (name.includes("team")) {
+        tier = "team";
+      } else if (name.includes("enterprise")) {
+        tier = "enterprise";
+      }
+    }
+
+    // Or from custom metadata if you set it in Polar
+    if (data.metadata?.tier) {
+      tier = data.metadata.tier as any;
+    }
   }
 
   // Create license
