@@ -77,7 +77,7 @@ export const exportDealershipData = query({
         .collect(),
       ctx.db.query("documents").collect(), // Will filter by dealId
       ctx.db
-        .query("document_templates")
+        .query("documentTemplates")
         .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId))
         .collect(),
       ctx.db
@@ -158,7 +158,7 @@ export const importDealershipData = internalMutation({
       vehicles: Map<string, Id<"vehicles">>;
       deals: Map<string, Id<"deals">>;
       documents: Map<string, Id<"documents">>;
-      templates: Map<string, Id<"document_templates">>;
+      templates: Map<string, Id<"documentTemplates">>;
     } = {
       clients: new Map(),
       vehicles: new Map(),
@@ -263,7 +263,7 @@ export const importDealershipData = internalMutation({
         const oldId = template._id;
         const { _id, _creationTime, ...templateData } = template;
 
-        const newId = await ctx.db.insert("document_templates", {
+        const newId = await ctx.db.insert("documentTemplates", {
           ...templateData,
           dealershipId: args.dealershipId,
         });
@@ -413,7 +413,7 @@ export const getExportMetadata = query({
         .collect()
         .then((r) => r.length),
       ctx.db
-        .query("document_templates")
+        .query("documentTemplates")
         .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId))
         .collect()
         .then((r) => r.length),

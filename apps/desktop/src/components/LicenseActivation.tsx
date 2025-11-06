@@ -3,7 +3,7 @@
  * Handles license key validation and activation for the desktop app
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@dealer/convex";
 import { Button } from "./ui/button";
@@ -27,7 +27,9 @@ export function LicenseActivation({ onSuccess }: LicenseActivationProps) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  const activateLicense = useMutation(api.licenses.activateLicense);
+  const licenseId = useId();
+
+  const activateLicense = useMutation(api.api.licenses.activateLicense);
 
   // Get machine info on mount
   useEffect(() => {
@@ -147,7 +149,7 @@ export function LicenseActivation({ onSuccess }: LicenseActivationProps) {
           <div className="space-y-2">
             <Label htmlFor="license">License Key</Label>
             <Input
-              id="license"
+              id={licenseId}
               type="text"
               placeholder="DEALER-XXXX-XXXX-XXXX"
               value={licenseKey}
@@ -238,7 +240,7 @@ export function LicenseInfo() {
   }, []);
 
   const licenseInfo = useQuery(
-    api.licenses.getLicenseInfo,
+    api.api.licenses.getLicenseInfo,
     licenseKey ? { licenseKey } : "skip"
   );
 
@@ -280,9 +282,9 @@ export function LicenseInfo() {
         <div className="pt-2">
           <Label className="text-xs text-muted-foreground mb-2 block">Active Devices</Label>
           <div className="space-y-2">
-            {licenseInfo.activations.map((activation, index) => (
+            {licenseInfo.activations.map((activation) => (
               <div
-                key={index}
+                key={activation.hostname}
                 className="text-sm p-2 bg-muted rounded flex items-center justify-between"
               >
                 <div>
