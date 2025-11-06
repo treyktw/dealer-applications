@@ -17,7 +17,7 @@ import {
   generateDealDocumentPath,
   validateS3Key,
   cleanS3Key
-} from "../lib/s3/document-paths";
+} from "../lib/s3/document_paths";
 
 /**
  * Generate all documents for a deal
@@ -28,19 +28,9 @@ export const generateDealDocuments = action({
     dealId: v.id("deals"),
   },
   handler: async (ctx, args) => {
-    // Get authenticated user
-    const user = await ctx.runQuery(api.users.getCurrentUser, {});
-    
-    if (!user) {
-      throw new Error("Authentication required");
-    }
-
-    if (!user.dealershipId) {
-      throw new Error("User not associated with a dealership");
-    }
-
-    // Get deal
-    const deal = await ctx.runQuery(api.deals.getDeal, {
+    // Get deal directly from database (works in both authenticated and scheduled contexts)
+    // We can't use getDeal query because it requires authentication
+    const deal = await ctx.runQuery(api.deals.getDealForGeneration, {
       dealId: args.dealId,
     });
 
@@ -48,12 +38,28 @@ export const generateDealDocuments = action({
       throw new Error("Deal not found");
     }
 
-    // Verify user has access to this dealership
-    // Note: deal.dealershipId is stored as string, user.dealershipId is Id<"dealerships">
-    const userDealershipIdStr = user.dealershipId as string;
-    const dealDealershipIdStr = deal.dealershipId as string;
-    if (userDealershipIdStr !== dealDealershipIdStr) {
-      throw new Error("User does not have access to this deal");
+    // Get dealershipId from deal (for scheduled actions, we can't rely on user auth)
+    if (!deal.dealershipId) {
+      throw new Error("Deal does not have a dealership ID");
+    }
+    const dealershipId = deal.dealershipId as Id<"dealerships">;
+    
+    // Try to get authenticated user (may be null if called from scheduler)
+    let user = null;
+    try {
+      user = await ctx.runQuery(api.users.getCurrentUser, {});
+    } catch {
+      // If authentication fails (e.g., in scheduled context), continue without user
+      console.log("Running document generation in scheduled context (no user auth)");
+    }
+
+    // If we have a user, verify they have access to this dealership
+    if (user) {
+      const userDealershipIdStr = user.dealershipId as string;
+      const dealDealershipIdStr = deal.dealershipId as string;
+      if (userDealershipIdStr !== dealDealershipIdStr) {
+        throw new Error("User does not have access to this deal");
+      }
     }
 
     // Update deal status to DOCS_GENERATING
@@ -65,7 +71,7 @@ export const generateDealDocuments = action({
     try {
       // Get active templates for this dealership
       const templates = await ctx.runQuery(api.documents.templates.getActiveTemplates, {
-        dealershipId: user.dealershipId,
+        dealershipId: dealershipId,
       });
 
       if (!templates || templates.length === 0) {
@@ -111,11 +117,28 @@ export const generateDealDocuments = action({
           }
 
           // Generate document instance for this template
+          // If no user available (scheduled context), find a user from the dealership
+          let userId = user?._id;
+          if (!userId) {
+            // Find any user from the dealership to use as the creator (for scheduled actions)
+            // Use an internal query that doesn't require auth
+            const dealershipUsersResult = await ctx.runQuery(api.users.getUsersByDealership, {
+              dealershipId: dealershipId,
+            });
+            if (dealershipUsersResult && dealershipUsersResult.length > 0) {
+              userId = dealershipUsersResult[0]._id;
+            } else {
+              // If no users found, skip this template (shouldn't happen in normal operation)
+              console.warn(`No users found for dealership ${dealershipId}, skipping template ${template.name}`);
+              continue;
+            }
+          }
+          
           const result = await ctx.runAction(api.documents.deal_generator.generateSingleDocument, {
             dealId: args.dealId,
             templateId: template._id,
             dealData,
-            userId: user._id,
+            userId: userId,
           });
 
           generatedDocuments.push({
@@ -294,17 +317,18 @@ export const generateSingleDocument = action({
     userId: v.id("users"),
   },
   handler: async (ctx, args): Promise<{ success: boolean; documentId?: string; error?: string }> => {
-    // Get template
+    // Get template (skip auth check since this is called from scheduled action)
     const template = await ctx.runQuery(api.documents.templates.getTemplateById, {
       templateId: args.templateId,
+      skipAuth: true,
     });
 
     if (!template) {
       throw new Error("Template not found");
     }
 
-    // Get deal
-    const deal = await ctx.runQuery(api.deals.getDeal, {
+    // Get deal (use getDealForGeneration since this is called from scheduled action)
+    const deal = await ctx.runQuery(api.deals.getDealForGeneration, {
       dealId: args.dealId,
     });
 
@@ -326,7 +350,7 @@ export const generateSingleDocument = action({
       );
     }
 
-    // Create document instance
+    // Create document instance (pass userId for scheduled actions)
     const documentId: { documentId: string } = await ctx.runMutation(
       api.documents.generator.createDocumentInstance,
       {
@@ -334,6 +358,7 @@ export const generateSingleDocument = action({
         templateId: args.templateId,
         dealId: args.dealId,
         data: args.dealData,
+        userId: args.userId, // Pass userId for scheduled actions
       }
     );
 

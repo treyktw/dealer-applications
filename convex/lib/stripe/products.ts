@@ -1,7 +1,11 @@
 // convex/lib/stripe/products.ts
 // Stripe product and price ID management
-
-import { SubscriptionPlan, BillingCycle } from "../../schema";
+import {
+  getPriceAmount as getPriceAmountFromConfig,
+  formatPrice as formatPriceFromConfig,
+  type SubscriptionPlanType,
+  type BillingCycleType,
+} from "../subscription/config";
 
 /**
  * Stripe price IDs from environment variables
@@ -98,29 +102,25 @@ export function getCycleDisplayName(cycle: string): string {
 
 /**
  * Get price amount in cents (for display)
- * These are hardcoded but could be fetched from Stripe API
+ * Uses centralized subscription config
  */
 export function getPriceAmount(plan: string, cycle: string): number {
-  const prices: Record<string, Record<string, number>> = {
-    basic: {
-      monthly: 4900, // $49/month
-      yearly: 47040, // $39.20/month * 12 = $470.40/year (20% off)
-    },
-    premium: {
-      monthly: 7900, // $79/month
-      yearly: 75840, // $63.20/month * 12 = $758.40/year (20% off)
-    },
-    enterprise: {
-      monthly: 19900, // $199/month
-      yearly: 191040, // $159.20/month * 12 = $1910.40/year (20% off)
-    },
-  };
-
-  return prices[plan.toLowerCase()]?.[cycle.toLowerCase()] || 0;
+  return getPriceAmountFromConfig(
+    plan as SubscriptionPlanType,
+    cycle as BillingCycleType
+  );
 }
 
 /**
  * Format price for display
+ * Uses centralized subscription config
+ */
+export function formatPriceDisplay(plan: string, cycle: string): string {
+  return formatPriceFromConfig(plan as SubscriptionPlanType, cycle as BillingCycleType);
+}
+
+/**
+ * Format price amount in cents for display (legacy function)
  */
 export function formatPrice(amountInCents: number): string {
   return new Intl.NumberFormat("en-US", {

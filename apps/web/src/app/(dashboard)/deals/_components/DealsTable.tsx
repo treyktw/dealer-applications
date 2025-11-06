@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import * as React from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import Link from "next/link";
@@ -19,7 +20,6 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -48,17 +48,15 @@ import {
   Search,
   Filter,
   FileText,
-  CheckCircle2,
-  Clock,
-  XCircle,
+
   MoreHorizontal,
   Eye,
   Trash2,
   Plus,
+  AlertCircle,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Doc } from "@/convex/_generated/dataModel";
-import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { DealStatusBadge } from "@/components/shared/StatusBadge";
@@ -83,6 +81,25 @@ export function DealsTable() {
   // Get current user for dealershipId
   const currentUser = useQuery(api.users.getCurrentUser);
   const dealershipId = currentUser?.dealershipId;
+
+  // Get subscription status with limits for logging
+  const subscriptionStatus = useQuery(
+    api.subscriptions.getSubscriptionStatusWithLimits,
+    dealershipId ? { dealershipId } : "skip"
+  );
+
+  // Log subscription status
+  React.useEffect(() => {
+    if (subscriptionStatus) {
+      console.log("📊 Subscription Status:", {
+        plan: subscriptionStatus.plan,
+        hasActiveSubscription: subscriptionStatus.hasActiveSubscription,
+        limits: subscriptionStatus.limits,
+        usage: subscriptionStatus.usage,
+        subscription: subscriptionStatus.subscription,
+      });
+    }
+  }, [subscriptionStatus]);
 
   const router = useRouter();
 
@@ -143,6 +160,26 @@ export function DealsTable() {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Handle subscription requirement gracefully
+  if (dealsData?.subscriptionRequired) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 space-y-4">
+        <div className="text-center space-y-2 max-w-md">
+          <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto" />
+          <h3 className="text-lg font-semibold">Subscription Required</h3>
+          <p className="text-sm text-muted-foreground">
+            {dealsData.subscriptionError || "Premium subscription with deals management is required to access this feature."}
+          </p>
+          <Button asChild className="mt-4">
+            <Link href="/settings/billing">
+              Upgrade Subscription
+            </Link>
+          </Button>
+        </div>
       </div>
     );
   }

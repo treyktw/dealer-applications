@@ -10,7 +10,7 @@ import {
   generateCustomDocumentPath,
   validateS3Key,
   cleanS3Key
-} from "./lib/s3/document-paths";
+} from "./lib/s3/document_paths";
 
 // S3 Configuration
 const s3Client = new S3Client({

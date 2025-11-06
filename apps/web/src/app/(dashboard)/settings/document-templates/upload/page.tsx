@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -87,6 +87,12 @@ export default function UploadTemplatePage() {
     templateId ? { templateId: templateId as Id<"documentTemplates"> } : "skip"
   );
 
+  // Use ref to always access latest template value in polling closure
+  const templateRef = useRef(template);
+  useEffect(() => {
+    templateRef.current = template;
+  }, [template]);
+
   const handleFileSelect = useCallback((file: File | null) => {
     setSelectedFile(file);
   }, []);
@@ -129,48 +135,61 @@ export default function UploadTemplatePage() {
 
       console.debug(`Polling attempt ${attempts}/${maxAttempts} for template:`, templateId);
 
-      // Check if template query has loaded with fields
-      if (template && template.pdfFields !== undefined) {
-        const fieldCount = template.pdfFields?.length || 0;
-        const mappingCount = template.fieldMappings?.length || 0;
-        const hasFields = fieldCount > 0;
-        const hasMappings = mappingCount > 0;
+      // Access latest template value from ref (updated by useEffect)
+      const currentTemplate = templateRef.current;
 
-        console.debug("Template data check:", {
-          fieldCount,
-          mappingCount,
-          hasFields,
-          hasMappings,
-          pdfFields: template.pdfFields,
-          fieldMappings: template.fieldMappings
-        });
-
-        if (hasFields) {
-          console.debug("Field extraction complete:", {
-            fieldCount,
-            mappingCount,
-            hasMappings,
-          });
-
+      // Check if template exists and has been loaded
+      if (!currentTemplate) {
+        // Template not loaded yet, continue polling
+        if (attempts >= maxAttempts) {
+          console.warn("Template not found after max polling attempts");
           clearInterval(interval);
-          setExtractionStatus({
-            fieldCount,
-            mappingCount,
-          });
-          setStep("complete");
-          
-          // Provide detailed success message based on extraction results
-          if (hasMappings) {
-            toast.success(
-              `Extracted ${fieldCount} fields with ${mappingCount} auto-mappings!`
-            );
-          } else {
-            toast.success(
-              `Extracted ${fieldCount} fields. Field mappings will be available for review.`
-            );
-          }
           return;
         }
+        return; // Continue polling
+      }
+
+      // Check if fields have been extracted (pdfFields array has items)
+      const fieldCount = currentTemplate.pdfFields?.length || 0;
+      const mappingCount = currentTemplate.fieldMappings?.length || 0;
+      const hasFields = fieldCount > 0;
+      const hasMappings = mappingCount > 0;
+
+      console.debug("Template data check:", {
+        fieldCount,
+        mappingCount,
+        hasFields,
+        hasMappings,
+        pdfFields: currentTemplate.pdfFields,
+        fieldMappings: currentTemplate.fieldMappings
+      });
+
+      // If fields have been extracted, stop polling
+      if (hasFields) {
+        console.debug("Field extraction complete:", {
+          fieldCount,
+          mappingCount,
+          hasMappings,
+        });
+
+        clearInterval(interval);
+        setExtractionStatus({
+          fieldCount,
+          mappingCount,
+        });
+        setStep("complete");
+        
+        // Provide detailed success message based on extraction results
+        if (hasMappings) {
+          toast.success(
+            `Extracted ${fieldCount} fields with ${mappingCount} auto-mappings!`
+          );
+        } else {
+          toast.success(
+            `Extracted ${fieldCount} fields. Field mappings will be available for review.`
+          );
+        }
+        return;
       }
 
       // Timeout after max attempts
@@ -178,10 +197,10 @@ export default function UploadTemplatePage() {
         console.warn("Field extraction timeout reached for template:", templateId);
         clearInterval(interval);
         
-        // Even if extraction is slow, move to complete step
-        // User can still view template
-        const fieldCount = template?.pdfFields?.length || 0;
-        const mappingCount = template?.fieldMappings?.length || 0;
+        // Check one last time with latest template value
+        const finalTemplate = templateRef.current;
+        const fieldCount = finalTemplate?.pdfFields?.length || 0;
+        const mappingCount = finalTemplate?.fieldMappings?.length || 0;
         
         setExtractionStatus({
           fieldCount,
@@ -204,7 +223,7 @@ export default function UploadTemplatePage() {
 
     // Cleanup on unmount
     return () => clearInterval(interval);
-  }, [template]);
+  }, []);
 
   // Loading state
   if (currentUser === undefined || dealership === undefined) {

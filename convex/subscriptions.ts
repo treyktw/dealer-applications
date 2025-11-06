@@ -777,3 +777,6 @@ export const getAvailableFeatures = query({
     };
   },
 });
+
+// Re-export subscription limits query
+export { getSubscriptionStatusWithLimits } from "./lib/subscription/limits";

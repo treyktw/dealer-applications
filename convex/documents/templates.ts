@@ -13,7 +13,7 @@ import {
   generateTemplatePath,
   validateS3Key,
   cleanS3Key
-} from "../lib/s3/document-paths";
+} from "../lib/s3/document_paths";
 
 /**
  * Create a new document template

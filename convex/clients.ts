@@ -196,33 +196,63 @@ export const importClients = action({
       
       console.log("📋 Headers found:", headers);
       
-      // Map headers to expected field names (case insensitive)
+      // Helper function to normalize headers for flexible matching
+      // Handles: "First Name", "first_name", "firstname", "first-name", etc.
+      const normalizeHeader = (header: string): string => {
+        return header
+          .toLowerCase()
+          .replace(/[\s_\-\.]+/g, "") // Remove spaces, underscores, hyphens, and dots
+          .trim();
+      };
+
+      // Map headers to expected field names (case insensitive, flexible formatting)
       const headerMap: Record<string, string> = {};
       headers.forEach((header, index) => {
-        const normalizedHeader = header.toLowerCase().replace(/\s+/g, "");
+        const normalizedHeader = normalizeHeader(header);
         
         // Map various header formats to our field names
-        if (normalizedHeader.includes("firstname") || normalizedHeader === "first") {
+        // First Name variations: "firstname", "first_name", "first-name", "first name", "first", "fname"
+        if (normalizedHeader.includes("firstname") || normalizedHeader === "first" || normalizedHeader === "fname") {
           headerMap["firstName"] = String(index);
-        } else if (normalizedHeader.includes("lastname") || normalizedHeader === "last") {
+        } 
+        // Last Name variations: "lastname", "last_name", "last-name", "last name", "last", "lname", "surname"
+        else if (normalizedHeader.includes("lastname") || normalizedHeader === "last" || normalizedHeader === "lname" || normalizedHeader.includes("surname")) {
           headerMap["lastName"] = String(index);
-        } else if (normalizedHeader.includes("email")) {
+        } 
+        // Email variations: "email", "e-mail", "emailaddress"
+        else if (normalizedHeader.includes("email") && !normalizedHeader.includes("address")) {
           headerMap["email"] = String(index);
-        } else if (normalizedHeader.includes("phone")) {
+        } 
+        // Phone variations: "phone", "telephone", "tel", "mobile", "cell"
+        else if (normalizedHeader.includes("phone") || normalizedHeader.includes("tel") || normalizedHeader.includes("mobile") || normalizedHeader === "cell") {
           headerMap["phone"] = String(index);
-        } else if (normalizedHeader.includes("address") && !normalizedHeader.includes("email")) {
+        } 
+        // Address variations: "address", "street", "streetaddress", "addr"
+        else if ((normalizedHeader.includes("address") && !normalizedHeader.includes("email")) || normalizedHeader.includes("street") || normalizedHeader === "addr") {
           headerMap["address"] = String(index);
-        } else if (normalizedHeader.includes("city")) {
+        } 
+        // City variations: "city", "town"
+        else if (normalizedHeader.includes("city") || normalizedHeader === "town") {
           headerMap["city"] = String(index);
-        } else if (normalizedHeader.includes("state")) {
+        } 
+        // State variations: "state", "province", "region"
+        else if (normalizedHeader.includes("state") || normalizedHeader.includes("province") || normalizedHeader === "region") {
           headerMap["state"] = String(index);
-        } else if (normalizedHeader.includes("zip")) {
+        } 
+        // Zip Code variations: "zip", "zipcode", "postal", "postalcode", "zip_code"
+        else if (normalizedHeader.includes("zip") || normalizedHeader.includes("postal")) {
           headerMap["zipCode"] = String(index);
-        } else if (normalizedHeader.includes("source")) {
+        } 
+        // Source variations: "source", "leadsource", "lead_source"
+        else if (normalizedHeader.includes("source")) {
           headerMap["source"] = String(index);
-        } else if (normalizedHeader.includes("status")) {
+        } 
+        // Status variations: "status", "clientstatus"
+        else if (normalizedHeader.includes("status")) {
           headerMap["status"] = String(index);
-        } else if (normalizedHeader.includes("note")) {
+        } 
+        // Notes variations: "note", "notes", "comment", "comments", "remarks"
+        else if (normalizedHeader.includes("note") || normalizedHeader.includes("comment") || normalizedHeader.includes("remark")) {
           headerMap["notes"] = String(index);
         }
       });

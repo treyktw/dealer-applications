@@ -303,6 +303,18 @@ export const createVehicle = mutation({
       throw new Error("Not authorized to add vehicles to this dealership");
     }
 
+    // Check vehicle limit
+    const { checkVehicleLimit } = await import("./lib/subscription/limits");
+    const vehicleLimitCheck = await checkVehicleLimit(ctx, args.dealershipId as string);
+    
+    if (!vehicleLimitCheck.allowed) {
+      throw new Error(
+        `Vehicle limit reached. You have ${vehicleLimitCheck.current} vehicles. ` +
+        `Your ${vehicleLimitCheck.limit === "unlimited" ? "plan" : `${vehicleLimitCheck.limit} vehicle`} limit has been reached. ` +
+        `Please upgrade your subscription to add more vehicles.`
+      );
+    }
+
     // Generate a unique ID for the vehicle
     const id = `${args.dealershipId}_${args.vin}`;
 

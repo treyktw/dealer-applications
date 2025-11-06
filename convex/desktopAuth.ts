@@ -6,6 +6,7 @@ import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { api } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
+import { planHasFeature, FeatureFlags } from "./lib/subscription/config";
 
 // ============================================================================
 // CONSTANTS
@@ -290,12 +291,19 @@ export const validateDesktopAuth = action({
         );
       }
 
-      // 7. Check for desktop app access feature
-      const hasDesktopAccess = subscription.features.includes("desktop_app_access");
+      // 7. Check for desktop app access feature (using centralized config)
+      // Check both plan-based feature and stored features array for compatibility
+      const hasDesktopAccess =
+        planHasFeature(subscription.plan, FeatureFlags.DESKTOP_APP_ACCESS) ||
+        subscription.features.includes(FeatureFlags.DESKTOP_APP_ACCESS);
+      
       if (!hasDesktopAccess) {
-        console.error("❌ Subscription lacks desktop access:", subscription.plan);
+        console.error("❌ Subscription lacks desktop access:", {
+          plan: subscription.plan,
+          features: subscription.features,
+        });
         throw new ConvexError(
-          "Your subscription plan does not include desktop app access. Please upgrade."
+          `Your ${subscription.plan} subscription plan does not include desktop app access. Please upgrade to Premium or Enterprise to use the desktop application.`
         );
       }
 

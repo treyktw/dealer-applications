@@ -94,6 +94,7 @@ const VALID_DEAL_TRANSITIONS: Record<string, string[]> = {
   [DealStatus.DRAFT]: [
     DealStatus.PENDING_APPROVAL,
     DealStatus.APPROVED, // Can skip approval in some cases
+    DealStatus.DOCS_GENERATING, // Allow automatic document generation from DRAFT
     DealStatus.CANCELLED,
   ],
   [DealStatus.PENDING_APPROVAL]: [
@@ -109,6 +110,7 @@ const VALID_DEAL_TRANSITIONS: Record<string, string[]> = {
   ],
   [DealStatus.DOCS_GENERATING]: [
     DealStatus.DOCS_READY,
+    DealStatus.DRAFT, // Allow reverting to DRAFT if generation fails
     DealStatus.ON_HOLD,
     DealStatus.CANCELLED,
   ],

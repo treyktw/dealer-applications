@@ -21,7 +21,7 @@ import {
   generateDealDocumentPath,
   validateS3Key,
   cleanS3Key
-} from "../lib/s3/document-paths";
+} from "../lib/s3/document_paths";
 
 /**
  * Authentication helper that works for both desktop and web apps
@@ -119,9 +119,25 @@ export const createDocumentInstance = mutation({
     templateId: v.id("documentTemplates"),
     dealId: v.id("deals"),
     data: v.any(), // Initial form data (schema-flexible)
+    userId: v.optional(v.id("users")), // Optional: for scheduled actions
   },
   handler: async (ctx, args) => {
-    const user = await requireDealership(ctx, args.dealershipId);
+    // If userId is provided (from scheduled action), get user directly
+    // Otherwise, require authentication
+    let user: Doc<"users">;
+    if (args.userId) {
+      const foundUser = await ctx.db.get(args.userId);
+      if (!foundUser) {
+        throw new Error("User not found");
+      }
+      // Verify user belongs to the dealership
+      if (foundUser.dealershipId !== args.dealershipId) {
+        throw new Error("User does not belong to this dealership");
+      }
+      user = foundUser;
+    } else {
+      user = await requireDealership(ctx, args.dealershipId);
+    }
 
     // Verify template exists and belongs to dealership
     const template = await ctx.db.get(args.templateId);

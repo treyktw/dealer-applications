@@ -24,55 +24,15 @@ export const SubscriptionStatus = {
   PAST_DUE: "past_due",
 } as const;
 
-export const SubscriptionPlan = {
-  BASIC: "basic",
-  PREMIUM: "premium",
-  ENTERPRISE: "enterprise",
-} as const;
-
-export const BillingCycle = {
-  MONTHLY: "monthly",
-  YEARLY: "yearly",
-} as const;
-
-export const SubscriptionFeatures = {
-  [SubscriptionPlan.BASIC]: [
-    "inventory_management",
-    "basic_reporting",
-    "employee_management",
-    "customer_management",
-    "file_storage_5gb",
-  ],
-  [SubscriptionPlan.PREMIUM]: [
-    "inventory_management",
-    "advanced_reporting",
-    "employee_management",
-    "customer_management",
-    "document_generation",
-    "analytics",
-    "file_storage_50gb",
-    "api_access",
-    "deals_management",
-    "desktop_app_access",
-    "custom_document_upload",
-  ],
-  [SubscriptionPlan.ENTERPRISE]: [
-    "inventory_management",
-    "advanced_reporting",
-    "employee_management",
-    "customer_management",
-    "document_generation",
-    "analytics",
-    "file_storage_unlimited",
-    "api_access",
-    "custom_integrations",
-    "priority_support",
-    "audit_logs",
-    "deals_management",
-    "desktop_app_access",
-    "custom_document_upload",
-  ],
-} as const;
+// Re-export from centralized subscription config
+export {
+  SubscriptionPlan,
+  BillingCycle,
+  SubscriptionFeatures,
+  type SubscriptionPlanType,
+  type BillingCycleType,
+  type FeatureFlag,
+} from "./lib/subscription/config";
 
 export const OrgRole = {
   OWNER: "OWNER",

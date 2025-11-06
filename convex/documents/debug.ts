@@ -3,7 +3,7 @@
 
 import { v } from "convex/values";
 import { query } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import {
   validateS3Key,
   cleanS3Key,
@@ -13,7 +13,7 @@ import {
   parseDealershipIdFromKey,
   parseDealIdFromKey,
   getFileExtension
-} from "../lib/s3/document-paths";
+} from "../lib/s3/document_paths";
 
 /**
  * Debug document paths for a specific deal
@@ -49,7 +49,7 @@ export const debugDocumentPaths = query({
         dealershipIdFromKey: parseDealershipIdFromKey(s3Key),
         dealIdFromKey: parseDealIdFromKey(s3Key),
         fileExtension: getFileExtension(s3Key),
-        createdAt: doc.createdAt,
+        createdAt: doc._creationTime,
         updatedAt: doc.updatedAt,
       };
     });
@@ -88,7 +88,7 @@ export const debugCustomDocumentPaths = query({
         fileExtension: getFileExtension(s3Key),
         fileSize: doc.fileSize,
         mimeType: doc.mimeType,
-        createdAt: doc.createdAt,
+        createdAt: doc._creationTime,
         updatedAt: doc.updatedAt,
       };
     });
@@ -185,15 +185,15 @@ export const debugTemplates = query({
     onlyInvalid: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    let templates;
+    let templates: Doc<"documentTemplates">[];
 
     if (args.dealershipId) {
       templates = await ctx.db
-        .query("document_templates")
+        .query("documentTemplates")
         .filter((q) => q.eq(q.field("dealershipId"), args.dealershipId))
         .collect();
     } else {
-      templates = await ctx.db.query("document_templates").collect();
+      templates = await ctx.db.query("documentTemplates").collect();
     }
 
     const results = templates.map(template => {
@@ -235,7 +235,7 @@ export const getDocumentPathStatistics = query({
     const allCustomDocuments = await ctx.db.query("dealer_uploaded_documents").collect();
 
     // Get all templates
-    const allTemplates = await ctx.db.query("document_templates").collect();
+    const allTemplates = await ctx.db.query("documentTemplates").collect();
 
     // Analyze document instances
     const documentStats = {
