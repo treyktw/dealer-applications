@@ -12,7 +12,6 @@ import { generateUploadUrl, generateDownloadUrl, deleteFile } from "../lib/s3";
 import {
   generateTemplatePath,
   validateS3Key,
-  cleanS3Key
 } from "../lib/s3/document_paths";
 
 /**

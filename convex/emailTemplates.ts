@@ -4,7 +4,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getCurrentUser, requireUser, requireMasterAdmin } from "./lib/helpers/auth_helpers";
-import type { Id } from "./_generated/dataModel";
 
 // ============================================================================
 // CREATE & UPDATE TEMPLATES

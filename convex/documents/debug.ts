@@ -3,7 +3,7 @@
 
 import { v } from "convex/values";
 import { query } from "../_generated/server";
-import type { Doc, Id } from "../_generated/dataModel";
+import type { Doc } from "../_generated/dataModel";
 import {
   validateS3Key,
   cleanS3Key,

@@ -1,7 +1,7 @@
 // src/types/documents.ts
 
-import { Client } from "@/types/client";
-import { Vehicle } from "@/types/vehicle";
+import type { Client } from "@/types/client";
+import type { Vehicle } from "@/types/vehicle";
 
 export enum DocumentType {
   TITLE_REASSIGNMENT = "Motor Vehicle Dealer Title Reassignment",

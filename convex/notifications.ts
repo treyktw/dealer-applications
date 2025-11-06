@@ -4,7 +4,7 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
 import { getCurrentUser, requireUser } from "./lib/helpers/auth_helpers";
-import type { Id } from "./_generated/dataModel";
+import  type { Doc } from "./_generated/dataModel";
 
 // ============================================================================
 // CREATE NOTIFICATIONS
@@ -224,7 +224,7 @@ export const getUserNotifications = query({
 
     const limit = args.limit || 50;
 
-    let notifications;
+    let notifications: Doc<"notifications">[];
     if (args.includeRead) {
       // Get all notifications
       notifications = await ctx.db

@@ -48,7 +48,9 @@ export function FinalizeStep({
       if (!sessionToken) throw new Error("No session token");
       return convexMutation(api.api.deals.updateDealStatus, {
         dealId: dealsId as Id<"deals">,
-        status: "completed",
+        newStatus: "completed",
+        reason: "Deal completed",
+        token: sessionToken,
       });
     },
     onSuccess: () => {
