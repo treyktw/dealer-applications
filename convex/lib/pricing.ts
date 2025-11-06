@@ -63,7 +63,8 @@ export const PRICING_CONFIG = {
     },
   },
 
-  // Optional: Subscription pricing (if you want to offer monthly option)
+  // Monthly subscriptions (Stripe)
+  // PRIMARY MONETIZATION METHOD for standalone desktop app
   subscriptions: {
     monthly: {
       id: "monthly",
@@ -71,14 +72,17 @@ export const PRICING_CONFIG = {
       description: "Pay as you go with no long-term commitment",
       price: 49,
       priceMonthly: 49,
-      billingCycle: "monthly",
-      maxActivations: 1,
+      billingCycle: "monthly" as const,
+      trialDays: 14,
+      stripeProductId: process.env.STRIPE_PRODUCT_MONTHLY_ID || "",
+      stripePriceId: process.env.STRIPE_PRICE_MONTHLY_ID || "",
       features: [
-        "1 device activation",
-        "All features included",
-        "Cancel anytime",
-        "Always up-to-date",
+        "Unlimited deals",
+        "Unlimited clients & vehicles",
+        "Document generation",
+        "Local data storage",
         "Email support",
+        "14-day free trial",
       ],
     },
     annual: {
@@ -87,14 +91,16 @@ export const PRICING_CONFIG = {
       description: "Best value - save 17% with annual billing",
       price: 490,
       priceMonthly: 40.83,
-      billingCycle: "annual",
-      maxActivations: 1,
+      billingCycle: "annual" as const,
+      trialDays: 14,
+      stripeProductId: process.env.STRIPE_PRODUCT_ANNUAL_ID || "",
+      stripePriceId: process.env.STRIPE_PRICE_ANNUAL_ID || "",
       features: [
-        "1 device activation",
-        "All features included",
+        "All Monthly features",
         "2 months free",
-        "Priority support",
-        "Annual license renewal",
+        "Priority email support",
+        "Early access to features",
+        "14-day free trial",
       ],
     },
   },

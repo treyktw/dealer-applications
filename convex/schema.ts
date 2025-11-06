@@ -1765,4 +1765,95 @@ export default defineSchema({
     .index("by_dealership", ["dealershipId"])
     .index("by_order", ["orderId"])
     .index("by_status", ["isActive"]),
+
+  /**
+   * Standalone users (for desktop app)
+   * Email/password authentication for standalone operation
+   */
+  standalone_users: defineTable({
+    email: v.string(),
+    passwordHash: v.string(), // bcrypt hash
+    name: v.string(),
+    businessName: v.optional(v.string()),
+
+    // License association
+    licenseKey: v.optional(v.string()),
+
+    // Subscription
+    subscriptionId: v.optional(v.id("standalone_subscriptions")),
+    subscriptionStatus: v.union(
+      v.literal("active"),
+      v.literal("past_due"),
+      v.literal("cancelled"),
+      v.literal("trial"),
+      v.literal("none")
+    ),
+
+    // Trial info
+    trialEndsAt: v.optional(v.number()),
+
+    // Security
+    emailVerified: v.boolean(),
+    verificationToken: v.optional(v.string()),
+    resetToken: v.optional(v.string()),
+    resetTokenExpiresAt: v.optional(v.number()),
+
+    // Metadata
+    lastLoginAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_license", ["licenseKey"])
+    .index("by_subscription", ["subscriptionId"])
+    .index("by_verification_token", ["verificationToken"])
+    .index("by_reset_token", ["resetToken"]),
+
+  /**
+   * Standalone subscriptions (Stripe integration)
+   * Monthly recurring billing for desktop app
+   */
+  standalone_subscriptions: defineTable({
+    userId: v.id("standalone_users"),
+
+    // Stripe info
+    stripeCustomerId: v.string(),
+    stripeSubscriptionId: v.string(),
+    stripePriceId: v.string(),
+    stripeProductId: v.string(),
+
+    // Subscription details
+    status: v.union(
+      v.literal("active"),
+      v.literal("past_due"),
+      v.literal("cancelled"),
+      v.literal("incomplete"),
+      v.literal("trialing"),
+      v.literal("unpaid")
+    ),
+
+    // Billing
+    currentPeriodStart: v.number(),
+    currentPeriodEnd: v.number(),
+    cancelAtPeriodEnd: v.boolean(),
+    cancelledAt: v.optional(v.number()),
+
+    // Plan info
+    planName: v.string(), // "monthly" or "annual"
+    amount: v.number(), // in cents
+    currency: v.string(),
+    interval: v.union(v.literal("month"), v.literal("year")),
+
+    // Trial
+    trialStart: v.optional(v.number()),
+    trialEnd: v.optional(v.number()),
+
+    // Metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_stripe_customer", ["stripeCustomerId"])
+    .index("by_stripe_subscription", ["stripeSubscriptionId"])
+    .index("by_status", ["status"]),
 });
