@@ -104,7 +104,7 @@ export function LicenseAuthProvider({ children }: { children: React.ReactNode })
       }
 
       try {
-        const result = await convexQuery(api.licenses.validateLicense, {
+        const result = await convexQuery(api.api.licenses.validateLicense, {
           licenseKey: storedLicenseKey,
           machineId,
         });
@@ -114,7 +114,7 @@ export function LicenseAuthProvider({ children }: { children: React.ReactNode })
           setConvexAuth(storedLicenseKey);
 
           // Get full license info
-          const licenseInfo = await convexQuery(api.licenses.getLicenseInfo, {
+          const licenseInfo = await convexQuery(api.api.licenses.getLicenseInfo, {
             licenseKey: storedLicenseKey,
           });
 
@@ -160,7 +160,7 @@ export function LicenseAuthProvider({ children }: { children: React.ReactNode })
       const hostname = await invoke<string>("get_hostname").catch(() => "Unknown");
 
       // Activate via Convex
-      const result = await convexMutation(api.licenses.activateLicense, {
+      const result = await convexMutation(api.api.licenses.activateLicense, {
         licenseKey,
         machineId,
         platform,
@@ -200,7 +200,7 @@ export function LicenseAuthProvider({ children }: { children: React.ReactNode })
         throw new Error("No active license");
       }
 
-      return await convexMutation(api.licenses.deactivateLicense, {
+      return await convexMutation(api.api.licenses.deactivateLicense, {
         licenseKey: storedLicenseKey,
         machineId,
       });
@@ -228,7 +228,7 @@ export function LicenseAuthProvider({ children }: { children: React.ReactNode })
     if (!storedLicenseKey || !machineId) return false;
 
     try {
-      const result = await convexQuery(api.licenses.validateLicense, {
+      const result = await convexQuery(api.api.licenses.validateLicense, {
         licenseKey: storedLicenseKey,
         machineId,
       });
@@ -247,7 +247,7 @@ export function LicenseAuthProvider({ children }: { children: React.ReactNode })
     // Update heartbeat
     if (storedLicenseKey && machineId) {
       try {
-        await convexMutation(api.licenses.updateHeartbeat, {
+        await convexMutation(api.api.licenses.updateHeartbeat, {
           licenseKey: storedLicenseKey,
           machineId,
         });

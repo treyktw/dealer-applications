@@ -10,6 +10,7 @@
 
 import type * as adminIpManagement from "../adminIpManagement.js";
 import type * as allowList from "../allowList.js";
+import type * as api_licenseAuth from "../api/licenseAuth.js";
 import type * as api_keys from "../api_keys.js";
 import type * as auth from "../auth.js";
 import type * as clerk from "../clerk.js";
@@ -46,6 +47,7 @@ import type * as lib_export from "../lib/export.js";
 import type * as lib_expression_evaluator from "../lib/expression_evaluator.js";
 import type * as lib_helpers_auth_helpers from "../lib/helpers/auth_helpers.js";
 import type * as lib_pdf_data_preparer from "../lib/pdf_data_preparer.js";
+import type * as lib_pricing from "../lib/pricing.js";
 import type * as lib_resend_client from "../lib/resend/client.js";
 import type * as lib_s3_client from "../lib/s3/client.js";
 import type * as lib_s3_document_paths from "../lib/s3/document_paths.js";
@@ -93,6 +95,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   adminIpManagement: typeof adminIpManagement;
   allowList: typeof allowList;
+  "api/licenseAuth": typeof api_licenseAuth;
   api_keys: typeof api_keys;
   auth: typeof auth;
   clerk: typeof clerk;
@@ -129,6 +132,7 @@ declare const fullApi: ApiFromModules<{
   "lib/expression_evaluator": typeof lib_expression_evaluator;
   "lib/helpers/auth_helpers": typeof lib_helpers_auth_helpers;
   "lib/pdf_data_preparer": typeof lib_pdf_data_preparer;
+  "lib/pricing": typeof lib_pricing;
   "lib/resend/client": typeof lib_resend_client;
   "lib/s3/client": typeof lib_s3_client;
   "lib/s3/document_paths": typeof lib_s3_document_paths;
