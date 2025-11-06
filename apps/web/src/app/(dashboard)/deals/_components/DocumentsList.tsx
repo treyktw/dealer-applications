@@ -213,34 +213,6 @@ export function DocumentsList({ dealId }: DocumentsListProps) {
                       <span>Updated {formatDate(new Date(doc.updatedAt))}</span>
                     )}
                   </div>
-
-                  {/* Signatures status */}
-                  {doc.requiredSignatures && doc.requiredSignatures.length > 0 && (
-                    <div className="flex flex-wrap gap-2 items-center mt-2">
-                      {doc.requiredSignatures.map((role) => {
-                        const isSigned = doc.signaturesCollected?.some(
-                          (sig) => sig.role === role
-                        );
-                        return (
-                          <div
-                            key={role}
-                            className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${
-                              isSigned
-                                ? "text-green-700 bg-green-100 dark:bg-green-900 dark:text-green-300"
-                                : "text-gray-700 bg-gray-100 dark:bg-gray-800 dark:text-gray-300"
-                            }`}
-                          >
-                            {isSigned ? (
-                              <CheckCircle2 className="w-3 h-3" />
-                            ) : (
-                              <Clock className="w-3 h-3" />
-                            )}
-                            {role.charAt(0).toUpperCase() + role.slice(1)}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
                 </div>
               </div>
 

@@ -1,7 +1,7 @@
 // apps/web/src/app/(admin)/document-packs/new/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -82,7 +82,7 @@ export default function NewDocumentPackPage() {
   const handleDocumentChange = (
     index: number,
     field: keyof Document,
-    value: any
+    value: string | string[] | boolean
   ) => {
     const newDocuments = [...documents];
     newDocuments[index] = {
@@ -142,8 +142,17 @@ export default function NewDocumentPackPage() {
         createStripeProduct: formData.createStripeProduct,
       });
 
-      toast.success("Document pack created successfully!");
-      router.push("/admin/document-packs");
+      if (result.success) {
+        toast.success("Document pack created successfully!", {
+          description: result.stripeProductId
+            ? "Stripe product and price created."
+            : undefined,
+        });
+        // Navigate to the document packs list
+        router.push("/admin/document-packs");
+      } else {
+        throw new Error("Failed to create document pack");
+      }
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to create pack"
@@ -189,7 +198,8 @@ export default function NewDocumentPackPage() {
             <div className="space-y-2">
               <Label htmlFor="name">Pack Name *</Label>
               <Input
-                id="name"
+                id={useId()}
+                name="name"
                 value={formData.name}
                 onChange={(e) =>
                   setFormData({ ...formData, name: e.target.value })
@@ -202,7 +212,8 @@ export default function NewDocumentPackPage() {
             <div className="space-y-2">
               <Label htmlFor="description">Description *</Label>
               <Textarea
-                id="description"
+                id={useId()}
+                name="description"
                 value={formData.description}
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
@@ -257,7 +268,8 @@ export default function NewDocumentPackPage() {
               <div className="space-y-2">
                 <Label htmlFor="price">Price (USD) *</Label>
                 <Input
-                  id="price"
+                  id={useId()}
+                  name="price"
                   type="number"
                   step="0.01"
                   value={formData.price}
@@ -273,7 +285,8 @@ export default function NewDocumentPackPage() {
             <div className="flex items-center space-x-2">
               <input
                 type="checkbox"
-                id="createStripeProduct"
+                id={useId()}
+                name="createStripeProduct"
                 checked={formData.createStripeProduct}
                 onChange={(e) =>
                   setFormData({
@@ -300,7 +313,7 @@ export default function NewDocumentPackPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {documents.map((doc, index) => (
-              <div key={index} className="border rounded-lg p-4 space-y-4">
+              <div key={doc.type} className="border rounded-lg p-4 space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="font-medium">Document {index + 1}</h4>
                   {documents.length > 1 && (

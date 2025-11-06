@@ -1,12 +1,5 @@
 // apps/web/src/lib/status-utils.ts - Frontend status utilities
 
-import { type ClassValue, clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
-
 // ============================================================================
 // STATUS ENUMS (matching backend)
 // ============================================================================

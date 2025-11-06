@@ -125,7 +125,7 @@ export default function PurchaseSuccessPage() {
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
                   <span>
-                    <strong>Receipt:</strong> You'll receive a confirmation email
+                    <strong>Receipt:</strong> You&apos;ll receive a confirmation email
                     shortly
                   </span>
                 </li>

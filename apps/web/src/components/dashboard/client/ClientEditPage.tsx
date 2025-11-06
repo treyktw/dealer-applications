@@ -89,6 +89,36 @@ export default function ClientEditPage({ params }: ClientEditPageProps) {
     );
   }
 
+  // Map client status to form-compatible status
+  // The form only accepts 'LEAD' | 'CUSTOMER' | 'PREVIOUS'
+  // Map other statuses to the closest compatible value
+  const mapStatusToFormStatus = (status: string): "LEAD" | "CUSTOMER" | "PREVIOUS" => {
+    if (status === "CUSTOMER" || status === "REPEAT_CUSTOMER") {
+      return "CUSTOMER";
+    }
+    if (status === "PREVIOUS") {
+      return "PREVIOUS";
+    }
+    // Default to LEAD for all other statuses (PROSPECT, CONTACTED, QUALIFIED, etc.)
+    return "LEAD";
+  };
+
+  // Prepare initial data with mapped status - only include fields that match ClientFormValues
+  const initialFormData: Partial<ClientFormValues> = {
+    firstName: clientData.firstName,
+    lastName: clientData.lastName,
+    email: clientData.email ?? null,
+    phone: clientData.phone ?? null,
+    address: clientData.address ?? null,
+    city: clientData.city ?? null,
+    state: clientData.state ?? null,
+    zipCode: clientData.zipCode ?? null,
+    source: clientData.source ?? null,
+    status: mapStatusToFormStatus(clientData.status || "LEAD"),
+    notes: clientData.notes ?? null,
+    dealershipId: clientData.dealershipId as string,
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
@@ -111,7 +141,7 @@ export default function ClientEditPage({ params }: ClientEditPageProps) {
         </CardHeader>
         <CardContent>
           <ClientForm 
-            initialData={clientData}
+            initialData={initialFormData}
             onSubmit={handleUpdateClient} 
             isLoading={isSubmitting}
             submitButtonText="Update Client"
