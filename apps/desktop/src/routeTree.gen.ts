@@ -23,6 +23,9 @@ import { Route as DealershipRouteImport } from './routes/dealership'
 import { Route as AccountSetupRouteImport } from './routes/account-setup'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DealsIndexRouteImport } from './routes/deals/index'
+import { Route as StandaloneVehiclesRouteImport } from './routes/standalone/vehicles'
+import { Route as StandaloneDealsRouteImport } from './routes/standalone/deals'
+import { Route as StandaloneClientsRouteImport } from './routes/standalone/clients'
 import { Route as DealsNewIndexRouteImport } from './routes/deals/new/index'
 import { Route as DealsDealsIdIndexRouteImport } from './routes/deals/$dealsId/index'
 import { Route as DealsDealsIdDocumentsIndexRouteImport } from './routes/deals/$dealsId/documents/index'
@@ -98,6 +101,21 @@ const DealsIndexRoute = DealsIndexRouteImport.update({
   path: '/deals/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StandaloneVehiclesRoute = StandaloneVehiclesRouteImport.update({
+  id: '/standalone/vehicles',
+  path: '/standalone/vehicles',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StandaloneDealsRoute = StandaloneDealsRouteImport.update({
+  id: '/standalone/deals',
+  path: '/standalone/deals',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StandaloneClientsRoute = StandaloneClientsRouteImport.update({
+  id: '/standalone/clients',
+  path: '/standalone/clients',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DealsNewIndexRoute = DealsNewIndexRouteImport.update({
   id: '/deals/new/',
   path: '/deals/new/',
@@ -135,6 +153,9 @@ export interface FileRoutesByFullPath {
   '/subscribe': typeof SubscribeRoute
   '/subscription': typeof SubscriptionRoute
   '/whats-new': typeof WhatsNewRoute
+  '/standalone/clients': typeof StandaloneClientsRoute
+  '/standalone/deals': typeof StandaloneDealsRoute
+  '/standalone/vehicles': typeof StandaloneVehiclesRoute
   '/deals': typeof DealsIndexRoute
   '/deals/$dealsId': typeof DealsDealsIdIndexRoute
   '/deals/new': typeof DealsNewIndexRoute
@@ -155,6 +176,9 @@ export interface FileRoutesByTo {
   '/subscribe': typeof SubscribeRoute
   '/subscription': typeof SubscriptionRoute
   '/whats-new': typeof WhatsNewRoute
+  '/standalone/clients': typeof StandaloneClientsRoute
+  '/standalone/deals': typeof StandaloneDealsRoute
+  '/standalone/vehicles': typeof StandaloneVehiclesRoute
   '/deals': typeof DealsIndexRoute
   '/deals/$dealsId': typeof DealsDealsIdIndexRoute
   '/deals/new': typeof DealsNewIndexRoute
@@ -176,6 +200,9 @@ export interface FileRoutesById {
   '/subscribe': typeof SubscribeRoute
   '/subscription': typeof SubscriptionRoute
   '/whats-new': typeof WhatsNewRoute
+  '/standalone/clients': typeof StandaloneClientsRoute
+  '/standalone/deals': typeof StandaloneDealsRoute
+  '/standalone/vehicles': typeof StandaloneVehiclesRoute
   '/deals/': typeof DealsIndexRoute
   '/deals/$dealsId/': typeof DealsDealsIdIndexRoute
   '/deals/new/': typeof DealsNewIndexRoute
@@ -198,6 +225,9 @@ export interface FileRouteTypes {
     | '/subscribe'
     | '/subscription'
     | '/whats-new'
+    | '/standalone/clients'
+    | '/standalone/deals'
+    | '/standalone/vehicles'
     | '/deals'
     | '/deals/$dealsId'
     | '/deals/new'
@@ -218,6 +248,9 @@ export interface FileRouteTypes {
     | '/subscribe'
     | '/subscription'
     | '/whats-new'
+    | '/standalone/clients'
+    | '/standalone/deals'
+    | '/standalone/vehicles'
     | '/deals'
     | '/deals/$dealsId'
     | '/deals/new'
@@ -238,6 +271,9 @@ export interface FileRouteTypes {
     | '/subscribe'
     | '/subscription'
     | '/whats-new'
+    | '/standalone/clients'
+    | '/standalone/deals'
+    | '/standalone/vehicles'
     | '/deals/'
     | '/deals/$dealsId/'
     | '/deals/new/'
@@ -259,6 +295,9 @@ export interface RootRouteChildren {
   SubscribeRoute: typeof SubscribeRoute
   SubscriptionRoute: typeof SubscriptionRoute
   WhatsNewRoute: typeof WhatsNewRoute
+  StandaloneClientsRoute: typeof StandaloneClientsRoute
+  StandaloneDealsRoute: typeof StandaloneDealsRoute
+  StandaloneVehiclesRoute: typeof StandaloneVehiclesRoute
   DealsIndexRoute: typeof DealsIndexRoute
   DealsDealsIdIndexRoute: typeof DealsDealsIdIndexRoute
   DealsNewIndexRoute: typeof DealsNewIndexRoute
@@ -366,6 +405,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DealsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/standalone/vehicles': {
+      id: '/standalone/vehicles'
+      path: '/standalone/vehicles'
+      fullPath: '/standalone/vehicles'
+      preLoaderRoute: typeof StandaloneVehiclesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/standalone/deals': {
+      id: '/standalone/deals'
+      path: '/standalone/deals'
+      fullPath: '/standalone/deals'
+      preLoaderRoute: typeof StandaloneDealsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/standalone/clients': {
+      id: '/standalone/clients'
+      path: '/standalone/clients'
+      fullPath: '/standalone/clients'
+      preLoaderRoute: typeof StandaloneClientsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/deals/new/': {
       id: '/deals/new/'
       path: '/deals/new'
@@ -411,6 +471,9 @@ const rootRouteChildren: RootRouteChildren = {
   SubscribeRoute: SubscribeRoute,
   SubscriptionRoute: SubscriptionRoute,
   WhatsNewRoute: WhatsNewRoute,
+  StandaloneClientsRoute: StandaloneClientsRoute,
+  StandaloneDealsRoute: StandaloneDealsRoute,
+  StandaloneVehiclesRoute: StandaloneVehiclesRoute,
   DealsIndexRoute: DealsIndexRoute,
   DealsDealsIdIndexRoute: DealsDealsIdIndexRoute,
   DealsNewIndexRoute: DealsNewIndexRoute,
