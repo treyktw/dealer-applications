@@ -11,14 +11,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Alert, AlertDescription } from "./ui/alert";
-import { CheckCircle2, AlertCircle, Key, Loader2 } from "lucide-react";
+import { CheckCircle2, AlertCircle, Key, Loader2, ShoppingCart } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { useUnifiedAuth } from "./auth/useUnifiedAuth";
+import { useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 
 interface LicenseActivationProps {
   onSuccess?: () => void;
+  onNavigate?: (path: string) => void;
 }
 
-export function LicenseActivation({ onSuccess }: LicenseActivationProps) {
+export function LicenseActivation({ onNavigate }: LicenseActivationProps) {
+  const navigate = useNavigate();
+  const auth = useUnifiedAuth();
   const [licenseKey, setLicenseKey] = useState("");
   const [machineId, setMachineId] = useState<string>("");
   const [platform, setPlatform] = useState<string>("");
@@ -26,10 +32,40 @@ export function LicenseActivation({ onSuccess }: LicenseActivationProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-
+  const [storedLicenseKey, setStoredLicenseKey] = useState<string | null>(null);
   const licenseId = useId();
+  
+  // Handle navigation - use callback if provided, otherwise use window.location
+  const handleNavigate = (path: string) => {
+    if (onNavigate) {
+      onNavigate(path);
+    } else {
+      navigate({ to: path });
+    }
+  };
 
   const activateLicense = useMutation(api.api.licenses.activateLicense);
+
+  // Check for stored license key locally FIRST (doesn't require auth)
+  useEffect(() => {
+    async function checkStoredLicense() {
+      try {
+        const key = await invoke<string>("get_stored_license");
+        if (key) {
+          setStoredLicenseKey(key);
+        }
+      } catch {
+        // No stored license - that's okay
+      }
+    }
+    checkStoredLicense();
+  }, []);
+
+  // Check if user already has a license key in the database (only if user is authenticated)
+  const userLicenseCheck = useQuery(
+    api.api.standaloneAuth.checkUserHasLicense,
+    auth.user?.email ? { email: auth.user.email } : "skip"
+  );
 
   // Get machine info on mount
   useEffect(() => {
@@ -39,7 +75,6 @@ export function LicenseActivation({ onSuccess }: LicenseActivationProps) {
         const id = await invoke<string>("get_machine_id");
         const plat = await invoke<string>("get_platform");
         const version = await invoke<string>("get_app_version");
-        const hostname = await invoke<string>("get_hostname").catch(() => "Unknown");
 
         setMachineId(id);
         setPlatform(plat);
@@ -55,6 +90,51 @@ export function LicenseActivation({ onSuccess }: LicenseActivationProps) {
 
     getMachineInfo();
   }, []);
+
+  // If user has a license key in database or stored locally, redirect away
+  useEffect(() => {
+    const hasLicenseInDb = userLicenseCheck?.hasLicense && userLicenseCheck.licenseKey;
+    const hasStoredLicense = !!storedLicenseKey;
+
+    if (hasLicenseInDb || hasStoredLicense) {
+      console.log("✅ User already has a license key, redirecting...");
+      // User already has a license - redirect to home
+      if (onNavigate) {
+        onNavigate("/");
+      } else {
+        navigate({ to: "/" });
+      }
+    }
+  }, [userLicenseCheck, storedLicenseKey, onNavigate, navigate]);
+
+  // If stored license exists, redirect immediately (don't wait for DB check)
+  if (storedLicenseKey) {
+    return null; // Will redirect via useEffect
+  }
+
+  // Show loading ONLY if we're waiting for a database query AND user is authenticated
+  // If user is not authenticated, we don't need to wait - just show the form
+  const isWaitingForDbCheck = auth.user?.email && userLicenseCheck === undefined;
+  
+  if (isWaitingForDbCheck) {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-4 bg-background">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center justify-center space-y-4 text-center">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-muted-foreground">Checking license status...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // If user has license in DB, don't render the form (will redirect via useEffect)
+  if (userLicenseCheck?.hasLicense) {
+    return null;
+  }
 
   async function handleActivate() {
     if (!licenseKey.trim()) {
@@ -73,35 +153,73 @@ export function LicenseActivation({ onSuccess }: LicenseActivationProps) {
 
     try {
       const hostname = await invoke<string>("get_hostname").catch(() => "Unknown");
+      const formattedLicenseKey = licenseKey.trim().toUpperCase();
+
+      console.log("🔑 Starting license activation:", {
+        licenseKey: formattedLicenseKey.substring(0, 12) + "...",
+        machineId: machineId.substring(0, 8) + "...",
+        platform,
+        appVersion,
+      });
 
       // Activate via Convex
       const result = await activateLicense({
-        licenseKey: licenseKey.trim().toUpperCase(),
+        licenseKey: formattedLicenseKey,
         machineId,
         platform,
         appVersion,
         hostname,
       });
 
+      console.log("✅ License activation result:", {
+        success: result.success,
+        hasSessionToken: !!result.sessionToken,
+        hasUserId: !!result.userId,
+      });
+
       // Store license key securely using Tauri's secure storage
       try {
-        await invoke("store_license", { licenseKey: licenseKey.trim().toUpperCase() });
+        console.log("💾 Attempting to store license key locally...");
+        await invoke("store_license", { licenseKey: formattedLicenseKey });
+        console.log("✅ License key stored successfully in Tauri secure storage");
       } catch (storeError) {
-        console.error("Failed to store license locally:", storeError);
+        console.error("❌ Failed to store license locally:", storeError);
+        toast.error("License activated but failed to save locally. Please restart the app.");
         // Continue anyway as license is activated on server
       }
 
-      setSuccess(true);
-
-      // Notify parent component
-      setTimeout(() => {
-        if (onSuccess) {
-          onSuccess();
+      // Store session token if provided
+      if (result.sessionToken && result.userId) {
+        try {
+          console.log("💾 Storing session token...");
+          // Store session token in localStorage (will be used by LicenseAuthContext)
+          localStorage.setItem("standalone_session_token", result.sessionToken);
+          localStorage.setItem("standalone_user_id", result.userId);
+          console.log("✅ Session token stored successfully");
+        } catch (sessionError) {
+          console.error("❌ Failed to store session token:", sessionError);
         }
-      }, 2000);
-    } catch (err: any) {
+      }
+
+      setSuccess(true);
+      toast.success("License activated successfully!");
+
+      // Redirect to home page after a brief delay
+      setTimeout(() => {
+        console.log("🚀 Redirecting to dashboard...");
+        if (onNavigate) {
+          onNavigate("/");
+        } else {
+          navigate({ to: "/" });
+        }
+      }, 1500);
+    } catch (err) {
       console.error("Activation error:", err);
-      setError(err.message || "Failed to activate license. Please try again.");
+      const errorMessage = err instanceof Error ? err.message : "Failed to activate license. Please try again.";
+      setError(errorMessage);
+      toast.error(errorMessage, {
+        description: "Please check your license key and try again.",
+      });
     } finally {
       setLoading(false);
     }
@@ -157,7 +275,7 @@ export function LicenseActivation({ onSuccess }: LicenseActivationProps) {
               onKeyDown={(e) => e.key === "Enter" && handleActivate()}
               disabled={loading || success}
               className="font-mono text-center"
-              maxLength={19}
+              maxLength={22}
             />
             <p className="text-xs text-muted-foreground">
               Find your license key in your purchase confirmation email
@@ -175,7 +293,7 @@ export function LicenseActivation({ onSuccess }: LicenseActivationProps) {
             <Alert className="border-green-500 text-green-700">
               <CheckCircle2 className="h-4 w-4" />
               <AlertDescription>
-                License activated successfully! Redirecting...
+                License activated successfully! Redirecting to dashboard...
               </AlertDescription>
             </Alert>
           )}
@@ -198,20 +316,19 @@ export function LicenseActivation({ onSuccess }: LicenseActivationProps) {
               variant="outline"
               size="sm"
               onClick={() => {
-                // Open purchase page
-                invoke("open_url", {
-                  url: "https://polar.sh/your-org/products/dealer-software",
-                });
+                handleNavigate("/subscribe");
               }}
+              className="w-full"
             >
-              Purchase License
+              <ShoppingCart className="mr-2 h-4 w-4" />
+              View Subscription Plans
             </Button>
           </div>
 
           <div className="text-xs text-muted-foreground space-y-1 pt-2">
-            <p>• Single License: 1 device</p>
-            <p>• Team License: 5 devices</p>
-            <p>• Enterprise: Unlimited devices</p>
+            <p>â€¢ Monthly: $49/month</p>
+            <p>â€¢ Annual: $490/year (save $98)</p>
+            <p>â€¢ Cancel anytime</p>
           </div>
         </CardContent>
       </Card>
@@ -290,7 +407,7 @@ export function LicenseInfo() {
                 <div>
                   <p className="font-medium">{activation.hostname || "Unknown"}</p>
                   <p className="text-xs text-muted-foreground capitalize">
-                    {activation.platform} • v{activation.appVersion}
+                    {activation.platform} â€¢ v{activation.appVersion}
                   </p>
                 </div>
                 <p className="text-xs text-muted-foreground">

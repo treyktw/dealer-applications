@@ -11,12 +11,16 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WhatsNewRouteImport } from './routes/whats-new'
 import { Route as SubscriptionRouteImport } from './routes/subscription'
+import { Route as SubscribeRouteImport } from './routes/subscribe'
+import { Route as StandaloneLoginRouteImport } from './routes/standalone-login'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as LicenseActivationRouteImport } from './routes/license-activation'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as DealershipRouteImport } from './routes/dealership'
+import { Route as AccountSetupRouteImport } from './routes/account-setup'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DealsIndexRouteImport } from './routes/deals/index'
 import { Route as DealsNewIndexRouteImport } from './routes/deals/new/index'
@@ -32,6 +36,16 @@ const WhatsNewRoute = WhatsNewRouteImport.update({
 const SubscriptionRoute = SubscriptionRouteImport.update({
   id: '/subscription',
   path: '/subscription',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SubscribeRoute = SubscribeRouteImport.update({
+  id: '/subscribe',
+  path: '/subscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StandaloneLoginRoute = StandaloneLoginRouteImport.update({
+  id: '/standalone-login',
+  path: '/standalone-login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -54,6 +68,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LicenseActivationRoute = LicenseActivationRouteImport.update({
+  id: '/license-activation',
+  path: '/license-activation',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HelpRoute = HelpRouteImport.update({
   id: '/help',
   path: '/help',
@@ -62,6 +81,11 @@ const HelpRoute = HelpRouteImport.update({
 const DealershipRoute = DealershipRouteImport.update({
   id: '/dealership',
   path: '/dealership',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountSetupRoute = AccountSetupRouteImport.update({
+  id: '/account-setup',
+  path: '/account-setup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -99,12 +123,16 @@ const DealsDealsIdDocumentsDocumentsRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/account-setup': typeof AccountSetupRoute
   '/dealership': typeof DealershipRoute
   '/help': typeof HelpRoute
+  '/license-activation': typeof LicenseActivationRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
+  '/standalone-login': typeof StandaloneLoginRoute
+  '/subscribe': typeof SubscribeRoute
   '/subscription': typeof SubscriptionRoute
   '/whats-new': typeof WhatsNewRoute
   '/deals': typeof DealsIndexRoute
@@ -115,12 +143,16 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/account-setup': typeof AccountSetupRoute
   '/dealership': typeof DealershipRoute
   '/help': typeof HelpRoute
+  '/license-activation': typeof LicenseActivationRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
+  '/standalone-login': typeof StandaloneLoginRoute
+  '/subscribe': typeof SubscribeRoute
   '/subscription': typeof SubscriptionRoute
   '/whats-new': typeof WhatsNewRoute
   '/deals': typeof DealsIndexRoute
@@ -132,12 +164,16 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/account-setup': typeof AccountSetupRoute
   '/dealership': typeof DealershipRoute
   '/help': typeof HelpRoute
+  '/license-activation': typeof LicenseActivationRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
+  '/standalone-login': typeof StandaloneLoginRoute
+  '/subscribe': typeof SubscribeRoute
   '/subscription': typeof SubscriptionRoute
   '/whats-new': typeof WhatsNewRoute
   '/deals/': typeof DealsIndexRoute
@@ -150,12 +186,16 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/account-setup'
     | '/dealership'
     | '/help'
+    | '/license-activation'
     | '/login'
     | '/profile'
     | '/search'
     | '/settings'
+    | '/standalone-login'
+    | '/subscribe'
     | '/subscription'
     | '/whats-new'
     | '/deals'
@@ -166,12 +206,16 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/account-setup'
     | '/dealership'
     | '/help'
+    | '/license-activation'
     | '/login'
     | '/profile'
     | '/search'
     | '/settings'
+    | '/standalone-login'
+    | '/subscribe'
     | '/subscription'
     | '/whats-new'
     | '/deals'
@@ -182,12 +226,16 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/account-setup'
     | '/dealership'
     | '/help'
+    | '/license-activation'
     | '/login'
     | '/profile'
     | '/search'
     | '/settings'
+    | '/standalone-login'
+    | '/subscribe'
     | '/subscription'
     | '/whats-new'
     | '/deals/'
@@ -199,12 +247,16 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AccountSetupRoute: typeof AccountSetupRoute
   DealershipRoute: typeof DealershipRoute
   HelpRoute: typeof HelpRoute
+  LicenseActivationRoute: typeof LicenseActivationRoute
   LoginRoute: typeof LoginRoute
   ProfileRoute: typeof ProfileRoute
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
+  StandaloneLoginRoute: typeof StandaloneLoginRoute
+  SubscribeRoute: typeof SubscribeRoute
   SubscriptionRoute: typeof SubscriptionRoute
   WhatsNewRoute: typeof WhatsNewRoute
   DealsIndexRoute: typeof DealsIndexRoute
@@ -228,6 +280,20 @@ declare module '@tanstack/react-router' {
       path: '/subscription'
       fullPath: '/subscription'
       preLoaderRoute: typeof SubscriptionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/subscribe': {
+      id: '/subscribe'
+      path: '/subscribe'
+      fullPath: '/subscribe'
+      preLoaderRoute: typeof SubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/standalone-login': {
+      id: '/standalone-login'
+      path: '/standalone-login'
+      fullPath: '/standalone-login'
+      preLoaderRoute: typeof StandaloneLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -258,6 +324,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/license-activation': {
+      id: '/license-activation'
+      path: '/license-activation'
+      fullPath: '/license-activation'
+      preLoaderRoute: typeof LicenseActivationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/help': {
       id: '/help'
       path: '/help'
@@ -270,6 +343,13 @@ declare module '@tanstack/react-router' {
       path: '/dealership'
       fullPath: '/dealership'
       preLoaderRoute: typeof DealershipRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account-setup': {
+      id: '/account-setup'
+      path: '/account-setup'
+      fullPath: '/account-setup'
+      preLoaderRoute: typeof AccountSetupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -319,12 +399,16 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AccountSetupRoute: AccountSetupRoute,
   DealershipRoute: DealershipRoute,
   HelpRoute: HelpRoute,
+  LicenseActivationRoute: LicenseActivationRoute,
   LoginRoute: LoginRoute,
   ProfileRoute: ProfileRoute,
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
+  StandaloneLoginRoute: StandaloneLoginRoute,
+  SubscribeRoute: SubscribeRoute,
   SubscriptionRoute: SubscriptionRoute,
   WhatsNewRoute: WhatsNewRoute,
   DealsIndexRoute: DealsIndexRoute,

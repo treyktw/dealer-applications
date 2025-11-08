@@ -16,9 +16,10 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { ThemeToggle } from "../theme/theme-toggle";
 import { useSubscription } from "@/lib/subscription/SubscriptionProvider";
-import { useAuth } from "@/components/auth/AuthContext";
+import { useUnifiedAuth } from "@/components/auth/useUnifiedAuth";
 import { cn } from "@/lib/utils";
 import { Separator } from "../ui/separator";
+import { getCachedAppMode } from "@/lib/mode-detection";
 
 interface HeaderProps {
   sidebarOpen: boolean;
@@ -27,26 +28,48 @@ interface HeaderProps {
 export function Header({ sidebarOpen }: HeaderProps) {
   const navigate = useNavigate();
   const { subscription } = useSubscription();
-  const { user, logout } = useAuth();
+  const { user, logout } = useUnifiedAuth();
   const [searchQuery, setSearchQuery] = useState("");
+  const appMode = getCachedAppMode();
+  const isStandalone = appMode === "standalone";
 
   // User is guaranteed to exist here because AuthGuard protects this component
   if (!user) {
     return null;
   }
 
-  const userName = user.name || "User";
+  const userName = user.name || user.email || "User";
   const nameParts = userName.split(" ");
   const firstName = nameParts[0];
   const lastName = nameParts[1] || "";
   const firstInitial = firstName[0] || "U";
   const lastInitial = lastName[0] || "";
   const userInitials = `${firstInitial}${lastInitial}`;
-  const userRole = user.role;
+  const userRole = user.role ?? (isStandalone ? "Standalone" : undefined);
 
   const handleSignOut = async () => {
-    await logout();
-    navigate({ to: "/login" });
+    console.log("🚪 [HEADER] Sign out button clicked");
+    console.log("🔍 [HEADER] Current state:", {
+      hasLogoutFunction: !!logout,
+      isStandalone,
+      userEmail: user?.email,
+      userId: user?.id,
+    });
+
+    if (logout) {
+      console.log("🚪 [HEADER] Calling logout function...");
+      try {
+        await logout();
+        console.log("✅ [HEADER] Logout function completed successfully");
+      } catch (error) {
+        console.error("❌ [HEADER] Logout function failed:", error);
+      }
+    } else {
+      console.warn("⚠️ [HEADER] No logout function available");
+    }
+
+    console.log("🧭 [HEADER] Navigating to login page...");
+    navigate({ to: isStandalone ? "/standalone-login" : "/login" });
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -109,7 +132,7 @@ export function Header({ sidebarOpen }: HeaderProps) {
                 className="gap-3 pl-2 pr-4 h-10 hover:bg-accent/50"
               >
                 <Avatar className="h-8 w-8 border-2 border-background shadow-sm">
-                  <AvatarImage src={user.image} alt={userName} />
+                  <AvatarImage src={undefined} alt={userName} />
                   <AvatarFallback className="bg-gradient-to-br from-primary to-primary/60 text-primary-foreground font-semibold">
                     {userInitials}
                   </AvatarFallback>
@@ -118,9 +141,11 @@ export function Header({ sidebarOpen }: HeaderProps) {
                   <span className="text-sm font-medium leading-none">
                     {firstName} {lastName}
                   </span>
-                  <span className="text-xs text-muted-foreground mt-0.5">
-                    {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
-                  </span>
+                  {userRole && (
+                    <span className="text-xs text-muted-foreground mt-0.5">
+                      {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
+                    </span>
+                  )}
                 </div>
                 {subscription && (
                   <Badge variant="secondary" className="ml-2 text-xs">

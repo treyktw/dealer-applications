@@ -3,7 +3,7 @@
  * Manages vehicle data in IndexedDB for standalone operation
  */
 
-import { getDB, LocalVehicle } from './db';
+import { getDB, type LocalVehicle } from './db';
 
 /**
  * Create a new vehicle

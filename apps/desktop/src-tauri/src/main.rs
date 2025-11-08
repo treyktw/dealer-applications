@@ -12,7 +12,7 @@ use encryption::{decrypt_data, encrypt_data, generate_encryption_key};
 use file_permissions::{check_file_permissions, get_storage_file_path, set_file_permissions};
 use file_operations::{
     batch_print_pdfs, cleanup_temp_print_dir, create_temp_print_dir, get_documents_dir,
-    get_downloads_dir, open_file_with_default_app, print_pdf, reveal_in_explorer,
+    get_downloads_dir, open_file_with_default_app, open_url, print_pdf, reveal_in_explorer,
     write_file_to_path,
 };
 use license::{
@@ -43,6 +43,7 @@ fn main() {
 
     // Initialize plugins in correct order
     builder = builder
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
@@ -135,6 +136,7 @@ fn main() {
             get_downloads_dir,
             get_documents_dir,
             open_file_with_default_app,
+            open_url,
             print_pdf,
             batch_print_pdfs,
             create_temp_print_dir,

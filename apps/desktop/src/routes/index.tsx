@@ -1,5 +1,6 @@
 // src/routes/index.tsx - Fixed with proper data fetching
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { Layout } from "@/components/layout/layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,7 +22,8 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { convexClient } from "@/lib/convex";
 import { api } from "@dealer/convex";
-import { useAuth } from "@/components/auth/AuthContext";
+import { useUnifiedAuth } from "@/components/auth/useUnifiedAuth";
+import { getCachedAppMode } from "@/lib/mode-detection";
 
 // Type definitions
 interface Deal {
@@ -55,14 +57,25 @@ export const Route = createFileRoute("/")({
 
 function HomePage() {
   const navigate = useNavigate();
-  const { user, session } = useAuth();
+  const auth = useUnifiedAuth();
+  const appMode = getCachedAppMode();
+  const isStandalone = appMode === "standalone";
+  
+  const user = auth.user;
+  const session = auth.session;
 
-  const firstName = user?.name?.split(" ")[0] || "there";
-
-  // Fetch deals using the same pattern as subscription and deals pages
+  // Fetch deals - only for dealership mode
+  // In standalone mode, deals are stored locally
+  // Must be called before any early returns (React hooks rule)
   const { data: dealsData, isLoading: dealsLoading } = useQuery({
     queryKey: ["deals", user?.dealershipId],
     queryFn: async () => {
+      if (isStandalone) {
+        // In standalone mode, deals are stored locally
+        // Return empty array for now - standalone deals would be fetched from local storage
+        return [];
+      }
+
       if (!user?.dealershipId) {
         throw new Error("User not associated with a dealership");
       }
@@ -77,13 +90,46 @@ function HomePage() {
         token: token,
       });
     },
-    enabled: !!user?.dealershipId && !!session?.token,
+    enabled: !isStandalone && !!user?.dealershipId && !!session?.token,
   });
 
+  // Redirect to login if not authenticated (standalone mode doesn't have AuthGuard)
+  useEffect(() => {
+    if (isStandalone && !auth.isLoading && !auth.isAuthenticated) {
+      console.log("🔒 [HOMEPAGE] Not authenticated in standalone mode, redirecting to login...");
+      navigate({ to: "/standalone-login" });
+    }
+  }, [isStandalone, auth.isLoading, auth.isAuthenticated, navigate]);
+
+  // Show loading while checking auth
+  if (auth.isLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Don't render if not authenticated (will redirect)
+  if (isStandalone && !auth.isAuthenticated) {
+    return null;
+  }
+
+  const firstName = user?.name?.split(" ")[0] || "there";
+
   // Handle subscription requirement - return empty array if subscription required
-  const deals: Deal[] = dealsData?.subscriptionRequired 
-    ? [] 
-    : (Array.isArray(dealsData) ? dealsData : dealsData?.deals || []);
+  const deals: Deal[] = Array.isArray(dealsData) 
+    ? dealsData 
+    : (dealsData && typeof dealsData === 'object' && 'subscriptionRequired' in dealsData && dealsData.subscriptionRequired)
+      ? []
+      : (dealsData && typeof dealsData === 'object' && 'deals' in dealsData && Array.isArray(dealsData.deals))
+        ? dealsData.deals
+        : [];
 
   // Calculate stats
   const stats = {

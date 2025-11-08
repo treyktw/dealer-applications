@@ -10,6 +10,11 @@ export type AppMode = 'standalone' | 'dealership';
 let cachedMode: AppMode | null = null;
 
 /**
+ * Result of mode detection - can be a mode or null if undetermined
+ */
+export type ModeDetectionResult = AppMode | null;
+
+/**
  * Detect current app mode
  *
  * Standalone mode:
@@ -24,7 +29,7 @@ let cachedMode: AppMode | null = null;
  * - Data stored in Convex
  * - Documents stored in S3
  */
-export async function detectAppMode(): Promise<AppMode> {
+export async function detectAppMode(): Promise<ModeDetectionResult> {
   // Return cached value if available
   if (cachedMode) {
     return cachedMode;
@@ -39,6 +44,25 @@ export async function detectAppMode(): Promise<AppMode> {
     return cachedMode;
   }
 
+  // Check for stored mode preference first (set by DealershipAssociationPrompt)
+  const storedMode = localStorage.getItem('app_mode');
+  if (storedMode === 'standalone' || storedMode === 'dealership') {
+    cachedMode = storedMode;
+    return cachedMode;
+  }
+
+  // Check for has_dealership preference (from first-time setup)
+  const hasDealership = localStorage.getItem('has_dealership');
+  if (hasDealership === 'true') {
+    cachedMode = 'dealership';
+    localStorage.setItem('app_mode', 'dealership');
+    return cachedMode;
+  } else if (hasDealership === 'false') {
+    cachedMode = 'standalone';
+    localStorage.setItem('app_mode', 'standalone');
+    return cachedMode;
+  }
+
   // Running in Tauri - check for standalone license
   try {
     const license = await invoke<string>('get_stored_license');
@@ -47,23 +71,38 @@ export async function detectAppMode(): Promise<AppMode> {
       const standaloneUser = localStorage.getItem('standalone_user_id');
       if (standaloneUser) {
         cachedMode = 'standalone';
+        localStorage.setItem('app_mode', 'standalone');
         return cachedMode;
       }
     }
-  } catch (error) {
+  } catch {
     // No license found
   }
 
-  // Check for Clerk auth
+  // Check for Clerk auth token (dealership mode)
   const clerkAuth = localStorage.getItem('clerk-db-jwt');
   if (clerkAuth) {
     cachedMode = 'dealership';
+    localStorage.setItem('app_mode', 'dealership');
     return cachedMode;
   }
 
-  // Default to dealership mode if unsure
-  cachedMode = 'dealership';
-  return cachedMode;
+  // Check for dealership session token
+  try {
+    const { getStoredToken } = await import('@/lib/storage');
+    const token = await getStoredToken();
+    if (token) {
+      cachedMode = 'dealership';
+      localStorage.setItem('app_mode', 'dealership');
+      return cachedMode;
+    }
+  } catch {
+    // No token found
+  }
+
+  // No mode determined - return null to show mode selector
+  // App.tsx will handle showing the mode selector
+  return null;
 }
 
 /**

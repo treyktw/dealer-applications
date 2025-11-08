@@ -4,8 +4,9 @@
  */
 
 import { v } from "convex/values";
-import { internalMutation, internalQuery, query, mutation } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+import { internalMutation, internalQuery, query, mutation, action } from "./_generated/server";
+import { getStripeClient } from "./lib/stripe/client";
+import { PRICING_CONFIG } from "./lib/pricing";
 
 /**
  * Create a new subscription (called by Stripe webhook)
@@ -37,7 +38,7 @@ export const create = internalMutation({
       stripeSubscriptionId: args.stripeSubscriptionId,
       stripePriceId: args.stripePriceId,
       stripeProductId: args.stripeProductId,
-      status: args.status as any,
+      status: args.status as "active" | "past_due" | "cancelled" | "incomplete" | "trialing" | "unpaid",
       currentPeriodStart: args.currentPeriodStart,
       currentPeriodEnd: args.currentPeriodEnd,
       cancelAtPeriodEnd: args.cancelAtPeriodEnd,
@@ -57,7 +58,7 @@ export const create = internalMutation({
       updatedAt: now,
     });
 
-    console.log(`✅ Subscription created: ${subscriptionId}`);
+    console.log(`âœ… Subscription created: ${subscriptionId}`);
     return subscriptionId;
   },
 });
@@ -86,8 +87,37 @@ export const update = internalMutation({
       throw new Error(`Subscription not found: ${args.stripeSubscriptionId}`);
     }
 
-    const updates: any = {
-      status: args.status as any,
+    // Map Stripe status to our schema status
+    const mapStripeStatus = (stripeStatus: string): "active" | "past_due" | "cancelled" | "incomplete" | "trialing" | "unpaid" => {
+      switch (stripeStatus) {
+        case "active":
+          return "active";
+        case "trialing":
+          return "trialing";
+        case "past_due":
+          return "past_due";
+        case "canceled":
+        case "cancelled":
+          return "cancelled";
+        case "incomplete":
+        case "incomplete_expired":
+          return "incomplete";
+        case "unpaid":
+          return "unpaid";
+        default:
+          return "incomplete";
+      }
+    };
+
+    const updates: {
+      status: "active" | "past_due" | "cancelled" | "incomplete" | "trialing" | "unpaid";
+      updatedAt: number;
+      currentPeriodStart?: number;
+      currentPeriodEnd?: number;
+      cancelAtPeriodEnd?: boolean;
+      cancelledAt?: number;
+    } = {
+      status: mapStripeStatus(args.status),
       updatedAt: Date.now(),
     };
 
@@ -101,7 +131,7 @@ export const update = internalMutation({
 
     await ctx.db.patch(subscription._id, updates);
 
-    console.log(`✅ Subscription updated: ${subscription._id}`);
+    console.log(`âœ… Subscription updated: ${subscription._id}`);
     return subscription._id;
   },
 });
@@ -245,5 +275,102 @@ export const getStats = query({
     };
 
     return stats;
+  },
+});
+
+/**
+ * Create Stripe checkout session for subscription
+ */
+export const createSubscriptionCheckout = action({
+  args: {
+    subscriptionTier: v.union(v.literal("monthly"), v.literal("annual")),
+    customerEmail: v.string(),
+    successUrl: v.string(),
+    cancelUrl: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const stripe = await getStripeClient();
+    
+    // Validate email
+    if (!args.customerEmail || !args.customerEmail.includes("@")) {
+      throw new Error("Valid email address is required");
+    }
+    
+    // Get price ID for the subscription tier
+    const priceId = PRICING_CONFIG.stripePriceIds[args.subscriptionTier];
+    if (!priceId) {
+      throw new Error(`No price ID configured for subscription tier: ${args.subscriptionTier}`);
+    }
+
+    // Create or get Stripe customer with the provided email
+    let customerId: string;
+    try {
+      // Try to find existing customer by email
+      const customers = await stripe.customers.list({
+        email: args.customerEmail,
+        limit: 1,
+      });
+
+      if (customers.data.length > 0) {
+        customerId = customers.data[0].id;
+        console.log(`✅ Found existing Stripe customer: ${customerId}`);
+      } else {
+        // Create new customer with email
+        const customer = await stripe.customers.create({
+          email: args.customerEmail,
+          metadata: {
+            type: "standalone_subscription",
+          },
+        });
+        customerId = customer.id;
+        console.log(`✅ Created new Stripe customer: ${customerId} for ${args.customerEmail}`);
+      }
+    } catch (error) {
+      console.error("Error creating/finding Stripe customer:", error);
+      throw new Error("Failed to create customer");
+    }
+
+    // Create checkout session for subscription
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      customer_update: {
+        // Allow customer to update their email if needed
+        address: "auto",
+      },
+      mode: "subscription", // Recurring subscription
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      success_url: args.successUrl,
+      cancel_url: args.cancelUrl,
+      metadata: {
+        type: "standalone_subscription",
+        subscriptionTier: args.subscriptionTier,
+        customerEmail: args.customerEmail,
+      },
+      subscription_data: {
+        metadata: {
+          type: "standalone_subscription",
+          subscriptionTier: args.subscriptionTier,
+          customerEmail: args.customerEmail,
+        },
+      },
+      allow_promotion_codes: true,
+      billing_address_collection: "required",
+    });
+
+    if (!session.url) {
+      throw new Error("Failed to create checkout session");
+    }
+
+    console.log(`✅ Created checkout session: ${session.id} for ${args.customerEmail}`);
+
+    return {
+      sessionId: session.id,
+      url: session.url,
+    };
   },
 });

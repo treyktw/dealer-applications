@@ -1,36 +1,53 @@
-// src/components/auth/AuthGuard.tsx - Updated for Email Auth
+// src/components/auth/AuthGuard.tsx - Updated for Dual Auth Support
 import type { ReactNode } from "react";
 import { useEffect } from "react";
-import { useAuth } from "@/components/auth/AuthContext";
 import { useNavigate, useLocation } from "@tanstack/react-router";
 import { LoadingScreen } from "@/components/ui/loading-screen";
+import { useUnifiedAuth } from "./useUnifiedAuth";
+import { getCachedAppMode } from "@/lib/mode-detection";
 
-const PUBLIC_ROUTES = ["/login", "/auth-verify"];
+const PUBLIC_ROUTES = ["/login", "/standalone-login", "/auth-verify", "/subscribe", "/account-setup", "/license-activation"];
 
 interface AuthGuardProps {
   children: ReactNode;
 }
 
 export function AuthGuard({ children }: AuthGuardProps) {
-  const { isLoading, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const appMode = getCachedAppMode();
+  const isStandalone = appMode === "standalone";
   
   const currentPath = location.pathname;
   const isPublicRoute = PUBLIC_ROUTES.some(route => currentPath.startsWith(route));
 
-  // Redirect logic
+  // Get auth context (works for both standalone and dealership modes)
+  const auth = useUnifiedAuth();
+
+  // Redirect logic (only for dealership mode)
   useEffect(() => {
-    if (isLoading) return; // Wait for auth to load
+    if (isStandalone) return;
+    if (auth.isLoading) return; // Wait for auth to load
 
     // If on public route and authenticated, redirect to home
-    if (isPublicRoute && isAuthenticated) {
+    if (isPublicRoute && auth.isAuthenticated) {
       navigate({ to: '/' });
       return;
     }
 
-    // If not authenticated and not on public route, redirect to login
-    if (!isPublicRoute && !isAuthenticated) {
+    // If not authenticated and not on public route, redirect to appropriate login
+    if (!isPublicRoute && !auth.isAuthenticated) {
+      // In standalone mode, redirect to standalone login
+      if (isStandalone) {
+        const returnTo = `${currentPath}${location.search ? `?${location.search}` : ''}`;
+        navigate({ 
+          to: '/standalone-login',
+          search: { redirect: returnTo }
+        });
+        return;
+      }
+      
+      // In dealership mode, redirect to login
       const returnTo = `${currentPath}${location.search ? `?${location.search}` : ''}`;
       navigate({ 
         to: '/login',
@@ -38,21 +55,29 @@ export function AuthGuard({ children }: AuthGuardProps) {
       });
       return;
     }
-  }, [isLoading, isAuthenticated, isPublicRoute, currentPath, location.search, navigate]);
+  }, [auth.isLoading, auth.isAuthenticated, isPublicRoute, currentPath, location.search, navigate, isStandalone]);
+
+  if (isStandalone) {
+    // Allow standalone mode to render without strict guard requirements
+    if (auth.isLoading && !isPublicRoute) {
+      return <LoadingScreen message="Loading..." />;
+    }
+    return <>{children}</>;
+  }
 
   // Show loading while checking auth for private routes only
-  if (!isPublicRoute && isLoading) {
+  if (!isPublicRoute && auth.isLoading) {
     return <LoadingScreen message="Loading..." />;
   }
 
   // Show loading while redirecting
-  if (!isPublicRoute && !isAuthenticated) {
-    return <LoadingScreen message="Redirecting to login..." />;
+  if (!isPublicRoute && !auth.isAuthenticated) {
+    return <LoadingScreen message="Redirecting..." />;
   }
 
-  // Check dealership access (for authenticated users only)
-  if (isAuthenticated && !isPublicRoute) {
-    if (!user?.dealershipId) {
+  // Check dealership access (only for dealership mode)
+  if (!isStandalone && auth.isAuthenticated && !isPublicRoute) {
+    if (!auth.user?.dealershipId) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-background p-6">
           <div className="max-w-md text-center space-y-4">

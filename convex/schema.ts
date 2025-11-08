@@ -1014,6 +1014,27 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_expiry", ["expiresAt"]),
 
+  /**
+   * Standalone user sessions (for desktop app)
+   * Separate from auth_sessions to support license-based auth
+   */
+  standalone_sessions: defineTable({
+    userId: v.id("standalone_users"),
+    token: v.string(), // Session token stored in Tauri keyring
+    licenseKey: v.string(), // Associated license key
+    machineId: v.string(), // Machine where session was created
+    expiresAt: v.number(), // When session expires
+    createdAt: v.number(),
+    lastAccessedAt: v.number(), // Track activity
+    userAgent: v.optional(v.string()), // Device info
+    ipAddress: v.optional(v.string()), // For security logging
+  })
+    .index("by_token", ["token"])
+    .index("by_user", ["userId"])
+    .index("by_license", ["licenseKey"])
+    .index("by_machine", ["machineId"])
+    .index("by_expiry", ["expiresAt"]),
+
   orgs: defineTable({
     name: v.string(),
     slug: v.string(), // unique identifier for URLs
@@ -1711,16 +1732,19 @@ export default defineSchema({
     .index("by_email_type", ["emailType", "isSubscribed"]),
 
   /**
-   * Desktop app license keys (Polar.sh integration)
+   * Desktop app license keys (Stripe integration)
    * For standalone desktop app monetization
    */
   licenses: defineTable({
     // Purchase info
-    orderId: v.string(), // Polar order ID
+    paymentIntentId: v.optional(v.string()), // Stripe Payment Intent ID (for one-time purchases)
+    checkoutSessionId: v.optional(v.string()), // Stripe Checkout Session ID
+    stripeSubscriptionId: v.optional(v.string()), // Stripe Subscription ID (for subscription-based licenses)
     licenseKey: v.string(), // Format: DEALER-XXXX-XXXX-XXXX
     customerEmail: v.string(),
-    customerId: v.string(), // Polar customer ID
-    productId: v.string(), // Polar product ID
+    stripeCustomerId: v.string(), // Stripe customer ID
+    stripeProductId: v.string(), // Stripe product ID
+    stripePriceId: v.string(), // Stripe price ID
 
     // License tier
     tier: v.union(
@@ -1763,7 +1787,8 @@ export default defineSchema({
     .index("by_license_key", ["licenseKey"])
     .index("by_customer", ["customerEmail"])
     .index("by_dealership", ["dealershipId"])
-    .index("by_order", ["orderId"])
+    .index("by_stripe_customer", ["stripeCustomerId"])
+    .index("by_payment_intent", ["paymentIntentId"])
     .index("by_status", ["isActive"]),
 
   /**
@@ -1786,8 +1811,10 @@ export default defineSchema({
       v.literal("past_due"),
       v.literal("cancelled"),
       v.literal("trial"),
-      v.literal("none")
+      v.literal("none"),
+      v.literal("pending")
     ),
+    stripeCustomerId: v.optional(v.string()), // Stripe customer ID for subscription management
 
     // Trial info
     trialEndsAt: v.optional(v.number()),

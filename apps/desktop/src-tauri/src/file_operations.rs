@@ -222,6 +222,23 @@ pub fn write_file_to_path(file_path: String, file_data: Vec<u8>) -> Result<(), S
     }
 }
 
+/// Open a URL in the system's default browser
+#[tauri::command]
+pub async fn open_url(url: String, app: AppHandle) -> Result<(), String> {
+    info!("🌐 Opening URL in browser: {}", url);
+    
+    match app.opener().open_url(&url, None::<&str>) {
+        Ok(_) => {
+            info!("✅ URL opened successfully");
+            Ok(())
+        }
+        Err(e) => {
+            error!("❌ Failed to open URL: {}", e);
+            Err(format!("Failed to open URL: {}", e))
+        }
+    }
+}
+
 /// Reveal file in file explorer
 #[tauri::command]
 pub fn reveal_in_explorer(file_path: String) -> Result<(), String> {

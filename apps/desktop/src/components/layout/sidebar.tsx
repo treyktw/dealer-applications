@@ -22,7 +22,8 @@ import {
   Sparkles,
   UserCircle,
 } from "lucide-react";
-import { useAuth } from "@/components/auth/AuthContext";
+import { useUnifiedAuth } from "@/components/auth/useUnifiedAuth";
+import { getCachedAppMode } from "@/lib/mode-detection";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -100,7 +101,9 @@ const NavItem = ({
 
 export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user } = useUnifiedAuth();
+  const appMode = getCachedAppMode();
+  const isStandalone = appMode === "standalone";
 
   // User is guaranteed to exist here because AuthGuard protects this component
   if (!user) {
@@ -136,20 +139,22 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
     {
       label: "Management",
       items: [
-        {
-          name: "Dealership",
-          path: "/dealership",
-          icon: Building2,
-          badge: null,
-          requiresRole: ["admin"],
-        },
+        !isStandalone
+          ? {
+              name: "Dealership",
+              path: "/dealership",
+              icon: Building2,
+              badge: null,
+              requiresRole: ["admin"],
+            }
+          : null,
         {
           name: "Subscription",
           path: "/subscription",
           icon: CreditCard,
           badge: null,
         },
-      ],
+      ].filter(Boolean) as NavItem[],
     },
     {
       label: "Personal",

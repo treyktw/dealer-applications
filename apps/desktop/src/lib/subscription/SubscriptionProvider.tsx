@@ -1,9 +1,10 @@
 // src/lib/subscription/SubscriptionProvider.tsx - Updated for Email Auth
-import React, { createContext, useContext } from 'react';
+import { createContext, useContext } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { convexQuery } from '@/lib/convex';
 import { api } from '@dealer/convex';
-import { useAuth } from '@/components/auth/AuthContext';
+import { useUnifiedAuth } from '@/components/auth/useUnifiedAuth';
+import { getCachedAppMode } from '@/lib/mode-detection';
 
 interface Subscription {
   _id: string;
@@ -39,28 +40,35 @@ interface SubscriptionContextType {
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, user } = useAuth();
+  const auth = useUnifiedAuth();
+  const appMode = getCachedAppMode();
+  const isStandalone = appMode === "standalone";
   
-  // Query subscription status
+  // Only query subscription status for dealership mode
+  // Standalone subscriptions are handled differently
+  const dealershipId = auth.user && 'dealershipId' in auth.user ? auth.user.dealershipId : null;
+  
+  // Query subscription status (only for dealership mode)
   const subscriptionStatusQuery = useQuery({
-    queryKey: ['subscription-status', user?.dealershipId],
+    queryKey: ['subscription-status', dealershipId],
     queryFn: () => convexQuery(api.api.subscriptions.checkSubscriptionStatus, {}),
-    enabled: isAuthenticated && !!user?.dealershipId,
+    enabled: !isStandalone && auth.isAuthenticated && !!dealershipId,
     staleTime: 60000, // 1 minute
   });
 
   const hasFeature = (feature: string): boolean => {
+    if (isStandalone) return false; // Standalone mode doesn't use this subscription system
     if (!subscriptionStatusQuery.data?.subscription?.features) return false;
     return subscriptionStatusQuery.data.subscription.features.includes(feature);
   };
 
   const value: SubscriptionContextType = {
-    isLoading: subscriptionStatusQuery.isLoading,
-    hasActiveSubscription: subscriptionStatusQuery.data?.hasActiveSubscription ?? false,
-    hasPendingSubscription: subscriptionStatusQuery.data?.hasPendingSubscription ?? false,
-    subscriptionStatus: subscriptionStatusQuery.data?.subscriptionStatus ?? 'unknown',
-    subscription: subscriptionStatusQuery.data?.subscription ?? null,
-    dealershipId: user?.dealershipId ?? null,
+    isLoading: isStandalone ? false : subscriptionStatusQuery.isLoading,
+    hasActiveSubscription: isStandalone ? false : (subscriptionStatusQuery.data?.hasActiveSubscription ?? false),
+    hasPendingSubscription: isStandalone ? false : (subscriptionStatusQuery.data?.hasPendingSubscription ?? false),
+    subscriptionStatus: isStandalone ? 'none' : (subscriptionStatusQuery.data?.subscriptionStatus ?? 'unknown'),
+    subscription: isStandalone ? null : (subscriptionStatusQuery.data?.subscription ?? null),
+    dealershipId: dealershipId ?? null,
     refreshStatus: () => subscriptionStatusQuery.refetch(),
     hasFeature,
   };

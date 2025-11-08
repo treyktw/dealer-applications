@@ -1,6 +1,11 @@
 /**
  * Centralized Pricing Configuration
- * Used across Polar products, frontend UI, and license validation
+ * Used across Stripe products, frontend UI, and license validation
+ *
+ *
+ *
+ *
+ * TRHIS IS A COPY DO NOT MODIFY THIS FILE WITHOUT CHANGING THE ONE IN CONVEX AS WELL!
  */
 
 export const PRICING_CONFIG = {
@@ -16,8 +21,11 @@ export const PRICING_CONFIG = {
       price: 49,
       priceMonthly: 49,
       billingCycle: "monthly" as const,
-      stripeProductId: process.env.STRIPE_PRODUCT_MONTHLY_ID || "",
-      stripePriceId: process.env.STRIPE_PRICE_MONTHLY_ID || "",
+      stripeProductId:
+        import.meta.env.VITE_STRIPE_PRODUCT_MONTHLY_ID || "prod_TNNBPshhrVHuTv",
+      stripePriceId:
+        import.meta.env.VITE_STRIPE_PRICE_MONTHLY_ID ||
+        "price_1SQcQqIjHWM6MrLtPPXHH2Dq",
       features: [
         "Unlimited deals",
         "Unlimited clients & vehicles",
@@ -33,8 +41,11 @@ export const PRICING_CONFIG = {
       price: 490,
       priceMonthly: 40.83,
       billingCycle: "annual" as const,
-      stripeProductId: process.env.STRIPE_PRODUCT_ANNUAL_ID || "",
-      stripePriceId: process.env.STRIPE_PRICE_ANNUAL_ID || "",
+      stripeProductId:
+        import.meta.env.VITE_STRIPE_PRODUCT_ANNUAL_ID || "prod_TNNBWF098W9zB8",
+      stripePriceId:
+        import.meta.env.VITE_STRIPE_PRICE_ANNUAL_ID ||
+        "price_1SQcRJIjHWM6MrLtQXiu1GYf",
       features: [
         "All Monthly features",
         "2 months free",
@@ -82,32 +93,36 @@ export const PRICING_CONFIG = {
 
   // Stripe product IDs (set these after creating products in Stripe)
   stripeProductIds: {
-    monthly: process.env.STRIPE_PRODUCT_MONTHLY_ID || "",
-    annual: process.env.STRIPE_PRODUCT_ANNUAL_ID || "",
-  },
-  
-  // Stripe price IDs (set these after creating prices in Stripe)
-  stripePriceIds: {
-    monthly: process.env.STRIPE_PRICE_MONTHLY_ID || "",
-    annual: process.env.STRIPE_PRICE_ANNUAL_ID || "",
+    monthly: import.meta.env.VITE_STRIPE_PRODUCT_MONTHLY_ID || "",
+    annual: import.meta.env.VITE_STRIPE_PRODUCT_ANNUAL_ID || "",
   },
 
+  // Stripe price IDs (set these after creating prices in Stripe)
+  stripePriceIds: {
+    monthly: import.meta.env.VITE_STRIPE_PRICE_MONTHLY_ID || "",
+    annual: import.meta.env.VITE_STRIPE_PRICE_ANNUAL_ID || "",
+  },
 } as const;
 
 export type SubscriptionTier = keyof typeof PRICING_CONFIG.subscriptions;
 
-
 /**
  * Calculate discounted price
  */
-export function getDiscountedPrice(price: number, discountPercent: number): number {
+export function getDiscountedPrice(
+  price: number,
+  discountPercent: number
+): number {
   return Math.round(price * (1 - discountPercent));
 }
 
 /**
  * Format price for display
  */
-export function formatPrice(price: number, currency: string = PRICING_CONFIG.currency): string {
+export function formatPrice(
+  price: number,
+  currency: string = PRICING_CONFIG.currency
+): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
@@ -119,7 +134,9 @@ export function formatPrice(price: number, currency: string = PRICING_CONFIG.cur
 /**
  * Check if promotion is active
  */
-export function isPromotionActive(promoId: keyof typeof PRICING_CONFIG.promotions): boolean {
+export function isPromotionActive(
+  promoId: keyof typeof PRICING_CONFIG.promotions
+): boolean {
   const promo = PRICING_CONFIG.promotions[promoId];
   if (!promo.enabled) return false;
   if (promo.expiresAt && promo.expiresAt < Date.now()) return false;
@@ -129,7 +146,9 @@ export function isPromotionActive(promoId: keyof typeof PRICING_CONFIG.promotion
 /**
  * Get subscription tier by Stripe product ID
  */
-export function getSubscriptionTierByStripeProductId(productId: string): SubscriptionTier | null {
+export function getSubscriptionTierByStripeProductId(
+  productId: string
+): SubscriptionTier | null {
   const entries = Object.entries(PRICING_CONFIG.stripeProductIds);
   const found = entries.find(([_, id]) => id === productId);
   return found ? (found[0] as SubscriptionTier) : null;
@@ -138,7 +157,9 @@ export function getSubscriptionTierByStripeProductId(productId: string): Subscri
 /**
  * Get subscription tier by Stripe price ID
  */
-export function getSubscriptionTierByStripePriceId(priceId: string): SubscriptionTier | null {
+export function getSubscriptionTierByStripePriceId(
+  priceId: string
+): SubscriptionTier | null {
   const entries = Object.entries(PRICING_CONFIG.stripePriceIds);
   const found = entries.find(([_, id]) => id === priceId);
   return found ? (found[0] as SubscriptionTier) : null;

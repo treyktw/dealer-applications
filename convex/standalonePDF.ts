@@ -6,6 +6,26 @@
 
 import { action } from "./_generated/server";
 import { v } from "convex/values";
+import { api } from "./_generated/api";
+import { PDFDocument, type PDFTextField, type PDFCheckBox, type PDFDropdown, type PDFRadioGroup } from "pdf-lib";
+import { preparePdfData, type FieldMapping, type DealData } from "./lib/pdf_data_preparer";
+
+// Type definitions for document generation results
+type DocumentResult = {
+  success: boolean;
+  documentType?: string;
+  base64PDF?: string;
+  size?: number;
+  filename?: string;
+  error?: string;
+};
+
+type DocumentPackResult = {
+  success: boolean;
+  documents: DocumentResult[];
+  totalGenerated: number;
+  totalFailed: number;
+};
 
 /**
  * Generate PDF from deal data
@@ -14,6 +34,15 @@ import { v } from "convex/values";
 export const generateDealPDF = action({
   args: {
     userId: v.id("standalone_users"),
+    templatePdfBase64: v.string(), // Base64-encoded PDF template with form fields
+    fieldMappings: v.array(v.object({
+      pdfFieldName: v.string(),
+      dataPath: v.string(), // e.g., "client.firstName", "vehicle.vin", "pricing.salePrice"
+      transform: v.optional(v.string()), // Optional transform function name
+      defaultValue: v.optional(v.string()),
+      required: v.boolean(),
+      autoMapped: v.boolean(),
+    })),
     dealData: v.object({
       id: v.string(),
       type: v.string(),
@@ -57,7 +86,7 @@ export const generateDealPDF = action({
   },
   handler: async (ctx, args) => {
     // Verify user has active subscription
-    const user = await ctx.runQuery(internal => internal.standaloneAuth.checkSubscription, {
+    const user = await ctx.runQuery(api.standaloneAuth.checkSubscription, {
       userId: args.userId,
     });
 
@@ -65,177 +94,138 @@ export const generateDealPDF = action({
       throw new Error("Active subscription required to generate documents");
     }
 
-    // Generate PDF based on document type
-    let pdfBuffer: Buffer;
+    // Convert base64 template to ArrayBuffer
+    const templateBuffer = Buffer.from(args.templatePdfBase64, 'base64');
 
-    switch (args.documentType) {
-      case "bill_of_sale":
-        pdfBuffer = await generateBillOfSale(args.dealData);
-        break;
-      case "buyers_order":
-        pdfBuffer = await generateBuyersOrder(args.dealData);
-        break;
-      case "odometer_disclosure":
-        pdfBuffer = await generateOdometerDisclosure(args.dealData);
-        break;
-      default:
-        throw new Error(`Unknown document type: ${args.documentType}`);
-    }
+    // Prepare deal data in the format expected by preparePdfData
+    const dealDataForMapping: DealData = {
+      client: {
+        firstName: args.dealData.client.firstName,
+        lastName: args.dealData.client.lastName,
+        email: args.dealData.client.email,
+        phone: args.dealData.client.phone,
+        address: args.dealData.client.address,
+        city: args.dealData.client.city,
+        state: args.dealData.client.state,
+        zipCode: args.dealData.client.zipCode,
+        driversLicense: args.dealData.client.driversLicense,
+      },
+      vehicle: {
+        vin: args.dealData.vehicle.vin,
+        year: args.dealData.vehicle.year,
+        make: args.dealData.vehicle.make,
+        model: args.dealData.vehicle.model,
+        trim: args.dealData.vehicle.trim,
+        mileage: args.dealData.vehicle.mileage,
+        color: args.dealData.vehicle.color,
+      },
+      deal: {
+        type: args.dealData.type,
+        salePrice: args.dealData.pricing.salePrice,
+        salesTax: args.dealData.pricing.salesTax,
+        docFee: args.dealData.pricing.docFee,
+        tradeInValue: args.dealData.pricing.tradeInValue,
+        downPayment: args.dealData.pricing.downPayment,
+        financedAmount: args.dealData.pricing.financedAmount,
+        totalAmount: args.dealData.pricing.totalAmount,
+      },
+      dealership: args.dealData.businessInfo ? {
+        name: args.dealData.businessInfo.name,
+        address: args.dealData.businessInfo.address,
+        phone: args.dealData.businessInfo.phone,
+        email: args.dealData.businessInfo.email,
+      } : {},
+    };
 
-    // Convert to base64
-    const base64PDF = pdfBuffer.toString('base64');
+    // Prepare PDF data using field mappings
+    const preparedData = preparePdfData(args.fieldMappings as FieldMapping[], dealDataForMapping);
+
+    // Fill the template PDF with the prepared data
+    const filledPdfBuffer = await fillTemplateWithData(
+      templateBuffer.buffer,
+      preparedData.fields
+    );
+
+    // Convert filled PDF to base64
+    const base64PDF = Buffer.from(filledPdfBuffer).toString('base64');
 
     return {
       success: true,
       documentType: args.documentType,
       base64PDF,
-      size: pdfBuffer.length,
+      size: filledPdfBuffer.byteLength,
       filename: `${args.documentType}_${args.dealData.id}_${Date.now()}.pdf`,
+      fieldsFilled: preparedData.fields.filter(f => !f.skipped).length,
+      fieldsSkipped: preparedData.fields.filter(f => f.skipped).length,
+      validationErrors: preparedData.validationErrors,
     };
   },
 });
 
 /**
- * Generate Bill of Sale PDF
+ * Fill PDF template with prepared field data
+ * Uses pdf-lib to fill form fields in the template
  */
-async function generateBillOfSale(dealData: any): Promise<Buffer> {
-  // TODO: Replace with actual PDF generation library (pdf-lib or similar)
-  // This is a placeholder that creates a simple text-based PDF
+async function fillTemplateWithData(
+  templateBuffer: ArrayBuffer,
+  fields: Array<{ pdfFieldName: string; value: string; skipped: boolean }>
+): Promise<ArrayBuffer> {
+  // Load PDF document
+  const pdfDoc = await PDFDocument.load(templateBuffer);
+  const form = pdfDoc.getForm();
 
-  const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
+  let filledCount = 0;
+  let skippedCount = 0;
 
-  const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([612, 792]); // Letter size
-  const { width, height } = page.getSize();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-  let y = height - 50;
-  const fontSize = 12;
-  const lineHeight = 20;
-
-  // Title
-  page.drawText('BILL OF SALE', {
-    x: 50,
-    y,
-    size: 18,
-    font: boldFont,
-    color: rgb(0, 0, 0),
-  });
-
-  y -= 40;
-
-  // Business Info
-  if (dealData.businessInfo) {
-    page.drawText(`Seller: ${dealData.businessInfo.name}`, { x: 50, y, size: fontSize, font });
-    y -= lineHeight;
-    if (dealData.businessInfo.address) {
-      page.drawText(`Address: ${dealData.businessInfo.address}`, { x: 50, y, size: fontSize, font });
-      y -= lineHeight;
+  // Fill each field
+  for (const field of fields) {
+    if (field.skipped) {
+      skippedCount++;
+      continue;
     }
-    if (dealData.businessInfo.phone) {
-      page.drawText(`Phone: ${dealData.businessInfo.phone}`, { x: 50, y, size: fontSize, font });
-      y -= lineHeight;
+
+    try {
+      // Get the PDF form field
+      const pdfField = form.getField(field.pdfFieldName);
+
+      // Get field type
+      const fieldType = pdfField.constructor.name;
+
+      // Fill based on type
+      if (fieldType === "PDFTextField") {
+        (pdfField as PDFTextField).setText(field.value);
+        filledCount++;
+      } else if (fieldType === "PDFCheckBox") {
+        const checked = field.value === "true" || field.value === "yes" || field.value === "1";
+        if (checked) {
+          (pdfField as PDFCheckBox).check();
+        } else {
+          (pdfField as PDFCheckBox).uncheck();
+        }
+        filledCount++;
+      } else if (fieldType === "PDFDropdown") {
+        (pdfField as PDFDropdown).select(field.value);
+        filledCount++;
+      } else if (fieldType === "PDFRadioGroup") {
+        (pdfField as PDFRadioGroup).select(field.value);
+        filledCount++;
+      }
+    } catch (fieldError) {
+      console.error(`Error filling field ${field.pdfFieldName}:`, fieldError);
+      skippedCount++;
     }
   }
 
-  y -= 20;
+  console.log(`PDF filled: ${filledCount} fields filled, ${skippedCount} skipped`);
 
-  // Buyer Info
-  page.drawText('BUYER INFORMATION', { x: 50, y, size: fontSize, font: boldFont });
-  y -= lineHeight;
-  page.drawText(`Name: ${dealData.client.firstName} ${dealData.client.lastName}`, { x: 50, y, size: fontSize, font });
-  y -= lineHeight;
-  if (dealData.client.address) {
-    page.drawText(`Address: ${dealData.client.address}`, { x: 50, y, size: fontSize, font });
-    y -= lineHeight;
-  }
-  if (dealData.client.city && dealData.client.state && dealData.client.zipCode) {
-    page.drawText(`City, State ZIP: ${dealData.client.city}, ${dealData.client.state} ${dealData.client.zipCode}`, { x: 50, y, size: fontSize, font });
-    y -= lineHeight;
-  }
-  if (dealData.client.phone) {
-    page.drawText(`Phone: ${dealData.client.phone}`, { x: 50, y, size: fontSize, font });
-    y -= lineHeight;
-  }
+  // DON'T flatten form - keep fields editable for later editing
+  // form.flatten(); // Commented out to preserve form fields
 
-  y -= 20;
-
-  // Vehicle Info
-  page.drawText('VEHICLE INFORMATION', { x: 50, y, size: fontSize, font: boldFont });
-  y -= lineHeight;
-  page.drawText(`Year/Make/Model: ${dealData.vehicle.year} ${dealData.vehicle.make} ${dealData.vehicle.model}`, { x: 50, y, size: fontSize, font });
-  y -= lineHeight;
-  if (dealData.vehicle.trim) {
-    page.drawText(`Trim: ${dealData.vehicle.trim}`, { x: 50, y, size: fontSize, font });
-    y -= lineHeight;
-  }
-  page.drawText(`VIN: ${dealData.vehicle.vin}`, { x: 50, y, size: fontSize, font });
-  y -= lineHeight;
-  page.drawText(`Mileage: ${dealData.vehicle.mileage.toLocaleString()} miles`, { x: 50, y, size: fontSize, font });
-  y -= lineHeight;
-  if (dealData.vehicle.color) {
-    page.drawText(`Color: ${dealData.vehicle.color}`, { x: 50, y, size: fontSize, font });
-    y -= lineHeight;
-  }
-
-  y -= 20;
-
-  // Pricing Info
-  page.drawText('PURCHASE DETAILS', { x: 50, y, size: fontSize, font: boldFont });
-  y -= lineHeight;
-  page.drawText(`Sale Price: $${dealData.pricing.salePrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, { x: 50, y, size: fontSize, font });
-  y -= lineHeight;
-  if (dealData.pricing.salesTax) {
-    page.drawText(`Sales Tax: $${dealData.pricing.salesTax.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, { x: 50, y, size: fontSize, font });
-    y -= lineHeight;
-  }
-  if (dealData.pricing.docFee) {
-    page.drawText(`Doc Fee: $${dealData.pricing.docFee.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, { x: 50, y, size: fontSize, font });
-    y -= lineHeight;
-  }
-  if (dealData.pricing.tradeInValue) {
-    page.drawText(`Trade-In Value: -$${dealData.pricing.tradeInValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, { x: 50, y, size: fontSize, font });
-    y -= lineHeight;
-  }
-  if (dealData.pricing.downPayment) {
-    page.drawText(`Down Payment: $${dealData.pricing.downPayment.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, { x: 50, y, size: fontSize, font });
-    y -= lineHeight;
-  }
-  page.drawText(`TOTAL: $${dealData.pricing.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, { x: 50, y, size: fontSize, font: boldFont });
-  y -= lineHeight * 2;
-
-  // Signature lines
-  y -= 40;
-  page.drawText('_________________________________', { x: 50, y, size: fontSize, font });
-  page.drawText('_________________________________', { x: 350, y, size: fontSize, font });
-  y -= lineHeight;
-  page.drawText('Buyer Signature', { x: 50, y, size: fontSize - 2, font });
-  page.drawText('Seller Signature', { x: 350, y, size: fontSize - 2, font });
-  y -= lineHeight;
-  page.drawText(`Date: _______________`, { x: 50, y, size: fontSize - 2, font });
-  page.drawText(`Date: _______________`, { x: 350, y, size: fontSize - 2, font });
-
+  // Save and return
   const pdfBytes = await pdfDoc.save();
-  return Buffer.from(pdfBytes);
+  return pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
 }
 
-/**
- * Generate Buyer's Order PDF
- */
-async function generateBuyersOrder(dealData: any): Promise<Buffer> {
-  // Similar to Bill of Sale but with different layout
-  // TODO: Implement full buyer's order template
-  return generateBillOfSale(dealData); // Placeholder
-}
-
-/**
- * Generate Odometer Disclosure PDF
- */
-async function generateOdometerDisclosure(dealData: any): Promise<Buffer> {
-  // TODO: Implement odometer disclosure template
-  return generateBillOfSale(dealData); // Placeholder
-}
 
 /**
  * Batch generate multiple documents for a deal
@@ -243,27 +233,78 @@ async function generateOdometerDisclosure(dealData: any): Promise<Buffer> {
 export const generateDealDocumentPack = action({
   args: {
     userId: v.id("standalone_users"),
-    dealData: v.any(), // Same as above
-    documentTypes: v.array(v.string()),
+    dealData: v.object({
+      id: v.string(),
+      type: v.string(),
+      client: v.object({
+        firstName: v.string(),
+        lastName: v.string(),
+        email: v.optional(v.string()),
+        phone: v.optional(v.string()),
+        address: v.optional(v.string()),
+        city: v.optional(v.string()),
+        state: v.optional(v.string()),
+        zipCode: v.optional(v.string()),
+        driversLicense: v.optional(v.string()),
+      }),
+      vehicle: v.object({
+        vin: v.string(),
+        year: v.number(),
+        make: v.string(),
+        model: v.string(),
+        trim: v.optional(v.string()),
+        mileage: v.number(),
+        color: v.optional(v.string()),
+      }),
+      pricing: v.object({
+        salePrice: v.number(),
+        salesTax: v.optional(v.number()),
+        docFee: v.optional(v.number()),
+        tradeInValue: v.optional(v.number()),
+        downPayment: v.optional(v.number()),
+        financedAmount: v.optional(v.number()),
+        totalAmount: v.number(),
+      }),
+      businessInfo: v.optional(v.object({
+        name: v.string(),
+        address: v.optional(v.string()),
+        phone: v.optional(v.string()),
+        email: v.optional(v.string()),
+      })),
+    }),
+    documents: v.array(v.object({
+      documentType: v.string(),
+      templatePdfBase64: v.string(),
+      fieldMappings: v.array(v.object({
+        pdfFieldName: v.string(),
+        dataPath: v.string(),
+        transform: v.optional(v.string()),
+        defaultValue: v.optional(v.string()),
+        required: v.boolean(),
+        autoMapped: v.boolean(),
+      })),
+    })),
   },
-  handler: async (ctx, args) => {
-    const documents = [];
+  handler: async (ctx, args): Promise<DocumentPackResult> => {
+    const documents: DocumentResult[] = [];
 
-    for (const docType of args.documentTypes) {
+    for (const doc of args.documents) {
       try {
-        const result = await ctx.runAction(internal => internal.standalonePDF.generateDealPDF, {
+        const result = await ctx.runAction(api.standalonePDF.generateDealPDF, {
           userId: args.userId,
           dealData: args.dealData,
-          documentType: docType,
+          documentType: doc.documentType,
+          templatePdfBase64: doc.templatePdfBase64,
+          fieldMappings: doc.fieldMappings,
         });
 
         documents.push(result);
       } catch (error) {
-        console.error(`Failed to generate ${docType}:`, error);
+        console.error(`Failed to generate ${doc.documentType}:`, error);
         documents.push({
           success: false,
-          documentType: docType,
-          error: error.message,
+          documentType: doc.documentType,
+          error: error instanceof Error ? error.message : String(error),
         });
       }
     }

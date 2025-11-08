@@ -1,12 +1,10 @@
 /**
  * License Management for Desktop App
- * Integrates with Polar.sh for license key distribution and validation
+ * Integrates with Stripe for license key distribution and validation
  */
 
 import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
-import { api } from "./_generated/api";
-import type { Doc, Id } from "./_generated/dataModel";
 
 /**
  * Validate a license key
@@ -161,9 +159,61 @@ export const activateLicense = mutation({
       updatedAt: Date.now(),
     });
 
+    console.log(`✅ License ${args.licenseKey} activated on machine ${args.machineId}`);
+
+    // Find standalone user associated with this license
+    const standaloneUser = await ctx.db
+      .query("standalone_users")
+      .withIndex("by_license", (q) => q.eq("licenseKey", args.licenseKey))
+      .first();
+
+    let sessionToken: string | null = null;
+    let userId: string | null = null;
+
+    if (standaloneUser) {
+      console.log(`🔍 Found standalone user ${standaloneUser._id} for license ${args.licenseKey}`);
+      
+      // Generate session token
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      sessionToken = '';
+      for (let i = 0; i < 64; i++) {
+        sessionToken += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+
+      const now = Date.now();
+      const SESSION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+      const expiresAt = now + SESSION_EXPIRY_MS;
+
+      // Create session
+      await ctx.db.insert("standalone_sessions", {
+        userId: standaloneUser._id,
+        token: sessionToken,
+        licenseKey: args.licenseKey,
+        machineId: args.machineId,
+        expiresAt,
+        createdAt: now,
+        lastAccessedAt: now,
+        userAgent: `${args.platform} ${args.appVersion}`,
+        ipAddress: undefined,
+      });
+
+      // Update user's last login
+      await ctx.db.patch(standaloneUser._id, {
+        lastLoginAt: now,
+        updatedAt: now,
+      });
+
+      userId = standaloneUser._id;
+      console.log(`✅ Created session for user ${userId} with token ${sessionToken.substring(0, 8)}...`);
+    } else {
+      console.log(`⚠️ No standalone user found for license ${args.licenseKey} - session not created`);
+    }
+
     return {
       success: true,
       message: "License activated successfully",
+      sessionToken: sessionToken || undefined,
+      userId: userId || undefined,
     };
   },
 });
@@ -242,14 +292,87 @@ export const getLicenseInfo = query({
 });
 
 /**
- * Create a new license (called by Polar webhook)
+ * Get license by payment intent ID (for webhook)
+ */
+export const getLicenseByPaymentIntent = query({
+  args: {
+    paymentIntentId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const license = await ctx.db
+      .query("licenses")
+      .withIndex("by_payment_intent", (q) => q.eq("paymentIntentId", args.paymentIntentId))
+      .first();
+
+    return license;
+  },
+});
+
+/**
+ * Generate and create a license for a subscription
+ * Used when a user subscribes via Stripe
+ */
+export const generateAndCreateLicense = internalMutation({
+  args: {
+    customerEmail: v.string(),
+    stripeCustomerId: v.string(),
+    stripeSubscriptionId: v.string(),
+    stripePriceId: v.string(),
+    stripeProductId: v.string(),
+    subscriptionTier: v.string(), // "monthly" or "annual"
+    amount: v.number(),
+    currency: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Generate unique license key
+    const licenseKey = generateLicenseKey();
+    
+    // For subscription-based licenses, we use "single" tier (1 device)
+    // Users can have multiple subscriptions if they need multiple devices
+    const tier = "single";
+    const maxActivations = 1;
+    
+    const now = Date.now();
+
+    const licenseId = await ctx.db.insert("licenses", {
+      licenseKey,
+      customerEmail: args.customerEmail,
+      stripeCustomerId: args.stripeCustomerId,
+      stripeProductId: args.stripeProductId,
+      stripePriceId: args.stripePriceId,
+      tier,
+      maxActivations,
+      activations: [],
+      isActive: true,
+      issuedAt: now,
+      amount: args.amount,
+      currency: args.currency,
+      // For subscriptions, no expiration - handled by subscription status
+      expiresAt: undefined,
+      // Link to subscription
+      stripeSubscriptionId: args.stripeSubscriptionId,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    console.log(`✅ License ${licenseKey} created for subscription ${args.stripeSubscriptionId}`);
+
+    return licenseKey;
+  },
+});
+
+/**
+ * Create a new license (called by Stripe webhook for one-time purchases)
+ * DEPRECATED: Use generateAndCreateLicense for subscriptions
  */
 export const createLicense = internalMutation({
   args: {
-    orderId: v.string(),
-    customerId: v.string(),
+    paymentIntentId: v.string(),
+    checkoutSessionId: v.optional(v.string()),
+    stripeCustomerId: v.string(),
     customerEmail: v.string(),
-    productId: v.string(),
+    stripeProductId: v.string(),
+    stripePriceId: v.string(),
     licenseKey: v.string(),
     tier: v.union(v.literal("single"), v.literal("team"), v.literal("enterprise")),
     amount: v.number(),
@@ -266,11 +389,13 @@ export const createLicense = internalMutation({
     const now = Date.now();
 
     const licenseId = await ctx.db.insert("licenses", {
-      orderId: args.orderId,
+      paymentIntentId: args.paymentIntentId,
+      checkoutSessionId: args.checkoutSessionId,
       licenseKey: args.licenseKey,
       customerEmail: args.customerEmail,
-      customerId: args.customerId,
-      productId: args.productId,
+      stripeCustomerId: args.stripeCustomerId,
+      stripeProductId: args.stripeProductId,
+      stripePriceId: args.stripePriceId,
       tier: args.tier,
       maxActivations,
       activations: [],
@@ -399,3 +524,25 @@ export const revokeLicense = mutation({
     return { success: true, message: "License revoked" };
   },
 });
+
+/**
+ * Generate a license key
+ * Format: DEALER-XXXX-XXXX-XXXX
+ */
+function generateLicenseKey(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Exclude confusing chars
+  const segments = 3;
+  const segmentLength = 4;
+
+  let key = "DEALER";
+
+  for (let i = 0; i < segments; i++) {
+    key += "-";
+    for (let j = 0; j < segmentLength; j++) {
+      key += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+  }
+
+  return key;
+}
+
