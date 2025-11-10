@@ -22,13 +22,22 @@ import { Route as HelpRouteImport } from './routes/help'
 import { Route as DealershipRouteImport } from './routes/dealership'
 import { Route as AccountSetupRouteImport } from './routes/account-setup'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as StandaloneIndexRouteImport } from './routes/standalone/index'
 import { Route as DealsIndexRouteImport } from './routes/deals/index'
-import { Route as StandaloneVehiclesRouteImport } from './routes/standalone/vehicles'
-import { Route as StandaloneDealsRouteImport } from './routes/standalone/deals'
-import { Route as StandaloneClientsRouteImport } from './routes/standalone/clients'
+import { Route as StandaloneSubscriptionRouteImport } from './routes/standalone/subscription'
+import { Route as StandaloneSettingsRouteImport } from './routes/standalone/settings'
+import { Route as StandaloneProfileRouteImport } from './routes/standalone/profile'
+import { Route as StandaloneDealsIndexRouteImport } from './routes/standalone/deals/index'
 import { Route as DealsNewIndexRouteImport } from './routes/deals/new/index'
 import { Route as DealsDealsIdIndexRouteImport } from './routes/deals/$dealsId/index'
+import { Route as StandaloneDealsNewRouteImport } from './routes/standalone/deals/new'
+import { Route as StandaloneDealsNewIndexRouteImport } from './routes/standalone/deals/new/index'
+import { Route as StandaloneDealsDealIdIndexRouteImport } from './routes/standalone/deals/$dealId/index'
 import { Route as DealsDealsIdDocumentsIndexRouteImport } from './routes/deals/$dealsId/documents/index'
+import { Route as StandaloneDealsNewFinalizeRouteImport } from './routes/standalone/deals/new/finalize'
+import { Route as StandaloneDealsNewDocumentsRouteImport } from './routes/standalone/deals/new/documents'
+import { Route as StandaloneDealsNewDetailsRouteImport } from './routes/standalone/deals/new/details'
+import { Route as StandaloneDealsNewClientVehicleRouteImport } from './routes/standalone/deals/new/client-vehicle'
 import { Route as DealsDealsIdDocumentsDocumentsRouteImport } from './routes/deals/$dealsId/documents/$documents'
 
 const WhatsNewRoute = WhatsNewRouteImport.update({
@@ -96,24 +105,34 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StandaloneIndexRoute = StandaloneIndexRouteImport.update({
+  id: '/standalone/',
+  path: '/standalone/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DealsIndexRoute = DealsIndexRouteImport.update({
   id: '/deals/',
   path: '/deals/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const StandaloneVehiclesRoute = StandaloneVehiclesRouteImport.update({
-  id: '/standalone/vehicles',
-  path: '/standalone/vehicles',
+const StandaloneSubscriptionRoute = StandaloneSubscriptionRouteImport.update({
+  id: '/standalone/subscription',
+  path: '/standalone/subscription',
   getParentRoute: () => rootRouteImport,
 } as any)
-const StandaloneDealsRoute = StandaloneDealsRouteImport.update({
-  id: '/standalone/deals',
-  path: '/standalone/deals',
+const StandaloneSettingsRoute = StandaloneSettingsRouteImport.update({
+  id: '/standalone/settings',
+  path: '/standalone/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
-const StandaloneClientsRoute = StandaloneClientsRouteImport.update({
-  id: '/standalone/clients',
-  path: '/standalone/clients',
+const StandaloneProfileRoute = StandaloneProfileRouteImport.update({
+  id: '/standalone/profile',
+  path: '/standalone/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StandaloneDealsIndexRoute = StandaloneDealsIndexRouteImport.update({
+  id: '/standalone/deals/',
+  path: '/standalone/deals/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DealsNewIndexRoute = DealsNewIndexRouteImport.update({
@@ -126,11 +145,51 @@ const DealsDealsIdIndexRoute = DealsDealsIdIndexRouteImport.update({
   path: '/deals/$dealsId/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StandaloneDealsNewRoute = StandaloneDealsNewRouteImport.update({
+  id: '/standalone/deals/new',
+  path: '/standalone/deals/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StandaloneDealsNewIndexRoute = StandaloneDealsNewIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => StandaloneDealsNewRoute,
+} as any)
+const StandaloneDealsDealIdIndexRoute =
+  StandaloneDealsDealIdIndexRouteImport.update({
+    id: '/standalone/deals/$dealId/',
+    path: '/standalone/deals/$dealId/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DealsDealsIdDocumentsIndexRoute =
   DealsDealsIdDocumentsIndexRouteImport.update({
     id: '/deals/$dealsId/documents/',
     path: '/deals/$dealsId/documents/',
     getParentRoute: () => rootRouteImport,
+  } as any)
+const StandaloneDealsNewFinalizeRoute =
+  StandaloneDealsNewFinalizeRouteImport.update({
+    id: '/finalize',
+    path: '/finalize',
+    getParentRoute: () => StandaloneDealsNewRoute,
+  } as any)
+const StandaloneDealsNewDocumentsRoute =
+  StandaloneDealsNewDocumentsRouteImport.update({
+    id: '/documents',
+    path: '/documents',
+    getParentRoute: () => StandaloneDealsNewRoute,
+  } as any)
+const StandaloneDealsNewDetailsRoute =
+  StandaloneDealsNewDetailsRouteImport.update({
+    id: '/details',
+    path: '/details',
+    getParentRoute: () => StandaloneDealsNewRoute,
+  } as any)
+const StandaloneDealsNewClientVehicleRoute =
+  StandaloneDealsNewClientVehicleRouteImport.update({
+    id: '/client-vehicle',
+    path: '/client-vehicle',
+    getParentRoute: () => StandaloneDealsNewRoute,
   } as any)
 const DealsDealsIdDocumentsDocumentsRoute =
   DealsDealsIdDocumentsDocumentsRouteImport.update({
@@ -153,14 +212,23 @@ export interface FileRoutesByFullPath {
   '/subscribe': typeof SubscribeRoute
   '/subscription': typeof SubscriptionRoute
   '/whats-new': typeof WhatsNewRoute
-  '/standalone/clients': typeof StandaloneClientsRoute
-  '/standalone/deals': typeof StandaloneDealsRoute
-  '/standalone/vehicles': typeof StandaloneVehiclesRoute
+  '/standalone/profile': typeof StandaloneProfileRoute
+  '/standalone/settings': typeof StandaloneSettingsRoute
+  '/standalone/subscription': typeof StandaloneSubscriptionRoute
   '/deals': typeof DealsIndexRoute
+  '/standalone': typeof StandaloneIndexRoute
+  '/standalone/deals/new': typeof StandaloneDealsNewRouteWithChildren
   '/deals/$dealsId': typeof DealsDealsIdIndexRoute
   '/deals/new': typeof DealsNewIndexRoute
+  '/standalone/deals': typeof StandaloneDealsIndexRoute
   '/deals/$dealsId/documents/$documents': typeof DealsDealsIdDocumentsDocumentsRoute
+  '/standalone/deals/new/client-vehicle': typeof StandaloneDealsNewClientVehicleRoute
+  '/standalone/deals/new/details': typeof StandaloneDealsNewDetailsRoute
+  '/standalone/deals/new/documents': typeof StandaloneDealsNewDocumentsRoute
+  '/standalone/deals/new/finalize': typeof StandaloneDealsNewFinalizeRoute
   '/deals/$dealsId/documents': typeof DealsDealsIdDocumentsIndexRoute
+  '/standalone/deals/$dealId': typeof StandaloneDealsDealIdIndexRoute
+  '/standalone/deals/new/': typeof StandaloneDealsNewIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -176,14 +244,22 @@ export interface FileRoutesByTo {
   '/subscribe': typeof SubscribeRoute
   '/subscription': typeof SubscriptionRoute
   '/whats-new': typeof WhatsNewRoute
-  '/standalone/clients': typeof StandaloneClientsRoute
-  '/standalone/deals': typeof StandaloneDealsRoute
-  '/standalone/vehicles': typeof StandaloneVehiclesRoute
+  '/standalone/profile': typeof StandaloneProfileRoute
+  '/standalone/settings': typeof StandaloneSettingsRoute
+  '/standalone/subscription': typeof StandaloneSubscriptionRoute
   '/deals': typeof DealsIndexRoute
+  '/standalone': typeof StandaloneIndexRoute
   '/deals/$dealsId': typeof DealsDealsIdIndexRoute
   '/deals/new': typeof DealsNewIndexRoute
+  '/standalone/deals': typeof StandaloneDealsIndexRoute
   '/deals/$dealsId/documents/$documents': typeof DealsDealsIdDocumentsDocumentsRoute
+  '/standalone/deals/new/client-vehicle': typeof StandaloneDealsNewClientVehicleRoute
+  '/standalone/deals/new/details': typeof StandaloneDealsNewDetailsRoute
+  '/standalone/deals/new/documents': typeof StandaloneDealsNewDocumentsRoute
+  '/standalone/deals/new/finalize': typeof StandaloneDealsNewFinalizeRoute
   '/deals/$dealsId/documents': typeof DealsDealsIdDocumentsIndexRoute
+  '/standalone/deals/$dealId': typeof StandaloneDealsDealIdIndexRoute
+  '/standalone/deals/new': typeof StandaloneDealsNewIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -200,14 +276,23 @@ export interface FileRoutesById {
   '/subscribe': typeof SubscribeRoute
   '/subscription': typeof SubscriptionRoute
   '/whats-new': typeof WhatsNewRoute
-  '/standalone/clients': typeof StandaloneClientsRoute
-  '/standalone/deals': typeof StandaloneDealsRoute
-  '/standalone/vehicles': typeof StandaloneVehiclesRoute
+  '/standalone/profile': typeof StandaloneProfileRoute
+  '/standalone/settings': typeof StandaloneSettingsRoute
+  '/standalone/subscription': typeof StandaloneSubscriptionRoute
   '/deals/': typeof DealsIndexRoute
+  '/standalone/': typeof StandaloneIndexRoute
+  '/standalone/deals/new': typeof StandaloneDealsNewRouteWithChildren
   '/deals/$dealsId/': typeof DealsDealsIdIndexRoute
   '/deals/new/': typeof DealsNewIndexRoute
+  '/standalone/deals/': typeof StandaloneDealsIndexRoute
   '/deals/$dealsId/documents/$documents': typeof DealsDealsIdDocumentsDocumentsRoute
+  '/standalone/deals/new/client-vehicle': typeof StandaloneDealsNewClientVehicleRoute
+  '/standalone/deals/new/details': typeof StandaloneDealsNewDetailsRoute
+  '/standalone/deals/new/documents': typeof StandaloneDealsNewDocumentsRoute
+  '/standalone/deals/new/finalize': typeof StandaloneDealsNewFinalizeRoute
   '/deals/$dealsId/documents/': typeof DealsDealsIdDocumentsIndexRoute
+  '/standalone/deals/$dealId/': typeof StandaloneDealsDealIdIndexRoute
+  '/standalone/deals/new/': typeof StandaloneDealsNewIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -225,14 +310,23 @@ export interface FileRouteTypes {
     | '/subscribe'
     | '/subscription'
     | '/whats-new'
-    | '/standalone/clients'
-    | '/standalone/deals'
-    | '/standalone/vehicles'
+    | '/standalone/profile'
+    | '/standalone/settings'
+    | '/standalone/subscription'
     | '/deals'
+    | '/standalone'
+    | '/standalone/deals/new'
     | '/deals/$dealsId'
     | '/deals/new'
+    | '/standalone/deals'
     | '/deals/$dealsId/documents/$documents'
+    | '/standalone/deals/new/client-vehicle'
+    | '/standalone/deals/new/details'
+    | '/standalone/deals/new/documents'
+    | '/standalone/deals/new/finalize'
     | '/deals/$dealsId/documents'
+    | '/standalone/deals/$dealId'
+    | '/standalone/deals/new/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -248,14 +342,22 @@ export interface FileRouteTypes {
     | '/subscribe'
     | '/subscription'
     | '/whats-new'
-    | '/standalone/clients'
-    | '/standalone/deals'
-    | '/standalone/vehicles'
+    | '/standalone/profile'
+    | '/standalone/settings'
+    | '/standalone/subscription'
     | '/deals'
+    | '/standalone'
     | '/deals/$dealsId'
     | '/deals/new'
+    | '/standalone/deals'
     | '/deals/$dealsId/documents/$documents'
+    | '/standalone/deals/new/client-vehicle'
+    | '/standalone/deals/new/details'
+    | '/standalone/deals/new/documents'
+    | '/standalone/deals/new/finalize'
     | '/deals/$dealsId/documents'
+    | '/standalone/deals/$dealId'
+    | '/standalone/deals/new'
   id:
     | '__root__'
     | '/'
@@ -271,14 +373,23 @@ export interface FileRouteTypes {
     | '/subscribe'
     | '/subscription'
     | '/whats-new'
-    | '/standalone/clients'
-    | '/standalone/deals'
-    | '/standalone/vehicles'
+    | '/standalone/profile'
+    | '/standalone/settings'
+    | '/standalone/subscription'
     | '/deals/'
+    | '/standalone/'
+    | '/standalone/deals/new'
     | '/deals/$dealsId/'
     | '/deals/new/'
+    | '/standalone/deals/'
     | '/deals/$dealsId/documents/$documents'
+    | '/standalone/deals/new/client-vehicle'
+    | '/standalone/deals/new/details'
+    | '/standalone/deals/new/documents'
+    | '/standalone/deals/new/finalize'
     | '/deals/$dealsId/documents/'
+    | '/standalone/deals/$dealId/'
+    | '/standalone/deals/new/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -295,14 +406,18 @@ export interface RootRouteChildren {
   SubscribeRoute: typeof SubscribeRoute
   SubscriptionRoute: typeof SubscriptionRoute
   WhatsNewRoute: typeof WhatsNewRoute
-  StandaloneClientsRoute: typeof StandaloneClientsRoute
-  StandaloneDealsRoute: typeof StandaloneDealsRoute
-  StandaloneVehiclesRoute: typeof StandaloneVehiclesRoute
+  StandaloneProfileRoute: typeof StandaloneProfileRoute
+  StandaloneSettingsRoute: typeof StandaloneSettingsRoute
+  StandaloneSubscriptionRoute: typeof StandaloneSubscriptionRoute
   DealsIndexRoute: typeof DealsIndexRoute
+  StandaloneIndexRoute: typeof StandaloneIndexRoute
+  StandaloneDealsNewRoute: typeof StandaloneDealsNewRouteWithChildren
   DealsDealsIdIndexRoute: typeof DealsDealsIdIndexRoute
   DealsNewIndexRoute: typeof DealsNewIndexRoute
+  StandaloneDealsIndexRoute: typeof StandaloneDealsIndexRoute
   DealsDealsIdDocumentsDocumentsRoute: typeof DealsDealsIdDocumentsDocumentsRoute
   DealsDealsIdDocumentsIndexRoute: typeof DealsDealsIdDocumentsIndexRoute
+  StandaloneDealsDealIdIndexRoute: typeof StandaloneDealsDealIdIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -398,6 +513,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/standalone/': {
+      id: '/standalone/'
+      path: '/standalone'
+      fullPath: '/standalone'
+      preLoaderRoute: typeof StandaloneIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/deals/': {
       id: '/deals/'
       path: '/deals'
@@ -405,25 +527,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DealsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/standalone/vehicles': {
-      id: '/standalone/vehicles'
-      path: '/standalone/vehicles'
-      fullPath: '/standalone/vehicles'
-      preLoaderRoute: typeof StandaloneVehiclesRouteImport
+    '/standalone/subscription': {
+      id: '/standalone/subscription'
+      path: '/standalone/subscription'
+      fullPath: '/standalone/subscription'
+      preLoaderRoute: typeof StandaloneSubscriptionRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/standalone/deals': {
-      id: '/standalone/deals'
+    '/standalone/settings': {
+      id: '/standalone/settings'
+      path: '/standalone/settings'
+      fullPath: '/standalone/settings'
+      preLoaderRoute: typeof StandaloneSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/standalone/profile': {
+      id: '/standalone/profile'
+      path: '/standalone/profile'
+      fullPath: '/standalone/profile'
+      preLoaderRoute: typeof StandaloneProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/standalone/deals/': {
+      id: '/standalone/deals/'
       path: '/standalone/deals'
       fullPath: '/standalone/deals'
-      preLoaderRoute: typeof StandaloneDealsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/standalone/clients': {
-      id: '/standalone/clients'
-      path: '/standalone/clients'
-      fullPath: '/standalone/clients'
-      preLoaderRoute: typeof StandaloneClientsRouteImport
+      preLoaderRoute: typeof StandaloneDealsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/deals/new/': {
@@ -440,12 +569,61 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DealsDealsIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/standalone/deals/new': {
+      id: '/standalone/deals/new'
+      path: '/standalone/deals/new'
+      fullPath: '/standalone/deals/new'
+      preLoaderRoute: typeof StandaloneDealsNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/standalone/deals/new/': {
+      id: '/standalone/deals/new/'
+      path: '/'
+      fullPath: '/standalone/deals/new/'
+      preLoaderRoute: typeof StandaloneDealsNewIndexRouteImport
+      parentRoute: typeof StandaloneDealsNewRoute
+    }
+    '/standalone/deals/$dealId/': {
+      id: '/standalone/deals/$dealId/'
+      path: '/standalone/deals/$dealId'
+      fullPath: '/standalone/deals/$dealId'
+      preLoaderRoute: typeof StandaloneDealsDealIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/deals/$dealsId/documents/': {
       id: '/deals/$dealsId/documents/'
       path: '/deals/$dealsId/documents'
       fullPath: '/deals/$dealsId/documents'
       preLoaderRoute: typeof DealsDealsIdDocumentsIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/standalone/deals/new/finalize': {
+      id: '/standalone/deals/new/finalize'
+      path: '/finalize'
+      fullPath: '/standalone/deals/new/finalize'
+      preLoaderRoute: typeof StandaloneDealsNewFinalizeRouteImport
+      parentRoute: typeof StandaloneDealsNewRoute
+    }
+    '/standalone/deals/new/documents': {
+      id: '/standalone/deals/new/documents'
+      path: '/documents'
+      fullPath: '/standalone/deals/new/documents'
+      preLoaderRoute: typeof StandaloneDealsNewDocumentsRouteImport
+      parentRoute: typeof StandaloneDealsNewRoute
+    }
+    '/standalone/deals/new/details': {
+      id: '/standalone/deals/new/details'
+      path: '/details'
+      fullPath: '/standalone/deals/new/details'
+      preLoaderRoute: typeof StandaloneDealsNewDetailsRouteImport
+      parentRoute: typeof StandaloneDealsNewRoute
+    }
+    '/standalone/deals/new/client-vehicle': {
+      id: '/standalone/deals/new/client-vehicle'
+      path: '/client-vehicle'
+      fullPath: '/standalone/deals/new/client-vehicle'
+      preLoaderRoute: typeof StandaloneDealsNewClientVehicleRouteImport
+      parentRoute: typeof StandaloneDealsNewRoute
     }
     '/deals/$dealsId/documents/$documents': {
       id: '/deals/$dealsId/documents/$documents'
@@ -456,6 +634,25 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface StandaloneDealsNewRouteChildren {
+  StandaloneDealsNewClientVehicleRoute: typeof StandaloneDealsNewClientVehicleRoute
+  StandaloneDealsNewDetailsRoute: typeof StandaloneDealsNewDetailsRoute
+  StandaloneDealsNewDocumentsRoute: typeof StandaloneDealsNewDocumentsRoute
+  StandaloneDealsNewFinalizeRoute: typeof StandaloneDealsNewFinalizeRoute
+  StandaloneDealsNewIndexRoute: typeof StandaloneDealsNewIndexRoute
+}
+
+const StandaloneDealsNewRouteChildren: StandaloneDealsNewRouteChildren = {
+  StandaloneDealsNewClientVehicleRoute: StandaloneDealsNewClientVehicleRoute,
+  StandaloneDealsNewDetailsRoute: StandaloneDealsNewDetailsRoute,
+  StandaloneDealsNewDocumentsRoute: StandaloneDealsNewDocumentsRoute,
+  StandaloneDealsNewFinalizeRoute: StandaloneDealsNewFinalizeRoute,
+  StandaloneDealsNewIndexRoute: StandaloneDealsNewIndexRoute,
+}
+
+const StandaloneDealsNewRouteWithChildren =
+  StandaloneDealsNewRoute._addFileChildren(StandaloneDealsNewRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -471,14 +668,18 @@ const rootRouteChildren: RootRouteChildren = {
   SubscribeRoute: SubscribeRoute,
   SubscriptionRoute: SubscriptionRoute,
   WhatsNewRoute: WhatsNewRoute,
-  StandaloneClientsRoute: StandaloneClientsRoute,
-  StandaloneDealsRoute: StandaloneDealsRoute,
-  StandaloneVehiclesRoute: StandaloneVehiclesRoute,
+  StandaloneProfileRoute: StandaloneProfileRoute,
+  StandaloneSettingsRoute: StandaloneSettingsRoute,
+  StandaloneSubscriptionRoute: StandaloneSubscriptionRoute,
   DealsIndexRoute: DealsIndexRoute,
+  StandaloneIndexRoute: StandaloneIndexRoute,
+  StandaloneDealsNewRoute: StandaloneDealsNewRouteWithChildren,
   DealsDealsIdIndexRoute: DealsDealsIdIndexRoute,
   DealsNewIndexRoute: DealsNewIndexRoute,
+  StandaloneDealsIndexRoute: StandaloneDealsIndexRoute,
   DealsDealsIdDocumentsDocumentsRoute: DealsDealsIdDocumentsDocumentsRoute,
   DealsDealsIdDocumentsIndexRoute: DealsDealsIdDocumentsIndexRoute,
+  StandaloneDealsDealIdIndexRoute: StandaloneDealsDealIdIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

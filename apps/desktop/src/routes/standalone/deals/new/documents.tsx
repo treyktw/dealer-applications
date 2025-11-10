@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { FileText } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { useWizard } from "./index";
+import { useWizard } from "@/lib/providers/WizardProvider";
 
 export const Route = createFileRoute("/standalone/deals/new/documents")({
   component: DocumentsStep,
@@ -96,12 +96,12 @@ function DocumentsStep() {
       selectedDocuments: selectedDocuments,
     });
 
-    setCurrentStep(5);
+    setCurrentStep(4);
     navigate({ to: "/standalone/deals/new/finalize" });
   };
 
   const handleBack = () => {
-    setCurrentStep(3);
+    setCurrentStep(2);
     navigate({ to: "/standalone/deals/new/details" });
   };
 

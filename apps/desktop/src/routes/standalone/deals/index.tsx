@@ -25,7 +25,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, Search, MoreVertical, Edit, Trash2, FileText, Download, DollarSign } from "lucide-react";
+import {
+  Plus,
+  Search,
+  MoreVertical,
+  Edit,
+  Trash2,
+  FileText,
+  Download,
+} from "lucide-react";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -39,9 +47,13 @@ import {
 } from "@/lib/local-storage/local-deals-service";
 import { getClient } from "@/lib/local-storage/local-clients-service";
 import { getVehicle } from "@/lib/local-storage/local-vehicles-service";
-import type { LocalDeal, LocalClient, LocalVehicle } from "@/lib/local-storage/db";
+import type {
+  LocalDeal,
+  LocalClient,
+  LocalVehicle,
+} from "@/lib/local-storage/db";
 
-export const Route = createFileRoute("/standalone/deals")({
+export const Route = createFileRoute("/standalone/deals/")({
   component: DealsPage,
 });
 
@@ -136,7 +148,11 @@ function DealsPage() {
   });
 
   const handleDelete = (id: string) => {
-    if (confirm("Are you sure you want to delete this deal? This action cannot be undone.")) {
+    if (
+      confirm(
+        "Are you sure you want to delete this deal? This action cannot be undone."
+      )
+    ) {
       deleteMutation.mutate(id);
     }
   };
@@ -152,14 +168,25 @@ function DealsPage() {
     }
 
     const csv = [
-      ["Deal ID", "Type", "Status", "Client", "Vehicle", "Total Amount", "Sale Amount", "Created Date"].join(","),
-      ...deals.map(d =>
+      [
+        "Deal ID",
+        "Type",
+        "Status",
+        "Client",
+        "Vehicle",
+        "Total Amount",
+        "Sale Amount",
+        "Created Date",
+      ].join(","),
+      ...deals.map((d) =>
         [
           d.id.slice(-8),
           d.type,
           d.status,
           d.client ? `${d.client.firstName} ${d.client.lastName}` : "N/A",
-          d.vehicle ? `${d.vehicle.year} ${d.vehicle.make} ${d.vehicle.model}` : "N/A",
+          d.vehicle
+            ? `${d.vehicle.year} ${d.vehicle.make} ${d.vehicle.model}`
+            : "N/A",
           d.totalAmount,
           d.saleAmount || 0,
           new Date(d.createdAt).toLocaleDateString(),
@@ -176,6 +203,23 @@ function DealsPage() {
     URL.revokeObjectURL(url);
     toast.success("Deals exported to CSV");
   };
+
+  const handleNewDeal = () => {
+    console.log("🔵 [DEALS] handleNewDeal called");
+    
+    // Prevent multiple rapid clicks
+    const now = Date.now();
+    const lastClick = (window as { lastNewDealClick?: number }).lastNewDealClick;
+    if (lastClick && now - lastClick < 500) {
+      console.log("⚠️ [DEALS] Ignoring rapid click");
+      return;
+    }
+    (window as { lastNewDealClick?: number }).lastNewDealClick = now;
+    
+    // Navigate directly to the first step of the wizard
+    console.log("🔵 [DEALS] Navigating to /standalone/deals/new/client-vehicle");
+    navigate({ to: "/standalone/deals/new/client-vehicle" });
+  }
 
   if (isLoading) {
     return (
@@ -196,66 +240,23 @@ function DealsPage() {
     <Layout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div>
+          <div className="flex items-center gap-2">
             <h1 className="text-3xl font-bold">Deals</h1>
-            <p className="text-muted-foreground mt-1">
-              Manage and track your deals
-            </p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={handleExport} className="gap-2">
               <Download className="h-4 w-4" />
               Export CSV
             </Button>
-            <Button onClick={() => navigate({ to: "/standalone/deals/new" })} className="gap-2">
+            <Button
+              onClick={handleNewDeal}
+              className="gap-2"
+            >
               <Plus className="h-4 w-4" />
               New Deal
             </Button>
           </div>
         </div>
-
-        {stats && (
-          <div className="grid gap-4 md:grid-cols-4">
-            <Card className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <FileText className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Deals</p>
-                  <p className="text-2xl font-bold">{stats.total}</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <FileText className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Completed</p>
-                  <p className="text-2xl font-bold">{stats.byStatus.completed || 0}</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Revenue</p>
-                <p className="text-2xl font-bold">
-                  ${stats.totalAmount.toLocaleString()}
-                </p>
-              </div>
-            </Card>
-            <Card className="p-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Avg. Deal Size</p>
-                <p className="text-2xl font-bold">
-                  ${Math.round(stats.averageAmount).toLocaleString()}
-                </p>
-              </div>
-            </Card>
-          </div>
-        )}
 
         <Card className="p-4">
           <div className="flex gap-4">
@@ -294,12 +295,6 @@ function DealsPage() {
                   ? "Try adjusting your filters"
                   : "Get started by creating your first deal"}
               </p>
-              {!searchQuery && statusFilter === "all" && (
-                <Button onClick={() => navigate({ to: "/standalone/deals/new" })}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Deal
-                </Button>
-              )}
             </div>
           </Card>
         ) : (
@@ -348,19 +343,37 @@ function DealsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
-                          <DropdownMenuItem onClick={() => handleStatusChange(deal.id, "draft")}>
+                          <DropdownMenuItem
+                            onClick={() => handleStatusChange(deal.id, "draft")}
+                          >
                             Set as Draft
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleStatusChange(deal.id, "pending")}>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              handleStatusChange(deal.id, "pending")
+                            }
+                          >
                             Set as Pending
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleStatusChange(deal.id, "in_progress")}>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              handleStatusChange(deal.id, "in_progress")
+                            }
+                          >
                             Set as In Progress
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleStatusChange(deal.id, "completed")}>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              handleStatusChange(deal.id, "completed")
+                            }
+                          >
                             Set as Completed
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleStatusChange(deal.id, "cancelled")}>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              handleStatusChange(deal.id, "cancelled")
+                            }
+                          >
                             Set as Cancelled
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -381,19 +394,29 @@ function DealsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
-                            onClick={() => navigate({ to: `/standalone/deals/${deal.id}` })}
+                            onClick={() =>
+                              navigate({ to: `/standalone/deals/${deal.id}` })
+                            }
                           >
                             <FileText className="h-4 w-4 mr-2" />
                             View Details
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => navigate({ to: `/standalone/deals/${deal.id}/edit` })}
+                            onClick={() =>
+                              navigate({
+                                to: `/standalone/deals/${deal.id}/edit`,
+                              })
+                            }
                           >
                             <Edit className="h-4 w-4 mr-2" />
                             Edit
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => navigate({ to: `/standalone/deals/${deal.id}/documents` })}
+                            onClick={() =>
+                              navigate({
+                                to: `/standalone/deals/${deal.id}/documents`,
+                              })
+                            }
                           >
                             <FileText className="h-4 w-4 mr-2" />
                             Generate Docs
@@ -420,23 +443,35 @@ function DealsPage() {
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Draft</p>
-                <p className="text-2xl font-bold">{stats?.byStatus.draft || 0}</p>
+                <p className="text-2xl font-bold">
+                  {stats?.byStatus.draft || 0}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Pending</p>
-                <p className="text-2xl font-bold">{stats?.byStatus.pending || 0}</p>
+                <p className="text-2xl font-bold">
+                  {stats?.byStatus.pending || 0}
+                </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-1">In Progress</p>
-                <p className="text-2xl font-bold">{stats?.byStatus.in_progress || 0}</p>
+                <p className="text-sm text-muted-foreground mb-1">
+                  In Progress
+                </p>
+                <p className="text-2xl font-bold">
+                  {stats?.byStatus.in_progress || 0}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Completed</p>
-                <p className="text-2xl font-bold text-green-600">{stats?.byStatus.completed || 0}</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {stats?.byStatus.completed || 0}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Cancelled</p>
-                <p className="text-2xl font-bold text-red-600">{stats?.byStatus.cancelled || 0}</p>
+                <p className="text-2xl font-bold text-red-600">
+                  {stats?.byStatus.cancelled || 0}
+                </p>
               </div>
             </div>
           </Card>

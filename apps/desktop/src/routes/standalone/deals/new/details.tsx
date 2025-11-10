@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -10,10 +9,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
+import {
+  Field,
+  FieldContent,
+  FieldLabel,
+  FieldGroup,
+} from "@/components/ui/field";
 import { DollarSign } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { useWizard } from "./index";
+import { useWizard } from "@/lib/providers/WizardProvider";
+import { updateDeal, getDealsByStatus } from "@/lib/local-storage/local-deals-service";
 
 export const Route = createFileRoute("/standalone/deals/new/details")({
   component: DetailsStep,
@@ -23,57 +30,150 @@ function DetailsStep() {
   const navigate = useNavigate();
   const { formData, updateFormData, setCurrentStep } = useWizard();
 
-  const [dealDetails, setDealDetails] = useState({
-    type: formData.type || "retail",
-    saleAmount: formData.saleAmount || 0,
-    salesTax: formData.salesTax || 0,
-    docFee: formData.docFee || 0,
-    tradeInValue: formData.tradeInValue || 0,
-    downPayment: formData.downPayment || 0,
-    financedAmount: formData.financedAmount || 0,
+  // Track dealId using ref to persist across renders
+  const dealIdRef = useRef<string>("");
+  const isInitializedRef = useRef(false);
+
+  // Load most recent draft deal on mount
+  const { data: draftDeal } = useQuery({
+    queryKey: ["draft-deal"],
+    queryFn: async () => {
+      const drafts = await getDealsByStatus("draft");
+      const sorted = drafts.sort((a, b) => b.updatedAt - a.updatedAt);
+      return sorted[0];
+    },
+    staleTime: Infinity,
   });
 
+  // Initialize dealId from draft
   useEffect(() => {
-    const { saleAmount, salesTax, docFee, tradeInValue, downPayment } = dealDetails;
+    if (draftDeal && !dealIdRef.current) {
+      dealIdRef.current = draftDeal.id;
+    }
+  }, [draftDeal]);
+
+  // Store number fields as strings to allow clearing/editing
+  const [dealDetails, setDealDetails] = useState({
+    type: "retail",
+    saleAmount: "",
+    salesTax: "",
+    docFee: "",
+    tradeInValue: "",
+    downPayment: "",
+  });
+
+  // Load saved data from draft deal or formData
+  useEffect(() => {
+    if (!isInitializedRef.current) {
+      // Prefer draft deal data, then formData, then defaults
+      const savedData = draftDeal || formData;
+      
+      setDealDetails({
+        type: savedData.type || "retail",
+        saleAmount: savedData.saleAmount != null ? savedData.saleAmount.toString() : "",
+        salesTax: savedData.salesTax != null ? savedData.salesTax.toString() : "",
+        docFee: savedData.docFee != null ? savedData.docFee.toString() : "",
+        tradeInValue: savedData.tradeInValue != null ? savedData.tradeInValue.toString() : "",
+        downPayment: savedData.downPayment != null ? savedData.downPayment.toString() : "",
+      });
+      
+      isInitializedRef.current = true;
+    }
+  }, [draftDeal, formData]);
+
+  // Convert string numbers to actual numbers for calculations
+  const numericValues = useMemo(() => {
+    return {
+      saleAmount: dealDetails.saleAmount.trim() ? parseFloat(dealDetails.saleAmount) || 0 : 0,
+      salesTax: dealDetails.salesTax.trim() ? parseFloat(dealDetails.salesTax) || 0 : 0,
+      docFee: dealDetails.docFee.trim() ? parseFloat(dealDetails.docFee) || 0 : 0,
+      tradeInValue: dealDetails.tradeInValue.trim() ? parseFloat(dealDetails.tradeInValue) || 0 : 0,
+      downPayment: dealDetails.downPayment.trim() ? parseFloat(dealDetails.downPayment) || 0 : 0,
+    };
+  }, [dealDetails.saleAmount, dealDetails.salesTax, dealDetails.docFee, dealDetails.tradeInValue, dealDetails.downPayment]);
+
+  // Calculate financed amount using useMemo
+  const financedAmount = useMemo(() => {
+    const { saleAmount, salesTax, docFee, tradeInValue, downPayment } = numericValues;
     const subtotal = saleAmount + salesTax + docFee - tradeInValue;
     const financed = subtotal - downPayment;
+    return Math.max(0, financed);
+  }, [numericValues]);
 
-    setDealDetails(prev => ({
-      ...prev,
-      financedAmount: Math.max(0, financed),
-    }));
-  }, [
-    dealDetails.saleAmount,
-    dealDetails.salesTax,
-    dealDetails.docFee,
-    dealDetails.tradeInValue,
-    dealDetails.downPayment,
-  ]);
+  // Auto-save form data with debouncing
+  const debouncedFormData = useMemo(() => {
+    return {
+      type: dealDetails.type,
+      saleAmount: numericValues.saleAmount,
+      salesTax: numericValues.salesTax,
+      docFee: numericValues.docFee,
+      tradeInValue: numericValues.tradeInValue,
+      downPayment: numericValues.downPayment,
+      financedAmount,
+      totalAmount: numericValues.saleAmount + numericValues.salesTax + numericValues.docFee - numericValues.tradeInValue,
+    };
+  }, [dealDetails.type, numericValues, financedAmount]);
 
-  const totalAmount =
-    dealDetails.saleAmount +
-    dealDetails.salesTax +
-    dealDetails.docFee -
-    dealDetails.tradeInValue;
+  // Debounced auto-save effect - saves to both wizard context and IndexedDB
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      // Update wizard context
+      updateFormData(debouncedFormData);
+
+      // Save to IndexedDB if we have a deal ID (from draft deal or formData)
+      const dealId = dealIdRef.current || draftDeal?.id;
+      if (dealId) {
+        try {
+          await updateDeal(dealId, {
+            type: dealDetails.type,
+            saleAmount: numericValues.saleAmount,
+            salesTax: numericValues.salesTax,
+            docFee: numericValues.docFee,
+            tradeInValue: numericValues.tradeInValue,
+            downPayment: numericValues.downPayment,
+            financedAmount,
+            totalAmount: numericValues.saleAmount + numericValues.salesTax + numericValues.docFee - numericValues.tradeInValue,
+          });
+        } catch (error) {
+          console.error("❌ [AUTO-SAVE] Error saving deal details to database:", error);
+        }
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timer);
+  }, [debouncedFormData, updateFormData, numericValues, dealDetails.type, financedAmount, draftDeal]);
+
+  // Memoized update handler
+  const updateDealField = useCallback((field: keyof typeof dealDetails, value: string) => {
+    setDealDetails((prev) => ({ ...prev, [field]: value }));
+  }, []);
+
+  const totalAmount = numericValues.saleAmount + numericValues.salesTax + numericValues.docFee - numericValues.tradeInValue;
 
   const handleNext = () => {
-    if (dealDetails.saleAmount <= 0) {
+    if (numericValues.saleAmount <= 0) {
       toast.error("Please enter a valid sale amount");
       return;
     }
 
     updateFormData({
-      ...dealDetails,
-      totalAmount: totalAmount,
+      type: dealDetails.type,
+      saleAmount: numericValues.saleAmount,
+      salesTax: numericValues.salesTax,
+      docFee: numericValues.docFee,
+      tradeInValue: numericValues.tradeInValue,
+      downPayment: numericValues.downPayment,
+      financedAmount,
+      totalAmount,
     });
 
-    setCurrentStep(4);
+    setCurrentStep(3);
     navigate({ to: "/standalone/deals/new/documents" });
   };
 
   const handleBack = () => {
-    setCurrentStep(2);
-    navigate({ to: "/standalone/deals/new/vehicle" });
+    setCurrentStep(1);
+    navigate({ to: "/standalone/deals/new/client-vehicle" });
   };
 
   return (
@@ -85,170 +185,153 @@ function DetailsStep() {
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="type">Deal Type</Label>
-            <Select
-              value={dealDetails.type}
-              onValueChange={(value) =>
-                setDealDetails({ ...dealDetails, type: value })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="retail">Retail</SelectItem>
-                <SelectItem value="wholesale">Wholesale</SelectItem>
-                <SelectItem value="lease">Lease</SelectItem>
-              </SelectContent>
-            </Select>
+      <FieldGroup>
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="space-y-4">
+            <Field>
+              <FieldLabel>Deal Type</FieldLabel>
+              <FieldContent>
+                <Select
+                  value={dealDetails.type}
+                  onValueChange={(value) => updateDealField("type", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="retail">Retail</SelectItem>
+                    <SelectItem value="wholesale">Wholesale</SelectItem>
+                    <SelectItem value="lease">Lease</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FieldContent>
+            </Field>
+
+            <Field>
+              <FieldLabel>Sale Amount *</FieldLabel>
+              <FieldContent>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={dealDetails.saleAmount}
+                    onChange={(e) => updateDealField("saleAmount", e.target.value)}
+                    className="pl-9"
+                    required
+                  />
+                </div>
+              </FieldContent>
+            </Field>
+
+            <Field>
+              <FieldLabel>Sales Tax</FieldLabel>
+              <FieldContent>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={dealDetails.salesTax}
+                    onChange={(e) => updateDealField("salesTax", e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+              </FieldContent>
+            </Field>
+
+            <Field>
+              <FieldLabel>Documentation Fee</FieldLabel>
+              <FieldContent>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={dealDetails.docFee}
+                    onChange={(e) => updateDealField("docFee", e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+              </FieldContent>
+            </Field>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="saleAmount">Sale Amount *</Label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="saleAmount"
-                type="number"
-                step="0.01"
-                value={dealDetails.saleAmount}
-                onChange={(e) =>
-                  setDealDetails({
-                    ...dealDetails,
-                    saleAmount: parseFloat(e.target.value) || 0,
-                  })
-                }
-                className="pl-9"
-                required
-              />
-            </div>
-          </div>
+          <div className="space-y-4">
+            <Field>
+              <FieldLabel>Trade-In Value</FieldLabel>
+              <FieldContent>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={dealDetails.tradeInValue}
+                    onChange={(e) => updateDealField("tradeInValue", e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+              </FieldContent>
+            </Field>
 
-          <div className="space-y-2">
-            <Label htmlFor="salesTax">Sales Tax</Label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="salesTax"
-                type="number"
-                step="0.01"
-                value={dealDetails.salesTax}
-                onChange={(e) =>
-                  setDealDetails({
-                    ...dealDetails,
-                    salesTax: parseFloat(e.target.value) || 0,
-                  })
-                }
-                className="pl-9"
-              />
-            </div>
-          </div>
+            <Field>
+              <FieldLabel>Down Payment</FieldLabel>
+              <FieldContent>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={dealDetails.downPayment}
+                    onChange={(e) => updateDealField("downPayment", e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+              </FieldContent>
+            </Field>
 
-          <div className="space-y-2">
-            <Label htmlFor="docFee">Documentation Fee</Label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="docFee"
-                type="number"
-                step="0.01"
-                value={dealDetails.docFee}
-                onChange={(e) =>
-                  setDealDetails({
-                    ...dealDetails,
-                    docFee: parseFloat(e.target.value) || 0,
-                  })
-                }
-                className="pl-9"
-              />
-            </div>
+            <Field>
+              <FieldLabel>Financed Amount</FieldLabel>
+              <FieldContent>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={financedAmount}
+                    className="pl-9 bg-muted"
+                    readOnly
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Calculated automatically
+                </p>
+              </FieldContent>
+            </Field>
           </div>
         </div>
-
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="tradeInValue">Trade-In Value</Label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="tradeInValue"
-                type="number"
-                step="0.01"
-                value={dealDetails.tradeInValue}
-                onChange={(e) =>
-                  setDealDetails({
-                    ...dealDetails,
-                    tradeInValue: parseFloat(e.target.value) || 0,
-                  })
-                }
-                className="pl-9"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="downPayment">Down Payment</Label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="downPayment"
-                type="number"
-                step="0.01"
-                value={dealDetails.downPayment}
-                onChange={(e) =>
-                  setDealDetails({
-                    ...dealDetails,
-                    downPayment: parseFloat(e.target.value) || 0,
-                  })
-                }
-                className="pl-9"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="financedAmount">Financed Amount</Label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="financedAmount"
-                type="number"
-                step="0.01"
-                value={dealDetails.financedAmount}
-                className="pl-9 bg-muted"
-                readOnly
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Calculated automatically
-            </p>
-          </div>
-        </div>
-      </div>
+      </FieldGroup>
 
       <Card className="p-6 bg-primary/5 border-primary/20">
         <h3 className="font-semibold mb-4">Deal Summary</h3>
         <div className="space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Sale Amount:</span>
-            <span className="font-medium">${dealDetails.saleAmount.toLocaleString()}</span>
+            <span className="font-medium">${numericValues.saleAmount.toLocaleString()}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Sales Tax:</span>
-            <span className="font-medium">${dealDetails.salesTax.toLocaleString()}</span>
+            <span className="font-medium">${numericValues.salesTax.toLocaleString()}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Doc Fee:</span>
-            <span className="font-medium">${dealDetails.docFee.toLocaleString()}</span>
+            <span className="font-medium">${numericValues.docFee.toLocaleString()}</span>
           </div>
-          {dealDetails.tradeInValue > 0 && (
+          {numericValues.tradeInValue > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Trade-In Value:</span>
               <span className="font-medium text-red-600">
-                -${dealDetails.tradeInValue.toLocaleString()}
+                -${numericValues.tradeInValue.toLocaleString()}
               </span>
             </div>
           )}
@@ -256,18 +339,18 @@ function DetailsStep() {
             <span className="font-semibold">Total Amount:</span>
             <span className="text-xl font-bold">${totalAmount.toLocaleString()}</span>
           </div>
-          {dealDetails.downPayment > 0 && (
+          {numericValues.downPayment > 0 && (
             <>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Down Payment:</span>
                 <span className="font-medium">
-                  ${dealDetails.downPayment.toLocaleString()}
+                  ${numericValues.downPayment.toLocaleString()}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="font-semibold">Amount Financed:</span>
                 <span className="text-lg font-bold text-primary">
-                  ${dealDetails.financedAmount.toLocaleString()}
+                  ${financedAmount.toLocaleString()}
                 </span>
               </div>
             </>
@@ -279,7 +362,7 @@ function DetailsStep() {
         <Button variant="outline" onClick={handleBack}>
           Back: Vehicle
         </Button>
-        <Button onClick={handleNext} disabled={dealDetails.saleAmount <= 0}>
+        <Button onClick={handleNext} disabled={numericValues.saleAmount <= 0}>
           Next: Documents
         </Button>
       </div>

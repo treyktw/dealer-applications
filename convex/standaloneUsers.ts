@@ -46,6 +46,18 @@ export const findByEmail = internalQuery({
 });
 
 /**
+ * Find user by ID
+ */
+export const findByUserId = internalQuery({
+  args: {
+    userId: v.id("standalone_users"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.userId);
+  },
+});
+
+/**
  * Create or find user from checkout session
  * Creates a user account if it doesn't exist, or returns existing user
  */

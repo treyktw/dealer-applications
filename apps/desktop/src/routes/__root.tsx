@@ -2,6 +2,7 @@
 import { createRootRoute, Outlet } from '@tanstack/react-router'
 import { Toaster } from 'react-hot-toast'
 import { AuthGuard } from '@/components/auth/AuthGuard'
+import { ModeRouteGuard } from '@/components/auth/ModeRouteGuard'
 import { SubscriptionProvider } from '@/lib/subscription/SubscriptionProvider'
 import { useEffect } from 'react'
 import { setupDeepLinkListener } from '@/lib/deeplink-listener'
@@ -39,7 +40,9 @@ function RootComponent() {
 
   const content = (
     <SubscriptionProvider>
-      <Outlet />
+      <ModeRouteGuard>
+        <Outlet />
+      </ModeRouteGuard>
       <Toaster
         position="top-right"
         toastOptions={{

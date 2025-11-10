@@ -6,7 +6,7 @@ import { Check, FileText, User, Car, DollarSign, Loader2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createDeal } from "@/lib/local-storage/local-deals-service";
-import { useWizard } from "./index";
+import { useWizard } from "@/lib/providers/WizardProvider";
 
 export const Route = createFileRoute("/standalone/deals/new/finalize")({
   component: FinalizeStep,
@@ -56,7 +56,7 @@ function FinalizeStep() {
   };
 
   const handleBack = () => {
-    setCurrentStep(4);
+    setCurrentStep(3);
     navigate({ to: "/standalone/deals/new/documents" });
   };
 

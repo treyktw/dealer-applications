@@ -93,11 +93,16 @@ function HomePage() {
     enabled: !isStandalone && !!user?.dealershipId && !!session?.token,
   });
 
-  // Redirect to login if not authenticated (standalone mode doesn't have AuthGuard)
+  // Redirect standalone users to standalone dashboard
   useEffect(() => {
-    if (isStandalone && !auth.isLoading && !auth.isAuthenticated) {
-      console.log("🔒 [HOMEPAGE] Not authenticated in standalone mode, redirecting to login...");
-      navigate({ to: "/standalone-login" });
+    if (isStandalone) {
+      if (!auth.isLoading && !auth.isAuthenticated) {
+        console.log("🔒 [HOMEPAGE] Not authenticated in standalone mode, redirecting to login...");
+        navigate({ to: "/standalone-login" });
+      } else if (auth.isAuthenticated) {
+        console.log("🔄 [HOMEPAGE] Standalone user on dealership route, redirecting to standalone dashboard...");
+        navigate({ to: "/standalone" });
+      }
     }
   }, [isStandalone, auth.isLoading, auth.isAuthenticated, navigate]);
 

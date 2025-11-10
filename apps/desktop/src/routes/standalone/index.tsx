@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Layout } from "@/components/layout/layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Users, Car, DollarSign, TrendingUp, ArrowRight } from "lucide-react";
+import { Plus, FileText, Users, Car, DollarSign, ArrowRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import {
   getDealsStats,
@@ -103,10 +103,10 @@ function StandaloneDashboard() {
               Welcome back! Here's your business overview
             </p>
           </div>
-          <Button onClick={() => navigate({ to: "/standalone/deals/new" })} className="gap-2">
+          <Link to="/standalone/deals" params={{ action: "new" }} className="gap-2">
             <Plus className="h-4 w-4" />
             New Deal
-          </Button>
+          </Link>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -318,40 +318,16 @@ function StandaloneDashboard() {
           )}
         </Card>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card className="p-6 cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => navigate({ to: "/standalone/deals" })}>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-semibold">Manage Deals</h3>
-              <FileText className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              View, edit, and manage all your deals
-            </p>
-          </Card>
-
-          <Card className="p-6 cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => navigate({ to: "/standalone/clients" })}>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-semibold">Manage Clients</h3>
-              <Users className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              View and manage your client relationships
-            </p>
-          </Card>
-
-          <Card className="p-6 cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => navigate({ to: "/standalone/vehicles" })}>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-semibold">Manage Inventory</h3>
-              <Car className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              View and manage your vehicle inventory
-            </p>
-          </Card>
-        </div>
+        <Card className="p-6 cursor-pointer hover:shadow-lg transition-shadow"
+          onClick={() => navigate({ to: "/standalone/deals" })}>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold">Manage Deals</h3>
+            <FileText className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <p className="text-sm text-muted-foreground">
+            View, edit, and manage all your deals
+          </p>
+        </Card>
       </div>
     </Layout>
   );

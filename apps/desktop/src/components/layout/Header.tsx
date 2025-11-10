@@ -166,11 +166,11 @@ export function Header({ sidebarOpen }: HeaderProps) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate({ to: "/profile" })}>
+              <DropdownMenuItem onClick={() => navigate({ to: isStandalone ? "/standalone/profile" : "/profile" })}>
                 <User className="mr-2 h-4 w-4" />
                 Profile & Account
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate({ to: "/subscription" })}>
+              <DropdownMenuItem onClick={() => navigate({ to: isStandalone ? "/standalone/subscription" : "/subscription" })}>
                 <CreditCard className="mr-2 h-4 w-4" />
                 Subscription
                 {subscription && (
@@ -179,7 +179,7 @@ export function Header({ sidebarOpen }: HeaderProps) {
                   </Badge>
                 )}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate({ to: "/settings" })}>
+              <DropdownMenuItem onClick={() => navigate({ to: isStandalone ? "/standalone/settings" : "/settings" })}>
                 <Settings className="mr-2 h-4 w-4" />
                 Settings
               </DropdownMenuItem>

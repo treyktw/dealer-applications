@@ -7,6 +7,7 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery, query, mutation, action } from "./_generated/server";
 import { getStripeClient } from "./lib/stripe/client";
 import { PRICING_CONFIG } from "./lib/pricing";
+import { api, internal } from "./_generated/api";
 
 /**
  * Create a new subscription (called by Stripe webhook)
@@ -165,6 +166,40 @@ export const getUserSubscription = query({
       .query("standalone_subscriptions")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
+  },
+});
+
+/**
+ * Create Stripe billing portal session
+ */
+export const createBillingPortalSession = action({
+  args: {
+    userId: v.id("standalone_users"),
+    returnUrl: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.runQuery(internal.standaloneUsers.findByUserId, {
+      userId: args.userId,
+    });
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    if (!user.stripeCustomerId) {
+      throw new Error("No Stripe customer ID found");
+    }
+
+    const stripe = await getStripeClient();
+
+    const portalSession = await stripe.billingPortal.sessions.create({
+      customer: user.stripeCustomerId,
+      return_url: args.returnUrl,
+    });
+
+    return {
+      url: portalSession.url,
+    };
   },
 });
 
