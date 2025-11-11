@@ -43,9 +43,9 @@ export function GeneratedDocumentsGrid({ documents, onStatusChanged }: Generated
   const [isLoading, setIsLoading] = useState(false);
 
   const updateStatus = useMutation({
-    mutationFn: async ({ documentId, status }: { documentId: Id<"documentInstances">; status: string }) => {
+    mutationFn: async ({ documentId, status }: { documentId: Id<"documentInstances">; status: "DRAFT" | "READY" | "SIGNED" | "VOID" | "FINALIZING" | "FINALIZED" }) => {
       if (!session?.token) throw new Error("No session token");
-      return convexMutation((api as any).documents.generator.updateDocumentStatus, {
+      return convexMutation(api.api.documents.generator.updateDocumentStatus, {
         documentId,
         status,
         token: session.token,
@@ -116,7 +116,7 @@ export function GeneratedDocumentsGrid({ documents, onStatusChanged }: Generated
                 className="mt-2 w-full h-8 rounded-md border bg-background text-sm"
                 id={`status-${doc._id}`}
                 value={doc.status || "READY"}
-                onChange={(e) => updateStatus.mutate({ documentId: doc._id, status: e.target.value })}
+                onChange={(e) => updateStatus.mutate({ documentId: doc._id, status: e.target.value as "DRAFT" | "READY" | "SIGNED" | "VOID" | "FINALIZING" | "FINALIZED" })}
                 disabled={updateStatus.isPending}
               >
                 <option value="DRAFT">Draft</option>

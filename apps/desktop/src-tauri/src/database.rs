@@ -13,6 +13,8 @@ use std::sync::{Arc, Mutex};
 
 use std::fs;
 
+use crate::storage::get_app_data_dir;
+
 // Database connection wrapper
 pub struct Database {
     conn: Arc<Mutex<Connection>>,

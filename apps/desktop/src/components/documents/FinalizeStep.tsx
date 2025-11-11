@@ -388,7 +388,7 @@ export function FinalizeStep({
       const targets = (documents || []).filter((d) => (d.status || '').toUpperCase() !== 'FINALIZED');
       await Promise.all(
         targets.map((d) =>
-          convexMutation((api as any).documents.generator.updateDocumentStatus, {
+          convexMutation(api.api.documents.generator.updateDocumentStatus, {
             documentId: d._id as Id<"documentInstances">,
             status: "FINALIZED",
             token: sessionToken,
