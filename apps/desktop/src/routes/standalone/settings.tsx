@@ -36,7 +36,6 @@ import { getSyncStatus, getLastSyncAt, formatLastSyncTime, type SyncStatus } fro
 import { Badge } from "@/components/ui/badge";
 import {
   promptSelectDocumentsDirectory,
-  hasDocumentsRootPath,
   getDocumentsPath,
 } from "@/lib/sqlite/local-documents-service";
 

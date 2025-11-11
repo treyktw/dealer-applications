@@ -7,9 +7,9 @@
  * - Standalone desktop app data portability
  */
 
-import { internalMutation, internalQuery, mutation, query } from "../_generated/server";
+import { internalMutation, query } from "../_generated/server";
 import { v } from "convex/values";
-import type { Doc, Id } from "../_generated/dataModel";
+import type { Id } from "../_generated/dataModel";
 
 /**
  * Export complete dealership data
@@ -61,32 +61,46 @@ export const exportDealershipData = query({
     ] = await Promise.all([
       ctx.db
         .query("users")
-        .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId))
+        .withIndex("by_dealership", (q) =>
+          q.eq("dealershipId", args.dealershipId)
+        )
         .collect(),
       ctx.db
         .query("clients")
-        .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId.toString()))
+        .withIndex("by_dealership", (q) =>
+          q.eq("dealershipId", args.dealershipId.toString())
+        )
         .collect(),
       ctx.db
         .query("vehicles")
-        .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId.toString()))
+        .withIndex("by_dealership", (q) =>
+          q.eq("dealershipId", args.dealershipId.toString())
+        )
         .collect(),
       ctx.db
         .query("deals")
-        .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId.toString()))
+        .withIndex("by_dealership", (q) =>
+          q.eq("dealershipId", args.dealershipId.toString())
+        )
         .collect(),
       ctx.db.query("documents").collect(), // Will filter by dealId
       ctx.db
         .query("documentTemplates")
-        .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId))
+        .withIndex("by_dealership", (q) =>
+          q.eq("dealershipId", args.dealershipId)
+        )
         .collect(),
       ctx.db
         .query("notifications")
-        .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId))
+        .withIndex("by_dealership", (q) =>
+          q.eq("dealershipId", args.dealershipId)
+        )
         .collect(),
       ctx.db
         .query("file_uploads")
-        .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId))
+        .withIndex("by_dealership", (q) =>
+          q.eq("dealershipId", args.dealershipId)
+        )
         .collect(),
     ]);
 
@@ -145,7 +159,6 @@ export const importDealershipData = internalMutation({
     console.log(`Starting data import for dealership: ${args.dealershipId}`);
 
     const data = args.data;
-    const { overwrite = false } = args;
 
     // Validate data structure
     if (!data.version || !data.exportedAt) {
@@ -167,7 +180,7 @@ export const importDealershipData = internalMutation({
       templates: new Map(),
     };
 
-    let stats = {
+    const stats = {
       clientsImported: 0,
       vehiclesImported: 0,
       dealsImported: 0,
@@ -218,7 +231,9 @@ export const importDealershipData = internalMutation({
         const vehicleId = idMaps.vehicles.get(dealData.vehicleId);
 
         if (!clientId || !vehicleId) {
-          console.warn(`Skipping deal ${oldId}: missing client or vehicle mapping`);
+          console.warn(
+            `Skipping deal ${oldId}: missing client or vehicle mapping`
+          );
           continue;
         }
 
@@ -309,21 +324,26 @@ export const exportDeals = query({
     }
 
     // Query deals with filters
-    let dealsQuery = ctx.db
+    const dealsQuery = ctx.db
       .query("deals")
-      .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId.toString()));
+      .withIndex("by_dealership", (q) =>
+        q.eq("dealershipId", args.dealershipId.toString())
+      );
 
     let deals = await dealsQuery.collect();
 
     // Apply filters
-    if (args.startDate) {
-      deals = deals.filter((d) => d.createdAt >= args.startDate!);
+    if (args.startDate !== undefined) {
+      const startDate = args.startDate;
+      deals = deals.filter((d) => d.createdAt >= startDate);
     }
-    if (args.endDate) {
-      deals = deals.filter((d) => d.createdAt <= args.endDate!);
+    if (args.endDate !== undefined) {
+      const endDate = args.endDate;
+      deals = deals.filter((d) => d.createdAt <= endDate);
     }
-    if (args.status) {
-      deals = deals.filter((d) => d.status === args.status);
+    if (args.status !== undefined) {
+      const status = args.status;
+      deals = deals.filter((d) => d.status === status);
     }
 
     // Get related data for each deal
@@ -394,27 +414,37 @@ export const getExportMetadata = query({
     ] = await Promise.all([
       ctx.db
         .query("users")
-        .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId))
+        .withIndex("by_dealership", (q) =>
+          q.eq("dealershipId", args.dealershipId)
+        )
         .collect()
         .then((r) => r.length),
       ctx.db
         .query("clients")
-        .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId.toString()))
+        .withIndex("by_dealership", (q) =>
+          q.eq("dealershipId", args.dealershipId.toString())
+        )
         .collect()
         .then((r) => r.length),
       ctx.db
         .query("vehicles")
-        .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId.toString()))
+        .withIndex("by_dealership", (q) =>
+          q.eq("dealershipId", args.dealershipId.toString())
+        )
         .collect()
         .then((r) => r.length),
       ctx.db
         .query("deals")
-        .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId.toString()))
+        .withIndex("by_dealership", (q) =>
+          q.eq("dealershipId", args.dealershipId.toString())
+        )
         .collect()
         .then((r) => r.length),
       ctx.db
         .query("documentTemplates")
-        .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId))
+        .withIndex("by_dealership", (q) =>
+          q.eq("dealershipId", args.dealershipId)
+        )
         .collect()
         .then((r) => r.length),
     ]);
@@ -426,7 +456,12 @@ export const getExportMetadata = query({
       totalVehicles: vehiclesCount,
       totalDeals: dealsCount,
       totalTemplates: templatesCount,
-      estimatedExportSize: "~" + Math.ceil((usersCount + clientsCount + vehiclesCount + dealsCount * 2) / 100) + "MB",
+      estimatedExportSize:
+        "~" +
+        Math.ceil(
+          (usersCount + clientsCount + vehiclesCount + dealsCount * 2) / 100
+        ) +
+        "MB",
     };
   },
 });

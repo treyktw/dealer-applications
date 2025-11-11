@@ -98,7 +98,10 @@ function HomePage() {
     if (isStandalone) {
       if (!auth.isLoading && !auth.isAuthenticated) {
         console.log("🔒 [HOMEPAGE] Not authenticated in standalone mode, redirecting to login...");
-        navigate({ to: "/standalone-login" });
+        navigate({ 
+          to: "/standalone-login",
+          search: { email: "" }
+        });
       } else if (auth.isAuthenticated) {
         console.log("🔄 [HOMEPAGE] Standalone user on dealership route, redirecting to standalone dashboard...");
         navigate({ to: "/standalone" });

@@ -14,6 +14,7 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { Loader2, CheckCircle2, AlertCircle, Key, ArrowRight } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface AccountSetupProps {
   email: string;
@@ -37,6 +38,7 @@ export function AccountSetup({ email }: AccountSetupProps) {
   const confirmPasswordId = useId();
 
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const completeAccountSetup = useMutation(api.api.standaloneAuth.completeAccountSetup);
   const activateLicense = useMutation(api.api.licenses.activateLicense);
 
@@ -70,7 +72,7 @@ export function AccountSetup({ email }: AccountSetupProps) {
         businessName: businessName.trim() || undefined,
       });
 
-      if (result.success && result.sessionToken && result.user.licenseKey) {
+      if (result.success && result.user.licenseKey) {
         console.log("✅ Account setup complete:", result);
         
         setLicenseKey(result.user.licenseKey);
@@ -83,8 +85,8 @@ export function AccountSetup({ email }: AccountSetupProps) {
 
         console.log("🔑 Auto-activating license:", result.user.licenseKey);
 
-        // Auto-activate the license
-        await activateLicense({
+        // Auto-activate the license (this will create a session)
+        const activationResult = await activateLicense({
           licenseKey: result.user.licenseKey,
           machineId,
           platform,
@@ -95,11 +97,35 @@ export function AccountSetup({ email }: AccountSetupProps) {
         // Store license key securely
         await invoke("store_license", { licenseKey: result.user.licenseKey });
         
-        console.log("✅ License activated and stored");
+        // Store session token if provided (from license activation)
+        if (activationResult.sessionToken && activationResult.userId) {
+          const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
+          
+          if (isTauri) {
+            try {
+              await invoke("store_session_token", { token: activationResult.sessionToken });
+              console.log("✅ [ACCOUNT-SETUP] Session token stored in secure storage");
+              localStorage.setItem("standalone_user_id", activationResult.userId);
+              
+              // Update react-query cache to trigger auth refresh
+              queryClient.setQueryData(["stored-session-token"], activationResult.sessionToken);
+              queryClient.invalidateQueries({ queryKey: ["standalone-session"] });
+              queryClient.invalidateQueries({ queryKey: ["user-license-check"] });
+              queryClient.invalidateQueries({ queryKey: ["license-validation"] });
+            } catch (error) {
+              console.error("❌ [ACCOUNT-SETUP] Failed to store session token:", error);
+            }
+          }
+        }
+        
+        console.log("✅ License activated and stored, session created");
         
         setSuccess(true);
         
-        // Don't auto-redirect - let user manually continue
+        // Auto-redirect after a short delay to show success message
+        setTimeout(() => {
+          navigate({ to: "/standalone" });
+        }, 2000);
       } else {
         setError("Failed to complete account setup. Please try again.");
       }

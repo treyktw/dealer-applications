@@ -1,7 +1,7 @@
 /**
  * Stripe Webhook Handler for License Purchases
  * @deprecated This webhook is deprecated. We now use subscriptions only.
- * License purchases are handled via subscription webhooks in stripeWebhook.ts
+ * License purchases are handled via subscription webhooks in stripe_webhook.ts
  * This file is kept for backward compatibility with existing one-time purchases.
  */
 

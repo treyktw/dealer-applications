@@ -28,7 +28,7 @@ export function AppLoader({ steps, currentStep }: AppLoaderProps) {
 
           {/* Loading Steps */}
           <div className="space-y-4">
-            {steps.map((step, index) => {
+            {steps.map((step) => {
               const isActive = step.id === currentStep || step.status === "loading";
               const isComplete = step.status === "complete";
               const isError = step.status === "error";

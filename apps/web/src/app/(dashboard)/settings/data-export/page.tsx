@@ -1,18 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useState, useEffect, useRef } from "react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Download, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export default function DataExportPage() {
-  const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
   const [exportComplete, setExportComplete] = useState(false);
+  const hasDownloadedRef = useRef(false);
 
   // Get current user's dealership
   const currentUser = useQuery(api.users.getCurrentUser, {});
@@ -24,62 +24,76 @@ export default function DataExportPage() {
     dealershipId ? { dealershipId } : "skip"
   );
 
-  // Export mutation
+  // Export query - triggers when isExporting is true
   const exportData = useQuery(
     api.lib.export.exportDealershipData,
     dealershipId && isExporting ? { dealershipId } : "skip"
   );
 
+  // Handle export completion and download
+  useEffect(() => {
+    if (exportData && isExporting && !exportComplete && !hasDownloadedRef.current) {
+      try {
+        // Create downloadable JSON file
+        const dataStr = JSON.stringify(exportData, null, 2);
+        const dataBlob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(dataBlob);
+
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `dealership-export-${Date.now()}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        hasDownloadedRef.current = true;
+        setExportComplete(true);
+        setIsExporting(false);
+
+        toast.success("Export completed successfully");
+      } catch (error) {
+        console.error("Error creating download:", error);
+        toast.error("Failed to create download file");
+        setIsExporting(false);
+        hasDownloadedRef.current = false;
+      }
+    }
+  }, [exportData, isExporting, exportComplete]);
+
+  // Handle query errors - if query is skipped or fails
+  useEffect(() => {
+    // Only check for errors if we're exporting and the query should be active
+    if (isExporting && dealershipId && exportData === undefined && currentUser !== undefined) {
+      // Give the query time to start loading
+      const timeout = setTimeout(() => {
+        // If still exporting and no data after reasonable time, likely an error
+        if (isExporting && exportData === undefined) {
+          console.error("Export query failed or timed out");
+          toast.error("Failed to export data. Please check your permissions and try again.");
+          setIsExporting(false);
+          hasDownloadedRef.current = false;
+        }
+      }, 10000); // Wait 10 seconds for large exports
+
+      return () => clearTimeout(timeout);
+    }
+  }, [isExporting, exportData, currentUser, dealershipId]);
+
   const handleExport = async () => {
     if (!dealershipId) {
-      toast({
-        title: "Error",
-        description: "No dealership found",
-        variant: "destructive",
-      });
+      toast.error("No dealership found");
       return;
     }
 
+    // Reset state
     setIsExporting(true);
     setExportComplete(false);
+    hasDownloadedRef.current = false;
 
-    try {
-      // Wait for export data to be fetched
-      // The query will trigger automatically when isExporting becomes true
-    } catch (error) {
-      console.error("Export error:", error);
-      toast({
-        title: "Export Failed",
-        description: "Failed to export data. Please try again.",
-        variant: "destructive",
-      });
-      setIsExporting(false);
-    }
+    // The query will trigger automatically when isExporting becomes true
+    // The useEffect hook will handle the download when data is ready
   };
-
-  // Handle export completion
-  if (exportData && isExporting && !exportComplete) {
-    // Create downloadable JSON file
-    const dataStr = JSON.stringify(exportData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(dataBlob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `dealership-export-${Date.now()}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    setExportComplete(true);
-    setIsExporting(false);
-
-    toast({
-      title: "Export Complete",
-      description: "Your data has been exported successfully.",
-    });
-  }
 
   return (
     <div className="container max-w-4xl py-8">

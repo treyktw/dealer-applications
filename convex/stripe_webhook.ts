@@ -120,7 +120,7 @@ export const handleStripeWebhook = internalAction({
             });
 
             // Generate license key for this subscription
-            const licenseKey = await ctx.runMutation(internal.licenses.generateAndCreateLicense, {
+            const { licenseId, licenseKey } = await ctx.runMutation(internal.licenses.generateAndCreateLicense, {
               customerEmail,
               stripeCustomerId,
               stripeSubscriptionId: subscriptionId,
@@ -130,6 +130,8 @@ export const handleStripeWebhook = internalAction({
               amount: subscription.items.data[0].price.unit_amount || 0,
               currency: subscription.items.data[0].price.currency,
             });
+
+            console.log(`✅ License created: ${licenseId} (${licenseKey}) for subscription ${subscriptionId}`);
 
             // Create subscription record (this also links it to the user)
             await ctx.runMutation(internal.standaloneSubscriptions.create, {

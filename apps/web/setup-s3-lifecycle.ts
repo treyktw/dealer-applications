@@ -15,10 +15,11 @@
  *   node scripts/setup-s3-lifecycle.js (if compiled)
  */
 
+import { BUCKET_NAME, s3Client } from "@/lib/s3-client";
 import {
-  S3Client,
   PutBucketLifecycleConfigurationCommand,
   GetBucketLifecycleConfigurationCommand,
+  type BucketLifecycleConfiguration,
 } from "@aws-sdk/client-s3";
 
 // Load environment variables from process.env (ensure .env.local is loaded)
@@ -33,23 +34,14 @@ if (!process.env.AWS_REGION || !process.env.AWS_ACCESS_KEY_ID ||
   process.exit(1);
 }
 
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION!,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
-
-const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME!;
 
 async function setupLifecyclePolicies() {
   console.log(`Setting up lifecycle policies for bucket: ${BUCKET_NAME}`);
 
-  const lifecycleConfiguration = {
+  const lifecycleConfiguration: BucketLifecycleConfiguration = {
     Rules: [
       {
-        Id: "cleanup-incomplete-multipart-uploads",
+        ID: "cleanup-incomplete-multipart-uploads",
         Status: "Enabled",
         Filter: {},
         AbortIncompleteMultipartUpload: {
@@ -57,7 +49,7 @@ async function setupLifecyclePolicies() {
         },
       },
       {
-        Id: "cleanup-temporary-files",
+        ID: "cleanup-temporary-files",
         Status: "Enabled",
         Filter: {
           Prefix: "temp/",
@@ -67,7 +59,7 @@ async function setupLifecyclePolicies() {
         },
       },
       {
-        Id: "cleanup-logs",
+        ID: "cleanup-logs",
         Status: "Enabled",
         Filter: {
           Prefix: "logs/",
@@ -93,8 +85,8 @@ async function setupLifecyclePolicies() {
       });
       const existing = await s3Client.send(getCommand);
       console.log("Existing lifecycle configuration:", JSON.stringify(existing, null, 2));
-    } catch (error: any) {
-      if (error.name === "NoSuchLifecycleConfiguration") {
+    } catch (error) {
+      if (error instanceof Error && (error as { name?: string }).name === "NoSuchLifecycleConfiguration") {
         console.log("No existing lifecycle configuration found.");
       } else {
         throw error;
@@ -110,8 +102,8 @@ async function setupLifecyclePolicies() {
     await s3Client.send(command);
     console.log("✅ Lifecycle policies configured successfully!");
     console.log("\nConfigured rules:");
-    lifecycleConfiguration.Rules.forEach((rule) => {
-      console.log(`  - ${rule.Id}: ${rule.Status}`);
+    lifecycleConfiguration.Rules?.forEach((rule) => {
+      console.log(`  - ${rule.ID}: ${rule.Status}`);
     });
 
     console.log("\n📝 Note: Deal-specific document cleanup is handled by Convex scheduled jobs.");

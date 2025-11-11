@@ -48,15 +48,9 @@ import {
 import { getClient } from "@/lib/sqlite/local-clients-service";
 import { getVehicle } from "@/lib/sqlite/local-vehicles-service";
 import { useUnifiedAuth } from "@/components/auth/useUnifiedAuth";
-import type {
-  LocalDeal,
-} from "@/lib/sqlite/local-deals-service";
-import type {
-  LocalClient,
-} from "@/lib/sqlite/local-clients-service";
-import type {
-  LocalVehicle,
-} from "@/lib/sqlite/local-vehicles-service";
+import type { LocalDeal } from "@/lib/sqlite/local-deals-service";
+import type { LocalClient } from "@/lib/sqlite/local-clients-service";
+import type { LocalVehicle } from "@/lib/sqlite/local-vehicles-service";
 
 export const Route = createFileRoute("/standalone/deals/")({
   component: DealsPage,
@@ -90,24 +84,25 @@ function DealsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const { data: deals, isLoading } = useQuery({
+  const { data: deals } = useQuery({
     queryKey: ["standalone-deals", searchQuery, statusFilter, auth.user?.id],
     queryFn: async () => {
       if (!auth.user?.id) return [];
-      
+      const userId = auth.user.id;
+
       let dealsList: LocalDeal[] = [];
 
       if (searchQuery) {
-        dealsList = await searchDeals(searchQuery, auth.user.id);
+        dealsList = await searchDeals(searchQuery, userId);
       } else if (statusFilter !== "all") {
-        dealsList = await getDealsByStatus(statusFilter, auth.user.id);
+        dealsList = await getDealsByStatus(statusFilter, userId);
       } else {
-        dealsList = await getAllDeals(auth.user.id);
+        dealsList = await getAllDeals(userId);
       }
 
       const dealsWithDetails: DealWithDetails[] = await Promise.all(
         dealsList.map(async (deal) => {
-          const client = await getClient(deal.client_id, auth.user.id);
+          const client = await getClient(deal.client_id, userId);
           const vehicle = await getVehicle(deal.vehicle_id);
           return {
             ...deal,
@@ -215,20 +210,23 @@ function DealsPage() {
 
   const handleNewDeal = () => {
     console.log("🔵 [DEALS] handleNewDeal called");
-    
+
     // Prevent multiple rapid clicks
     const now = Date.now();
-    const lastClick = (window as { lastNewDealClick?: number }).lastNewDealClick;
+    const lastClick = (window as { lastNewDealClick?: number })
+      .lastNewDealClick;
     if (lastClick && now - lastClick < 500) {
       console.log("⚠️ [DEALS] Ignoring rapid click");
       return;
     }
     (window as { lastNewDealClick?: number }).lastNewDealClick = now;
-    
+
     // Navigate directly to the first step of the wizard
-    console.log("🔵 [DEALS] Navigating to /standalone/deals/new/client-vehicle");
+    console.log(
+      "🔵 [DEALS] Navigating to /standalone/deals/new/client-vehicle"
+    );
     navigate({ to: "/standalone/deals/new/client-vehicle" });
-  }
+  };
 
   const dealsList = deals || [];
 
@@ -244,10 +242,7 @@ function DealsPage() {
               <Download className="h-4 w-4" />
               Export CSV
             </Button>
-            <Button
-              onClick={handleNewDeal}
-              className="gap-2"
-            >
+            <Button onClick={handleNewDeal} className="gap-2">
               <Plus className="h-4 w-4" />
               New Deal
             </Button>

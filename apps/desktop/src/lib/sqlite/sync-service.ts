@@ -89,13 +89,42 @@ async function uploadChanges(
     documents: 0,
   };
 
+  // Helper function to safely include optional string fields (convert null to empty string)
+  const includeIfValue = (obj: any, key: string, value: string | null | undefined) => {
+    if (value !== undefined) {
+      // Convert null to empty string, otherwise use the value
+      obj[key] = value === null ? "" : value;
+    }
+  };
+
+  // Helper function to safely include optional number fields (exclude null/undefined)
+  const includeIfNumber = (obj: any, key: string, value: number | null | undefined) => {
+    if (value !== null && value !== undefined) {
+      obj[key] = value;
+    }
+  };
+
   try {
     // Upload clients modified since lastSyncAt
     const clients = await getAllClients(userId);
     for (const client of clients) {
       if (!client.synced_at || client.synced_at < lastSyncAt || client.updated_at > lastSyncAt) {
-        // Build client object, explicitly converting null to undefined
-        const clientData: any = {
+        // Build client object with only required fields first
+        const clientData: {
+          id: string;
+          first_name: string;
+          last_name: string;
+          created_at: number;
+          updated_at: number;
+          email?: string;
+          phone?: string;
+          address?: string;
+          city?: string;
+          state?: string;
+          zip_code?: string;
+          drivers_license?: string;
+          synced_at?: number;
+        } = {
           id: client.id,
           first_name: client.first_name,
           last_name: client.last_name,
@@ -103,31 +132,15 @@ async function uploadChanges(
           updated_at: client.updated_at,
         };
 
-        // Only include optional fields if they're not null
-        if (client.email !== null && client.email !== undefined) {
-          clientData.email = client.email;
-        }
-        if (client.phone !== null && client.phone !== undefined) {
-          clientData.phone = client.phone;
-        }
-        if (client.address !== null && client.address !== undefined) {
-          clientData.address = client.address;
-        }
-        if (client.city !== null && client.city !== undefined) {
-          clientData.city = client.city;
-        }
-        if (client.state !== null && client.state !== undefined) {
-          clientData.state = client.state;
-        }
-        if (client.zip_code !== null && client.zip_code !== undefined) {
-          clientData.zip_code = client.zip_code;
-        }
-        if (client.drivers_license !== null && client.drivers_license !== undefined) {
-          clientData.drivers_license = client.drivers_license;
-        }
-        if (client.synced_at !== null && client.synced_at !== undefined) {
-          clientData.synced_at = client.synced_at;
-        }
+        // Safely include optional fields (convert null to empty string)
+        includeIfValue(clientData, "email", client.email);
+        includeIfValue(clientData, "phone", client.phone);
+        includeIfValue(clientData, "address", client.address);
+        includeIfValue(clientData, "city", client.city);
+        includeIfValue(clientData, "state", client.state);
+        includeIfValue(clientData, "zip_code", client.zip_code);
+        includeIfValue(clientData, "drivers_license", client.drivers_license);
+        includeIfNumber(clientData, "synced_at", client.synced_at);
 
         await convexMutation(api.api.standaloneSync.uploadClient, {
           userId,

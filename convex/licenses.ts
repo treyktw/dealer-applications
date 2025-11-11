@@ -355,9 +355,12 @@ export const generateAndCreateLicense = internalMutation({
       updatedAt: now,
     });
 
-    console.log(`✅ License ${licenseKey} created for subscription ${args.stripeSubscriptionId}`);
+    console.log(`✅ License created: ${licenseId} (${licenseKey}) for subscription ${args.stripeSubscriptionId}`);
 
-    return licenseKey;
+    return {
+      licenseId,
+      licenseKey,
+    };
   },
 });
 

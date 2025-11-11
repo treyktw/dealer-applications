@@ -7,7 +7,7 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery, query, mutation, action } from "./_generated/server";
 import { getStripeClient } from "./lib/stripe/client";
 import { PRICING_CONFIG } from "./lib/pricing";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 
 /**
  * Create a new subscription (called by Stripe webhook)

@@ -23,13 +23,20 @@ import { setAppMode } from "@/lib/mode-detection";
 
 export const Route = createFileRoute("/standalone-login")({
   component: StandaloneLoginPage,
+  validateSearch: (search: Record<string, unknown>): { email: string; redirect?: string } => {
+    return {
+      email: (search.email as string) || "",
+      redirect: search.redirect ? (search.redirect as string) : undefined,
+    };
+  },
 });
 
 function StandaloneLoginPage() {
   const navigate = useNavigate();
   const auth = useUnifiedAuth();
   const queryClient = useQueryClient();
-  const [email, setEmail] = useState("");
+  const { email: emailFromSearch } = Route.useSearch();
+  const [email, setEmail] = useState(emailFromSearch || "");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [checkingUserType, setCheckingUserType] = useState(false);
@@ -69,6 +76,13 @@ function StandaloneLoginPage() {
     }
     getMachineId();
   }, []);
+
+  // Update email when search parameter changes
+  useEffect(() => {
+    if (emailFromSearch) {
+      setEmail(emailFromSearch);
+    }
+  }, [emailFromSearch]);
 
   // Redirect if already authenticated
   useEffect(() => {

@@ -9,12 +9,9 @@
  */
 
 import { internalMutation } from "../_generated/server";
-import { v } from "convex/values";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { s3Client, BUCKET_NAME } from "../../apps/web/src/lib/s3-client";
 import {
-  generateDealDocumentPath,
-  generateCustomDocumentPath,
   isDealDocumentKey,
   isCustomDocumentKey,
   parseDealIdFromKey,
@@ -124,8 +121,8 @@ export const cleanupDealDocuments = internalMutation({
           .collect();
 
         for (const document of documents) {
-          // Delete from S3 if documentUrl exists
-          if (document.documentUrl) {
+          // Delete from S3 if documentUrl exists and is a deal document
+          if (document.documentUrl && isDealDocumentKey(document.documentUrl)) {
             const deleted = await deleteFromS3(document.documentUrl);
             if (deleted) {
               totalS3ObjectsDeleted++;
@@ -144,15 +141,18 @@ export const cleanupDealDocuments = internalMutation({
           .collect();
 
         for (const file of fileUploads) {
-          // Check if this file belongs to the deal
-          if (file.s3Key && file.s3Key.includes(`/deals/${deal._id}/`)) {
-            const deleted = await deleteFromS3(file.s3Key);
-            if (deleted) {
-              totalS3ObjectsDeleted++;
-            }
+          // Check if this file belongs to the deal using proper path parsing
+          if (file.s3Key && isCustomDocumentKey(file.s3Key)) {
+            const dealIdFromKey = parseDealIdFromKey(file.s3Key);
+            if (dealIdFromKey === deal._id) {
+              const deleted = await deleteFromS3(file.s3Key);
+              if (deleted) {
+                totalS3ObjectsDeleted++;
+              }
 
-            // Delete file record
-            await ctx.db.delete(file._id);
+              // Delete file record
+              await ctx.db.delete(file._id);
+            }
           }
         }
 

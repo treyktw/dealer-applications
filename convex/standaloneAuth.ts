@@ -687,3 +687,48 @@ export const checkSubscription = query({
     return { valid: false, reason: "subscription_inactive" };
   },
 });
+
+/**
+ * Watch subscription status by email (websocket-based, reactive)
+ * Automatically updates when subscription status changes
+ */
+export const watchSubscriptionStatusByEmail = query({
+  args: {
+    email: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("standalone_users")
+      .withIndex("by_email", (q) => q.eq("email", args.email.toLowerCase()))
+      .first();
+
+    if (!user) {
+      return {
+        found: false,
+        hasSubscription: false,
+        subscriptionStatus: null,
+        hasPassword: false,
+        userId: null,
+        licenseKey: null,
+      };
+    }
+
+    // Get subscription details if exists
+    let subscription = null;
+    if (user.subscriptionId) {
+      subscription = await ctx.db.get(user.subscriptionId);
+    }
+
+    return {
+      found: true,
+      hasSubscription: !!user.subscriptionId,
+      subscriptionStatus: user.subscriptionStatus,
+      subscriptionActive: user.subscriptionStatus === "active" && subscription?.status === "active",
+      hasPassword: !!(user.passwordHash && user.passwordHash.length > 0),
+      userId: user._id,
+      licenseKey: user.licenseKey || null,
+      email: user.email,
+      name: user.name,
+    };
+  },
+});

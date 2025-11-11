@@ -65,10 +65,12 @@ function StandaloneDashboard() {
     queryKey: ["standalone-recent-deals", auth.user?.id],
     queryFn: async () => {
       if (!auth.user?.id) return [];
-      const deals = await getRecentDeals(10, auth.user.id);
+      const userId = auth.user.id;
+      const deals = await getRecentDeals(10, userId);
       const dealsWithDetails: DealWithDetails[] = await Promise.all(
         deals.map(async (deal) => {
-          const client = await getClient(deal.client_id, auth.user.id);
+          const client = await getClient(deal.client_id, userId);
+          
           const vehicle = await getVehicle(deal.vehicle_id);
           return {
             ...deal,

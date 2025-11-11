@@ -19,9 +19,6 @@ import { invoke } from '@tauri-apps/api/core';
 // Create a shared Convex client instance
 const client = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL);
 
-// Storage key for auth token
-const STORAGE_KEY = 'dealer_auth_token';
-
 // Helper to get stored token
 // SECURITY: Uses specific dealership auth token command instead of generic secure storage
 export async function getStoredToken(): Promise<string | null> {

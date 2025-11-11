@@ -42,7 +42,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
         const returnTo = `${currentPath}${location.search ? `?${location.search}` : ''}`;
         navigate({ 
           to: '/standalone-login',
-          search: { redirect: returnTo }
+          search: { email: "", redirect: returnTo }
         });
         return;
       }

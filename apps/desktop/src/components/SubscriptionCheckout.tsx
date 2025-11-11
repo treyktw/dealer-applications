@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Alert, AlertDescription } from "./ui/alert";
-import { CheckCircle2, AlertCircle, Loader2, ShoppingCart, Check } from "lucide-react";
+import { AlertCircle, Loader2, ShoppingCart, Check } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useSubscriptionListener } from "../hooks/useSubscriptionListener";
 import { formatPrice, PRICING_CONFIG } from "../lib/pricing";
@@ -34,29 +34,54 @@ export function SubscriptionCheckout({ onSuccess }: SubscriptionCheckoutProps) {
   
   // Handle navigation when subscription is detected
   const handleSubscriptionDetected = async (email: string) => {
-    console.log("🎯 Subscription detected for:", email);
+    console.log("🎯 [SUBSCRIPTION-CHECKOUT] Subscription detected for:", email);
     
     try {
-      // Check if user already has a password (existing account)
-      // If they do, they don't need account setup - just redirect to home
-      // The LicenseAuthContext will auto-activate the license
+      // Check subscription status (websocket will auto-update)
       const { convexQuery } = await import("@/lib/convex");
-      const result = await convexQuery(api.api.standaloneAuth.checkAccountSetupNeeded, { email }) as { needsSetup: boolean; user?: { email: string } } | null | undefined;
+      const status = await convexQuery(api.api.standaloneAuth.watchSubscriptionStatusByEmail, { email }) as {
+        found: boolean;
+        subscriptionActive: boolean;
+        hasPassword: boolean;
+        email: string;
+      } | null | undefined;
       
-      if (result?.needsSetup) {
-        // User needs account setup (no password)
-        console.log("🎯 User needs account setup, navigating to account setup page");
-        navigate({ 
-          to: "/account-setup",
-          search: { email }
-        });
+      console.log("🎯 [SUBSCRIPTION-CHECKOUT] Status check:", status);
+      
+      if (!status?.found) {
+        console.log("⚠️ [SUBSCRIPTION-CHECKOUT] User not found, waiting...");
+        return; // Wait for user to be created
+      }
+      
+      if (status.subscriptionActive) {
+        // Subscription is active - call onSuccess callback
+        if (onSuccess) {
+          console.log("✅ [SUBSCRIPTION-CHECKOUT] Calling onSuccess callback");
+          onSuccess();
+        }
+        
+        if (!status.hasPassword) {
+          // User needs account setup (no password)
+          console.log("🎯 [SUBSCRIPTION-CHECKOUT] User needs account setup, navigating to account setup page");
+          navigate({ 
+            to: "/account-setup",
+            search: { email }
+          });
+        } else {
+          // User already has password - navigate to login with email pre-filled
+          // They'll need to enter password, but email will be pre-filled
+          console.log("🎯 [SUBSCRIPTION-CHECKOUT] User has password, navigating to login");
+          navigate({ 
+            to: "/standalone-login",
+            search: { email }
+          });
+        }
       } else {
-        // User already has password - license will be auto-activated by LicenseAuthContext
-        console.log("🎯 User already has account, redirecting to home (license will auto-activate)");
-        navigate({ to: "/" });
+        console.log("⏳ [SUBSCRIPTION-CHECKOUT] Subscription not yet active, waiting...");
+        // Keep waiting - websocket will update automatically
       }
     } catch (err) {
-      console.error("Error checking account setup status:", err);
+      console.error("❌ [SUBSCRIPTION-CHECKOUT] Error checking subscription status:", err);
       // Fallback to account setup
       navigate({ 
         to: "/account-setup",
