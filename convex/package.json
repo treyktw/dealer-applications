@@ -10,7 +10,7 @@
   },
   "types": "./index.ts",
   "peerDependencies": {
-    "convex": ">=1.24.0"
+    "convex": ">=1.29.0"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.787.0",

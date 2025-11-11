@@ -15,6 +15,8 @@ import type * as api_keys from "../api_keys.js";
 import type * as auth from "../auth.js";
 import type * as clerk from "../clerk.js";
 import type * as clients from "../clients.js";
+import type * as convex__generated_api from "../convex/_generated/api.js";
+import type * as convex__generated_server from "../convex/_generated/server.js";
 import type * as crons from "../crons.js";
 import type * as dealerDocumentPackPurchases from "../dealerDocumentPackPurchases.js";
 import type * as dealerships from "../dealerships.js";
@@ -105,6 +107,8 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   clerk: typeof clerk;
   clients: typeof clients;
+  "convex/_generated/api": typeof convex__generated_api;
+  "convex/_generated/server": typeof convex__generated_server;
   crons: typeof crons;
   dealerDocumentPackPurchases: typeof dealerDocumentPackPurchases;
   dealerships: typeof dealerships;

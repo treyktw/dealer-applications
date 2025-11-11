@@ -47,7 +47,7 @@
     "@tauri-apps/plugin-updater": "^2.8.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "convex": "^1.26.2",
+    "convex": "^1.29.0",
     "date-fns": "^3.6.0",
     "effect": "^3.17.9",
     "idb": "^8.0.3",
