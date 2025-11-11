@@ -22,7 +22,8 @@ import {
   Sparkles,
   UserCircle,
 } from "lucide-react";
-import { useAuth } from "@/components/auth/AuthContext";
+import { useUnifiedAuth } from "@/components/auth/useUnifiedAuth";
+import { getCachedAppMode } from "@/lib/mode-detection";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -100,7 +101,9 @@ const NavItem = ({
 
 export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user } = useUnifiedAuth();
+  const appMode = getCachedAppMode();
+  const isStandalone = appMode === "standalone";
 
   // User is guaranteed to exist here because AuthGuard protects this component
   if (!user) {
@@ -111,58 +114,99 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const userRole = user.role?.toLowerCase() || "";
 
   const isActive = (path: string) => {
-    if (path === "/") return location.pathname === "/";
+    // Handle root path specially
+    if (path === "/" || path === "/standalone") {
+      if (isStandalone) {
+        return location.pathname === "/standalone" || location.pathname === "/standalone/";
+      } else {
+        return location.pathname === "/";
+      }
+    }
     return location.pathname.startsWith(path);
   };
 
+  // Build navigation groups based on mode
   const navigationGroups = [
-    {
-      label: "Main",
-      items: [
+    ...(isStandalone
+      ? [
+          {
+            label: "Main",
+            items: [
+              {
+                name: "Dashboard",
+                path: "/standalone",
+                icon: Home,
+                badge: null,
+              },
+              {
+                name: "Deals",
+                path: "/standalone/deals",
+                icon: FileText,
+                badge: null,
+              },
+            ],
+          },
         {
-          name: "Dashboard",
-          path: "/",
-          icon: Home,
-          badge: null,
+          label: "Management",
+          items: [
+            {
+              name: "Subscription",
+              path: "/standalone/subscription",
+              icon: CreditCard,
+              badge: null,
+            },
+          ],
         },
-        {
-          name: "Deals",
-          path: "/deals",
-          icon: FileText,
-          badge: null,
-        },
-      ],
-    },
-    {
-      label: "Management",
-      items: [
-        {
-          name: "Dealership",
-          path: "/dealership",
-          icon: Building2,
-          badge: null,
-          requiresRole: ["admin"],
-        },
-        {
-          name: "Subscription",
-          path: "/subscription",
-          icon: CreditCard,
-          badge: null,
-        },
-      ],
-    },
+        ]
+      : [
+          {
+            label: "Main",
+            items: [
+              {
+                name: "Dashboard",
+                path: "/",
+                icon: Home,
+                badge: null,
+              },
+              {
+                name: "Deals",
+                path: "/deals",
+                icon: FileText,
+                badge: null,
+              },
+            ],
+          },
+          {
+            label: "Management",
+            items: [
+              {
+                name: "Dealership",
+                path: "/dealership",
+                icon: Building2,
+                badge: null,
+                requiresRole: ["admin"],
+              },
+              {
+                name: "Subscription",
+                path: "/subscription",
+                icon: CreditCard,
+                badge: null,
+              },
+            ].filter(Boolean) as NavItem[],
+          },
+        ]),
     {
       label: "Personal",
       items: [
         {
           name: "Profile",
-          path: "/profile",
+          path: isStandalone ? "/standalone/profile" : "/profile",
           icon: UserCircle,
           badge: null,
         },
         {
           name: "Settings",
-          path: "/settings",
+          path: isStandalone ? "/standalone/settings" : "/settings",
           icon: Settings,
           badge: null,
         },

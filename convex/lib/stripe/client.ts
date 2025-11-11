@@ -27,6 +27,13 @@ export const stripe = new Stripe(stripeSecretKey, {
 });
 
 /**
+ * Get Stripe client (for use in actions)
+ */
+export async function getStripeClient(): Promise<Stripe> {
+  return stripe;
+}
+
+/**
  * Webhook secret for signature verification
  */
 export const STRIPE_WEBHOOK_SECRET = webhookSecret;

@@ -2,16 +2,17 @@
 
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useId, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { convexMutation } from '@/lib/convex';
-import { api } from '@dealer/convex';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { convexClient } from '@/lib/convex';
+import { api, type Id } from '@dealer/convex';
 import { Layout } from '@/components/layout/layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 import { ArrowRight, Car, User } from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthContext';
 
 export const Route = createFileRoute('/deals/new/')({
   component: NewDealPage,
@@ -19,35 +20,80 @@ export const Route = createFileRoute('/deals/new/')({
 
 function NewDealPage() {
   const navigate = useNavigate();
-  const [dealType, setDealType] = useState('cash_sale');
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const [dealType, setDealType] = useState<'cash' | 'finance' | 'lease'>('cash');
   
   const createDeal = useMutation({
-    mutationFn: async (data: any) => {
-      // Create the deal
-      const result = await convexMutation(api.api.deals.createDeal, data);
-      const dealsId = result.dealId;
-      
-      // Create document pack immediately
-      await convexMutation(api.api.documentPacks.createDocumentPack, {
-        dealId: dealsId,
-        packType: dealType,
-        jurisdiction: 'GA', // Should come from dealership settings
+    mutationFn: async (data: {
+      clientFirstName: string;
+      clientLastName: string;
+      clientEmail?: string;
+      clientPhone?: string;
+      vin?: string;
+      stockNumber?: string;
+      saleAmount: number;
+    }) => {
+      if (!user?.dealershipId) {
+        throw new Error("User not associated with a dealership");
+      }
+
+      // First, create client
+      const newClient = await convexClient.mutation(api.api.clients.createClient, {
+        dealershipId: user.dealershipId,
+        firstName: data.clientFirstName,
+        lastName: data.clientLastName,
+        email: data.clientEmail,
+        phone: data.clientPhone,
+        clientId: `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      });
+      const clientId = newClient.clientId;
+
+      // Create vehicle with required fields
+      const vin = data.vin || `TEMP-${Date.now()}`;
+      const stock = data.stockNumber || `STOCK-${Date.now()}`;
+      const newVehicle = await convexClient.mutation(api.api.inventory.createVehicle, {
+        dealershipId: user.dealershipId as Id<"dealerships">,
+        vin,
+        stock,
+        make: 'Unknown',
+        model: 'Unknown',
+        year: new Date().getFullYear(),
+        mileage: 0,
+        price: data.saleAmount,
+        status: 'available',
+        featured: false,
+      });
+      const vehicleId = newVehicle.id;
+
+      // Now create the deal
+      const result = await convexClient.mutation(api.api.deals.createDeal, {
+        clientId,
+        vehicleId,
+        dealershipId: user.dealershipId,
+        type: dealType,
+        saleAmount: data.saleAmount,
+        salesTax: 0,
+        docFee: 0,
+        totalAmount: data.saleAmount,
+        saleDate: Date.now(),
       });
       
-      return dealsId;
+      return result.dealId;
     },
-    onSuccess: (dealsId) => {
+    onSuccess: (dealId) => {
+      queryClient.invalidateQueries({ queryKey: ["deals"] });
       toast.success('Deal created successfully');
       navigate({ 
         to: '/deals/$dealsId/documents', 
-        params: { dealsId: dealsId as string },
-        search: {
-          token: undefined,
-        },
+        params: { dealsId: dealId as string },
+        search: { token: undefined },
       });
     },
-    onError: (error) => {
-      toast.error(`Failed to create deal: ${error.message}`);
+    onError: (error: Error) => {
+      toast.error('Failed to create deal', {
+        description: error.message,
+      });
     },
   });
 
@@ -65,8 +111,8 @@ function NewDealPage() {
             <CardContent>
               <div className="grid grid-cols-3 gap-4">
                 <Button
-                  variant={dealType === 'cash_sale' ? 'default' : 'outline'}
-                  onClick={() => setDealType('cash_sale')}
+                  variant={dealType === 'cash' ? 'default' : 'outline'}
+                  onClick={() => setDealType('cash')}
                 >
                   Cash Sale
                 </Button>
@@ -98,14 +144,21 @@ function NewDealPage() {
               <form onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
+                const saleAmount = parseFloat(formData.get('saleAmount') as string) || 0;
+                
+                if (saleAmount <= 0) {
+                  toast.error('Please enter a valid sale amount');
+                  return;
+                }
+
                 createDeal.mutate({
-                  type: dealType,
-                  clientFirstName: formData.get('firstName'),
-                  clientLastName: formData.get('lastName'),
-                  clientEmail: formData.get('email'),
-                  clientPhone: formData.get('phone'),
-                  vin: formData.get('vin'),
-                  stockNumber: formData.get('stockNumber'),
+                  clientFirstName: formData.get('firstName') as string,
+                  clientLastName: formData.get('lastName') as string,
+                  clientEmail: formData.get('email') as string || undefined,
+                  clientPhone: formData.get('phone') as string || undefined,
+                  vin: formData.get('vin') as string || undefined,
+                  stockNumber: formData.get('stockNumber') as string || undefined,
+                  saleAmount,
                 });
               }} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -144,6 +197,20 @@ function NewDealPage() {
                       <Label htmlFor="stockNumber">Stock Number</Label>
                       <Input id={useId()} name="stockNumber" />
                     </div>
+                  </div>
+                </div>
+
+                <div className="border-t pt-4">
+                  <h3 className="font-medium mb-4">Deal Information</h3>
+                  <div>
+                    <Label htmlFor="saleAmount">Sale Amount *</Label>
+                    <Input 
+                      id={useId()} 
+                      name="saleAmount" 
+                      type="number" 
+                      step="0.01"
+                      required 
+                    />
                   </div>
                 </div>
 

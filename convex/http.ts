@@ -13,6 +13,9 @@ import {
   handleOptions 
 } from "./external_api";
 
+// Import license webhook handler
+import { webhook as licenseWebhook } from "./licenseWebhook";
+
 if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error("STRIPE_SECRET_KEY is not set");
 }
@@ -249,6 +252,13 @@ http.route({
   path: "/stripe_webhook",
   method: "POST",
   handler: stripeWebhook,
+});
+
+// License webhook (for one-time license purchases)
+http.route({
+  path: "/license/webhook",
+  method: "POST",
+  handler: licenseWebhook,
 });
 
 // Email auth endpoints (VERIFICATION CODES)

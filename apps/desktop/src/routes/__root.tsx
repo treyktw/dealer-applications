@@ -2,15 +2,20 @@
 import { createRootRoute, Outlet } from '@tanstack/react-router'
 import { Toaster } from 'react-hot-toast'
 import { AuthGuard } from '@/components/auth/AuthGuard'
+import { ModeRouteGuard } from '@/components/auth/ModeRouteGuard'
 import { SubscriptionProvider } from '@/lib/subscription/SubscriptionProvider'
 import { useEffect } from 'react'
 import { setupDeepLinkListener } from '@/lib/deeplink-listener'
+import { getCachedAppMode } from '@/lib/mode-detection'
+import { RouteLoader } from '@/components/ui/route-loader'
 
 export const Route = createRootRoute({
   component: RootComponent,
 })
 
 function RootComponent() {
+  const appMode = getCachedAppMode()
+  const isStandalone = appMode === 'standalone'
 
   useEffect(() => {
     console.log('🚀 Root layout mounting - setting up deep link listener...');
@@ -34,35 +39,42 @@ function RootComponent() {
     };
   }, []);
 
-  return (
-    <AuthGuard>
-      <SubscriptionProvider>
+  const content = (
+    <SubscriptionProvider>
+      <RouteLoader />
+      <ModeRouteGuard>
         <Outlet />
-        <Toaster
-          position="top-right"
-          toastOptions={{
+      </ModeRouteGuard>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+          success: {
             duration: 3000,
-            style: {
-              background: '#363636',
-              color: '#fff',
+            iconTheme: {
+              primary: '#10b981',
+              secondary: '#fff',
             },
-            success: {
-              duration: 3000,
-              iconTheme: {
-                primary: '#10b981',
-                secondary: '#fff',
-              },
+          },
+          error: {
+            duration: 4000,
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#fff',
             },
-            error: {
-              duration: 4000,
-              iconTheme: {
-                primary: '#ef4444',
-                secondary: '#fff',
-              },
-            },
-          }}
-        />
-      </SubscriptionProvider>
-    </AuthGuard>
+          },
+        }}
+      />
+    </SubscriptionProvider>
   )
+
+  if (isStandalone) {
+    return content
+  }
+
+  return <AuthGuard>{content}</AuthGuard>
 }

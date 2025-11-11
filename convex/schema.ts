@@ -1014,6 +1014,27 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_expiry", ["expiresAt"]),
 
+  /**
+   * Standalone user sessions (for desktop app)
+   * Separate from auth_sessions to support license-based auth
+   */
+  standalone_sessions: defineTable({
+    userId: v.id("standalone_users"),
+    token: v.string(), // Session token stored in Tauri keyring
+    licenseKey: v.string(), // Associated license key
+    machineId: v.string(), // Machine where session was created
+    expiresAt: v.number(), // When session expires
+    createdAt: v.number(),
+    lastAccessedAt: v.number(), // Track activity
+    userAgent: v.optional(v.string()), // Device info
+    ipAddress: v.optional(v.string()), // For security logging
+  })
+    .index("by_token", ["token"])
+    .index("by_user", ["userId"])
+    .index("by_license", ["licenseKey"])
+    .index("by_machine", ["machineId"])
+    .index("by_expiry", ["expiresAt"]),
+
   orgs: defineTable({
     name: v.string(),
     slug: v.string(), // unique identifier for URLs
@@ -1709,4 +1730,298 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_client", ["clientId"])
     .index("by_email_type", ["emailType", "isSubscribed"]),
+
+  /**
+   * Desktop app license keys (Stripe integration)
+   * For standalone desktop app monetization
+   */
+  licenses: defineTable({
+    // Purchase info
+    paymentIntentId: v.optional(v.string()), // Stripe Payment Intent ID (for one-time purchases)
+    checkoutSessionId: v.optional(v.string()), // Stripe Checkout Session ID
+    stripeSubscriptionId: v.optional(v.string()), // Stripe Subscription ID (for subscription-based licenses)
+    licenseKey: v.string(), // Format: DEALER-XXXX-XXXX-XXXX
+    customerEmail: v.string(),
+    stripeCustomerId: v.string(), // Stripe customer ID
+    stripeProductId: v.string(), // Stripe product ID
+    stripePriceId: v.string(), // Stripe price ID
+
+    // License tier
+    tier: v.union(
+      v.literal("single"), // Single user/machine
+      v.literal("team"), // Small team (5 users)
+      v.literal("enterprise") // Unlimited users
+    ),
+
+    // Activation limits
+    maxActivations: v.number(), // 1, 5, or unlimited (-1)
+    activations: v.array(
+      v.object({
+        machineId: v.string(), // Unique machine identifier
+        activatedAt: v.number(),
+        lastSeen: v.number(),
+        platform: v.string(), // windows, macos, linux
+        appVersion: v.string(),
+        hostname: v.optional(v.string()),
+      })
+    ),
+
+    // Status
+    isActive: v.boolean(),
+    issuedAt: v.number(),
+    expiresAt: v.optional(v.number()), // null for perpetual licenses
+
+    // Payment info
+    amount: v.number(), // Amount paid in cents
+    currency: v.string(), // USD, EUR, etc.
+
+    // Association
+    dealershipId: v.optional(v.id("dealerships")), // Linked after activation
+    userId: v.optional(v.id("users")), // Primary user
+
+    // Metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    notes: v.optional(v.string()), // Admin notes
+  })
+    .index("by_license_key", ["licenseKey"])
+    .index("by_customer", ["customerEmail"])
+    .index("by_dealership", ["dealershipId"])
+    .index("by_stripe_customer", ["stripeCustomerId"])
+    .index("by_payment_intent", ["paymentIntentId"])
+    .index("by_status", ["isActive"]),
+
+  /**
+   * Standalone users (for desktop app)
+   * Email/password authentication for standalone operation
+   */
+  standalone_users: defineTable({
+    email: v.string(),
+    passwordHash: v.string(), // bcrypt hash
+    name: v.string(),
+    businessName: v.optional(v.string()),
+
+    // License association
+    licenseKey: v.optional(v.string()),
+
+    // Subscription
+    subscriptionId: v.optional(v.id("standalone_subscriptions")),
+    subscriptionStatus: v.union(
+      v.literal("active"),
+      v.literal("past_due"),
+      v.literal("cancelled"),
+      v.literal("trial"),
+      v.literal("none"),
+      v.literal("pending")
+    ),
+    stripeCustomerId: v.optional(v.string()), // Stripe customer ID for subscription management
+
+    // Trial info
+    trialEndsAt: v.optional(v.number()),
+
+    // Security
+    emailVerified: v.boolean(),
+    verificationToken: v.optional(v.string()),
+    resetToken: v.optional(v.string()),
+    resetTokenExpiresAt: v.optional(v.number()),
+
+    // Metadata
+    lastLoginAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_license", ["licenseKey"])
+    .index("by_subscription", ["subscriptionId"])
+    .index("by_verification_token", ["verificationToken"])
+    .index("by_reset_token", ["resetToken"]),
+
+  /**
+   * Standalone subscriptions (Stripe integration)
+   * Monthly recurring billing for desktop app
+   */
+  standalone_subscriptions: defineTable({
+    userId: v.id("standalone_users"),
+
+    // Stripe info
+    stripeCustomerId: v.string(),
+    stripeSubscriptionId: v.string(),
+    stripePriceId: v.string(),
+    stripeProductId: v.string(),
+
+    // Subscription details
+    status: v.union(
+      v.literal("active"),
+      v.literal("past_due"),
+      v.literal("cancelled"),
+      v.literal("incomplete"),
+      v.literal("trialing"),
+      v.literal("unpaid")
+    ),
+
+    // Billing
+    currentPeriodStart: v.number(),
+    currentPeriodEnd: v.number(),
+    cancelAtPeriodEnd: v.boolean(),
+    cancelledAt: v.optional(v.number()),
+
+    // Plan info
+    planName: v.string(), // "monthly" or "annual"
+    amount: v.number(), // in cents
+    currency: v.string(),
+    interval: v.union(v.literal("month"), v.literal("year")),
+
+    // Trial
+    trialStart: v.optional(v.number()),
+    trialEnd: v.optional(v.number()),
+
+    // Metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_stripe_customer", ["stripeCustomerId"])
+    .index("by_stripe_subscription", ["stripeSubscriptionId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Standalone clients (synced from desktop SQLite)
+   * Stores client data for standalone users
+   */
+  standalone_clients: defineTable({
+    userId: v.string(), // Standalone user ID (string, not Convex ID)
+    localId: v.string(), // Local SQLite ID
+
+    // Client information
+    firstName: v.string(),
+    lastName: v.string(),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    address: v.optional(v.string()),
+    city: v.optional(v.string()),
+    state: v.optional(v.string()),
+    zipCode: v.optional(v.string()),
+    driversLicense: v.optional(v.string()),
+
+    // Sync metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    syncedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_updated", ["userId", "updatedAt"])
+    .index("by_local_id", ["userId", "localId"]),
+
+  /**
+   * Standalone vehicles (synced from desktop SQLite)
+   * Stores vehicle inventory data for standalone users
+   */
+  standalone_vehicles: defineTable({
+    userId: v.string(), // Standalone user ID
+    localId: v.string(), // Local SQLite ID
+
+    // Vehicle information
+    vin: v.string(),
+    stockNumber: v.optional(v.string()),
+    year: v.number(),
+    make: v.string(),
+    model: v.string(),
+    trim: v.optional(v.string()),
+    body: v.optional(v.string()),
+    doors: v.optional(v.number()),
+    transmission: v.optional(v.string()),
+    engine: v.optional(v.string()),
+    cylinders: v.optional(v.number()),
+    titleNumber: v.optional(v.string()),
+    mileage: v.number(),
+    color: v.optional(v.string()),
+    price: v.number(),
+    cost: v.number(),
+    status: v.string(),
+    description: v.optional(v.string()),
+
+    // Sync metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    syncedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_updated", ["userId", "updatedAt"])
+    .index("by_local_id", ["userId", "localId"])
+    .index("by_vin", ["userId", "vin"]),
+
+  /**
+   * Standalone deals (synced from desktop SQLite)
+   * Stores deal data for standalone users
+   */
+  standalone_deals: defineTable({
+    userId: v.string(), // Standalone user ID
+    localId: v.string(), // Local SQLite ID
+
+    // Deal information
+    type: v.string(), // "retail", "wholesale", "lease"
+    clientLocalId: v.string(), // Reference to standalone_clients.localId
+    vehicleLocalId: v.string(), // Reference to standalone_vehicles.localId
+    status: v.string(), // "draft", "pending", "sold", etc.
+    totalAmount: v.number(),
+    saleDate: v.optional(v.number()),
+    saleAmount: v.optional(v.number()),
+    salesTax: v.optional(v.number()),
+    docFee: v.optional(v.number()),
+    tradeInValue: v.optional(v.number()),
+    downPayment: v.optional(v.number()),
+    financedAmount: v.optional(v.number()),
+    documentIds: v.array(v.string()), // Array of document local IDs
+    cobuyerData: v.optional(
+      v.object({
+        firstName: v.string(),
+        lastName: v.string(),
+        email: v.optional(v.string()),
+        phone: v.optional(v.string()),
+        address: v.optional(v.string()),
+        addressLine2: v.optional(v.string()),
+        city: v.optional(v.string()),
+        state: v.optional(v.string()),
+        zipCode: v.optional(v.string()),
+        driversLicense: v.optional(v.string()),
+      })
+    ),
+
+    // Sync metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    syncedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_updated", ["userId", "updatedAt"])
+    .index("by_local_id", ["userId", "localId"])
+    .index("by_client", ["userId", "clientLocalId"])
+    .index("by_vehicle", ["userId", "vehicleLocalId"])
+    .index("by_status", ["userId", "status"]),
+
+  /**
+   * Standalone documents (synced from desktop SQLite)
+   * Stores document metadata (actual PDFs stored in S3)
+   */
+  standalone_documents: defineTable({
+    userId: v.string(), // Standalone user ID
+    localId: v.string(), // Local SQLite ID
+    dealLocalId: v.string(), // Reference to standalone_deals.localId
+
+    // Document information
+    type: v.string(), // "bill_of_sale", "buyers_order", etc.
+    filename: v.string(),
+    s3Key: v.string(), // S3 key where PDF is stored
+    fileSize: v.optional(v.number()),
+    fileChecksum: v.optional(v.string()),
+
+    // Sync metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    syncedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_updated", ["userId", "updatedAt"])
+    .index("by_local_id", ["userId", "localId"])
+    .index("by_deal", ["userId", "dealLocalId"]),
 });

@@ -83,7 +83,85 @@ export const handleStripeWebhook = internalAction({
             break;
           }
 
-          // Handle subscription checkouts
+          // Handle standalone subscription checkouts
+          if (session.metadata?.type === "standalone_subscription") {
+            console.log("Standalone subscription checkout detected");
+            
+            const subscriptionId = session.subscription as string;
+            const customerEmail = session.customer_email || session.metadata?.customerEmail;
+            const stripeCustomerId = session.customer as string;
+            const subscriptionTier = session.metadata?.subscriptionTier;
+
+            if (!subscriptionId) {
+              console.error("No subscription ID in completed session");
+              throw new Error("No subscription ID in completed session");
+            }
+
+            if (!customerEmail) {
+              console.error("No customer email in checkout session");
+              throw new Error("No customer email in checkout session");
+            }
+
+            // Get the subscription from Stripe
+            const subscription = await stripe.subscriptions.retrieve(subscriptionId) as Stripe.Subscription;
+
+            console.log("Retrieved Stripe subscription for standalone user:", {
+              id: subscription.id,
+              status: subscription.status,
+              customer: subscription.customer,
+              customerEmail,
+            });
+
+            // Create or find user account
+            const userId = await ctx.runMutation(internal.standaloneUsers.createOrFindFromCheckout, {
+              email: customerEmail,
+              stripeCustomerId,
+              checkoutSessionId: session.id,
+            });
+
+            // Generate license key for this subscription
+            const { licenseId, licenseKey } = await ctx.runMutation(internal.licenses.generateAndCreateLicense, {
+              customerEmail,
+              stripeCustomerId,
+              stripeSubscriptionId: subscriptionId,
+              stripePriceId: subscription.items.data[0].price.id,
+              stripeProductId: subscription.items.data[0].price.product as string,
+              subscriptionTier: subscriptionTier || (subscription.items.data[0].price.recurring?.interval === "year" ? "annual" : "monthly"),
+              amount: subscription.items.data[0].price.unit_amount || 0,
+              currency: subscription.items.data[0].price.currency,
+            });
+
+            console.log(`✅ License created: ${licenseId} (${licenseKey}) for subscription ${subscriptionId}`);
+
+            // Create subscription record (this also links it to the user)
+            await ctx.runMutation(internal.standaloneSubscriptions.create, {
+              userId,
+              stripeCustomerId,
+              stripeSubscriptionId: subscriptionId,
+              stripePriceId: subscription.items.data[0].price.id,
+              stripeProductId: subscription.items.data[0].price.product as string,
+              status: subscription.status,
+              currentPeriodStart: subscription.start_date * 1000,
+              currentPeriodEnd: (subscription?.ended_at ? subscription.ended_at * 1000 : Date.now()) as number,
+              cancelAtPeriodEnd: subscription.cancel_at_period_end,
+              planName: subscriptionTier || (subscription.items.data[0].price.recurring?.interval === "year" ? "annual" : "monthly"),
+              amount: subscription.items.data[0].price.unit_amount || 0,
+              currency: subscription.items.data[0].price.currency,
+              interval: subscription.items.data[0].price.recurring?.interval as "month" | "year" || "month",
+            });
+
+            // Link license key to user and update subscription status
+            await ctx.runMutation(internal.standaloneUsers.linkLicenseAndUpdateStatus, {
+              userId,
+              licenseKey,
+              status: subscription.status === "active" ? "active" : "none",
+            });
+
+            console.log("Standalone subscription checkout processing completed successfully");
+            break;
+          }
+
+          // Handle dealership subscription checkouts
           if (session.mode !== "subscription") {
             console.log("Not a subscription checkout, skipping");
             break;
@@ -301,7 +379,8 @@ export const handleStripeWebhook = internalAction({
           break;
         }
 
-        case "invoice.payment_succeeded": {
+        case "invoice.payment_succeeded":
+        case "invoice.paid": {
           const invoice = event.data.object as Stripe.Invoice & { subscription: string };
           if (invoice.subscription) {
             console.log("Payment succeeded for subscription:", invoice.subscription);
@@ -310,17 +389,48 @@ export const handleStripeWebhook = internalAction({
             try {
               const subscription = await stripe.subscriptions.retrieve(invoice.subscription) as Stripe.Subscription;
               const dealershipId = subscription.metadata?.dealershipId;
+              const isStandalone = subscription.metadata?.type === "standalone_subscription";
               
               console.log("Invoice payment succeeded - subscription details:", {
                 id: subscription.id,
                 status: subscription.status,
                 dealershipId,
+                isStandalone,
                 hasMetadata: !!subscription.metadata,
               });
 
+              // Handle standalone subscriptions
+              if (isStandalone) {
+                const sub = await ctx.runQuery(internal.standaloneSubscriptions.findByStripeId, {
+                  stripeSubscriptionId: subscription.id,
+                });
+
+                if (sub) {
+                  // Update subscription status
+                  await ctx.runMutation(internal.standaloneSubscriptions.update, {
+                    stripeSubscriptionId: subscription.id,
+                    status: subscription.status,
+                    currentPeriodStart: subscription.start_date * 1000,
+                    currentPeriodEnd: subscription?.ended_at ? subscription.ended_at * 1000 : undefined,
+                    cancelAtPeriodEnd: subscription.cancel_at_period_end,
+                  });
+
+                  // Update user status
+                  await ctx.runMutation(internal.standaloneUsers.updateSubscriptionStatus, {
+                    userId: sub.userId,
+                    status: subscription.status === "active" ? "active" : "pending",
+                  });
+
+                  console.log("Updated standalone subscription after successful payment");
+                } else {
+                  console.log("Standalone subscription not found in database");
+                }
+                break;
+              }
+
+              // Handle dealership subscriptions
               if (!subscription.days_until_due) {
                 console.error("No days until due in subscription");
-    
               }
 
               if (dealershipId) {

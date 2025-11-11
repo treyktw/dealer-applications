@@ -52,6 +52,32 @@ export async function setupDeepLinkListener() {
           return;
         }
         
+        // Handle subscription success deep link
+        if (url.pathname.includes('subscription-success')) {
+          console.log('✅ Subscription success detected');
+          
+          const sessionId = url.searchParams.get('session_id');
+          const email = url.searchParams.get('email');
+          
+          console.log('Subscription success params:', { sessionId, email });
+          
+          // Dispatch event for account setup
+          window.dispatchEvent(new CustomEvent('subscription-success', {
+            detail: { sessionId, email }
+          }));
+          return;
+        }
+        
+        // Handle subscription canceled deep link
+        if (url.pathname.includes('subscription-canceled')) {
+          console.log('❌ Subscription canceled');
+          
+          window.dispatchEvent(new CustomEvent('subscription-canceled', {
+            detail: {}
+          }));
+          return;
+        }
+        
         // Handle deal deep links (existing functionality)
         if (url.pathname.includes('open')) {
           console.log('📄 Deal deep link detected');
