@@ -3,10 +3,15 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Check, FileText, User, Car, DollarSign, Loader2 } from "lucide-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { createDeal } from "@/lib/local-storage/local-deals-service";
+import { createDeal } from "@/lib/sqlite/local-deals-service";
 import { useWizard } from "@/lib/providers/WizardProvider";
+import { useUnifiedAuth } from "@/components/auth/useUnifiedAuth";
+import { getClient } from "@/lib/sqlite/local-clients-service";
+import { getVehicle } from "@/lib/sqlite/local-vehicles-service";
+import { useEffect } from "react";
+import { generateDocumentsForDeal } from "@/lib/document-generation";
 
 export const Route = createFileRoute("/standalone/deals/new/finalize")({
   component: FinalizeStep,
@@ -15,18 +20,145 @@ export const Route = createFileRoute("/standalone/deals/new/finalize")({
 function FinalizeStep() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { formData, setCurrentStep } = useWizard();
+  const auth = useUnifiedAuth();
+  const { formData, setCurrentStep, updateFormData, clearFormData } = useWizard();
+
+  console.log("🔍 [FINALIZE] FormData:", {
+    clientId: formData.clientId,
+    vehicleId: formData.vehicleId,
+    hasSelectedClient: !!formData.selectedClient,
+    hasSelectedVehicle: !!formData.selectedVehicle,
+  });
+
+  // Fetch client and vehicle if they're missing but IDs exist
+  const shouldFetchClient = !!formData.clientId && !formData.selectedClient;
+  const shouldFetchVehicle = !!formData.vehicleId && !formData.selectedVehicle;
+
+  console.log("🔍 [FINALIZE] Query conditions:", {
+    shouldFetchClient,
+    shouldFetchVehicle,
+  });
+
+  const { data: fetchedClient, isLoading: isLoadingClient, error: clientError } = useQuery({
+    queryKey: ["standalone-client", formData.clientId, auth.user?.id],
+    queryFn: () => {
+      if (!formData.clientId) throw new Error("Client ID is required");
+      if (!auth.user?.id) throw new Error("User ID is required");
+      console.log("📥 [FINALIZE] Fetching client:", formData.clientId);
+      return getClient(formData.clientId, auth.user.id);
+    },
+    enabled: shouldFetchClient && !!auth.user?.id,
+  });
+
+  const { data: fetchedVehicle, isLoading: isLoadingVehicle, error: vehicleError } = useQuery({
+    queryKey: ["standalone-vehicle", formData.vehicleId],
+    queryFn: () => {
+      if (!formData.vehicleId) throw new Error("Vehicle ID is required");
+      console.log("📥 [FINALIZE] Fetching vehicle:", formData.vehicleId);
+      return getVehicle(formData.vehicleId);
+    },
+    enabled: shouldFetchVehicle,
+  });
+
+  console.log("🔍 [FINALIZE] Query results:", {
+    fetchedClient: !!fetchedClient,
+    fetchedVehicle: !!fetchedVehicle,
+    isLoadingClient,
+    isLoadingVehicle,
+    clientError: clientError?.message,
+    vehicleError: vehicleError?.message,
+  });
+
+  // Update wizard context when we fetch the data
+  useEffect(() => {
+    if (fetchedClient && !formData.selectedClient) {
+      console.log("✅ [FINALIZE] Updating wizard with fetched client");
+      updateFormData({ selectedClient: fetchedClient });
+    }
+  }, [fetchedClient, formData.selectedClient, updateFormData]);
+
+  useEffect(() => {
+    if (fetchedVehicle && !formData.selectedVehicle) {
+      console.log("✅ [FINALIZE] Updating wizard with fetched vehicle");
+      updateFormData({ selectedVehicle: fetchedVehicle });
+    }
+  }, [fetchedVehicle, formData.selectedVehicle, updateFormData]);
 
   const createDealMutation = useMutation({
-    mutationFn: createDeal,
-    onSuccess: (newDeal) => {
+    mutationFn: async (deal: Parameters<typeof createDeal>[0]) => {
+      console.log("🚀 [FINALIZE] Creating deal with data:", {
+        client_id: deal.client_id,
+        vehicle_id: deal.vehicle_id,
+        type: deal.type,
+        total_amount: deal.total_amount,
+        userId: auth.user?.id,
+      });
+      const result = await createDeal(deal, auth.user?.id);
+      console.log("✅ [FINALIZE] Deal created successfully:", result.id);
+      return result;
+    },
+    onSuccess: async (newDeal) => {
+      console.log("✅ [FINALIZE] Deal creation succeeded, newDeal:", newDeal);
+      
+      // Auto-generate documents if any are selected
+      const documentsToGenerate = formData.selectedDocuments || [];
+      if (documentsToGenerate.length > 0 && selectedClient && selectedVehicle) {
+        console.log("📄 [FINALIZE] Auto-generating documents:", documentsToGenerate);
+        toast.loading(`Generating ${documentsToGenerate.length} document${documentsToGenerate.length > 1 ? "s" : ""}...`, {
+          id: "generating-docs",
+        });
+
+        try {
+          const generationResults = await generateDocumentsForDeal(documentsToGenerate, {
+            dealId: newDeal.id,
+            documentType: "", // Not used in batch generation
+            deal: newDeal,
+            client: selectedClient,
+            vehicle: selectedVehicle,
+            userId: auth.user?.id || "",
+            userEmail: auth.user?.email,
+            userName: auth.user?.name,
+          });
+
+          // Invalidate documents query
+          queryClient.invalidateQueries({ queryKey: ["standalone-documents", newDeal.id] });
+
+          if (generationResults.success > 0) {
+            toast.success(
+              `Deal created! Generated ${generationResults.success} document${generationResults.success > 1 ? "s" : ""}.`,
+              { id: "generating-docs", duration: 5000 }
+            );
+          }
+
+          if (generationResults.failed > 0) {
+            console.warn("⚠️ [FINALIZE] Some documents failed to generate:", generationResults.errors);
+            toast.warning(
+              `${generationResults.failed} document${generationResults.failed > 1 ? "s" : ""} failed to generate.`,
+              { id: "generating-docs", duration: 5000 }
+            );
+          }
+        } catch (error) {
+          console.error("❌ [FINALIZE] Error generating documents:", error);
+          toast.error("Deal created, but document generation failed", {
+            id: "generating-docs",
+            description: error instanceof Error ? error.message : "Unknown error",
+          });
+        }
+      }
+
       queryClient.invalidateQueries({ queryKey: ["standalone-deals"] });
       queryClient.invalidateQueries({ queryKey: ["standalone-deals-stats"] });
       queryClient.invalidateQueries({ queryKey: ["standalone-recent-deals"] });
-      toast.success("Deal created successfully!");
+      clearFormData(); // Clear wizard data after successful creation
+      
+      if (documentsToGenerate.length === 0) {
+        toast.success("Deal created successfully!");
+      }
+      
       navigate({ to: `/standalone/deals/${newDeal.id}` });
     },
     onError: (error: Error) => {
+      console.error("❌ [FINALIZE] Deal creation failed:", error);
       toast.error("Failed to create deal", {
         description: error.message,
       });
@@ -39,19 +171,32 @@ function FinalizeStep() {
       return;
     }
 
-    createDealMutation.mutate({
-      type: formData.type,
+    if (!auth.user?.id) {
+      toast.error("User ID is required");
+      return;
+    }
+
+    console.log("🚀 [FINALIZE] handleCreate called with formData:", {
       clientId: formData.clientId,
       vehicleId: formData.vehicleId,
-      status: "draft",
+      type: formData.type,
       totalAmount: formData.totalAmount,
-      saleAmount: formData.saleAmount,
-      salesTax: formData.salesTax,
-      docFee: formData.docFee,
-      tradeInValue: formData.tradeInValue,
-      downPayment: formData.downPayment,
-      financedAmount: formData.financedAmount,
-      documentIds: [],
+      userId: auth.user.id,
+    });
+
+    createDealMutation.mutate({
+      type: formData.type,
+      client_id: formData.clientId,
+      vehicle_id: formData.vehicleId,
+      status: "draft",
+      total_amount: formData.totalAmount,
+      sale_amount: formData.saleAmount,
+      sales_tax: formData.salesTax,
+      doc_fee: formData.docFee,
+      trade_in_value: formData.tradeInValue,
+      down_payment: formData.downPayment,
+      financed_amount: formData.financedAmount,
+      document_ids: [],
     });
   };
 
@@ -60,14 +205,49 @@ function FinalizeStep() {
     navigate({ to: "/standalone/deals/new/documents" });
   };
 
-  const { selectedClient, selectedVehicle, selectedDocuments } = formData;
+  // Use fetched data if available, otherwise use formData
+  const selectedClient = formData.selectedClient || fetchedClient;
+  const selectedVehicle = formData.selectedVehicle || fetchedVehicle;
+  const selectedDocuments = formData.selectedDocuments;
 
-  if (!selectedClient || !selectedVehicle) {
+  console.log("🔍 [FINALIZE] Final state:", {
+    selectedClient: !!selectedClient,
+    selectedVehicle: !!selectedVehicle,
+    isLoadingClient,
+    isLoadingVehicle,
+  });
+
+  // Show loading state while fetching
+  if (isLoadingClient || isLoadingVehicle) {
     return (
       <div className="text-center py-12">
-        <p className="text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-muted-foreground" />
+        <p className="text-muted-foreground">Loading deal information...</p>
+      </div>
+    );
+  }
+
+  // Show error if we still don't have the required data
+  if (!selectedClient || !selectedVehicle) {
+    console.error("❌ [FINALIZE] Missing data:", {
+      hasClient: !!selectedClient,
+      hasVehicle: !!selectedVehicle,
+      clientId: formData.clientId,
+      vehicleId: formData.vehicleId,
+      fetchedClient: !!fetchedClient,
+      fetchedVehicle: !!fetchedVehicle,
+    });
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground mb-4">
           Missing required information. Please go back and complete all steps.
         </p>
+        <p className="text-xs text-muted-foreground mb-4">
+          Client ID: {formData.clientId || "missing"} | Vehicle ID: {formData.vehicleId || "missing"}
+        </p>
+        <Button variant="outline" onClick={handleBack}>
+          Go Back
+        </Button>
       </div>
     );
   }
@@ -93,7 +273,7 @@ function FinalizeStep() {
             <div className="flex justify-between">
               <span className="text-muted-foreground">Name:</span>
               <span className="font-medium">
-                {selectedClient.firstName} {selectedClient.lastName}
+                {selectedClient.first_name} {selectedClient.last_name}
               </span>
             </div>
             {selectedClient.email && (

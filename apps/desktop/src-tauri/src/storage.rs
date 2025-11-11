@@ -7,6 +7,7 @@ use dirs;
 use log::{error, info};
 use std::path::PathBuf;
 use tauri::command;
+use tauri_plugin_dialog::DialogExt;
 
 /// Get the application data directory
 /// Platform-specific paths:
@@ -37,41 +38,148 @@ pub fn get_app_data_dir() -> Result<PathBuf, String> {
 }
 
 /// Get the database storage path
+/// In development: uses db/ folder in app root
+/// In production: uses app data directory
 #[command]
 pub fn get_database_path() -> Result<String, String> {
-    let data_dir = get_app_data_dir()?;
-    let db_path = data_dir.join("database");
-
-    // Create directory if it doesn't exist
-    if !db_path.exists() {
-        std::fs::create_dir_all(&db_path)
-            .map_err(|e| format!("Failed to create database directory: {}", e))?;
-        info!("Created database directory: {:?}", db_path);
+    #[cfg(debug_assertions)]
+    {
+        // Development: use db/ folder in app root
+        let mut db_path = std::env::current_exe()
+            .map_err(|e| format!("Failed to get current exe: {}", e))?;
+        
+        // Navigate to app root (go up from target/debug or target/release)
+        while db_path.file_name().and_then(|n| n.to_str()) != Some("dealer-software") {
+            if !db_path.pop() {
+                break;
+            }
+        }
+        
+        // If we're in src-tauri/target, go up to src-tauri
+        if db_path.ends_with("target") {
+            db_path.pop();
+        }
+        
+        // Go up to app root
+        db_path.pop();
+        db_path.push("db");
+        
+        // Create directory if it doesn't exist
+        if !db_path.exists() {
+            std::fs::create_dir_all(&db_path)
+                .map_err(|e| format!("Failed to create database directory: {}", e))?;
+            info!("Created database directory: {:?}", db_path);
+        }
+        
+        let db_file = db_path.join("dealer.db");
+        return db_file
+            .to_str()
+            .ok_or_else(|| "Invalid path encoding".to_string())
+            .map(|s| s.to_string());
     }
-
-    db_path
-        .to_str()
-        .ok_or_else(|| "Invalid path encoding".to_string())
-        .map(|s| s.to_string())
+    
+    #[cfg(not(debug_assertions))]
+    {
+        // Production: use app data directory
+        let data_dir = get_app_data_dir()?;
+        let db_path = data_dir.join("dealer.db");
+        
+        // Ensure parent directory exists
+        if let Some(parent) = db_path.parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create database directory: {}", e))?;
+                info!("Created database directory: {:?}", parent);
+            }
+        }
+        
+        return db_path
+            .to_str()
+            .ok_or_else(|| "Invalid path encoding".to_string())
+            .map(|s| s.to_string());
+    }
 }
 
-/// Get the documents storage path
+/// Get the documents storage path (default fallback)
+/// Default: AppData/DealerDocs/
+/// Note: User-chosen path is stored in secure storage and checked by TypeScript
 #[command]
 pub fn get_documents_storage_path() -> Result<String, String> {
+    // Default fallback: AppData/DealerDocs/
     let data_dir = get_app_data_dir()?;
-    let docs_path = data_dir.join("documents");
+    let docs_path = data_dir.join("DealerDocs");
 
-    // Create directory if it doesn't exist
     if !docs_path.exists() {
         std::fs::create_dir_all(&docs_path)
             .map_err(|e| format!("Failed to create documents directory: {}", e))?;
-        info!("Created documents directory: {:?}", docs_path);
+        info!("Created default documents directory: {:?}", docs_path);
     }
 
     docs_path
         .to_str()
         .ok_or_else(|| "Invalid path encoding".to_string())
         .map(|s| s.to_string())
+}
+
+/// Prompt user to select documents root directory
+/// Returns the selected path or None if cancelled
+/// Uses callback-based API from tauri-plugin-dialog
+#[command]
+pub async fn prompt_select_documents_directory(
+    app: tauri::AppHandle,
+) -> Result<Option<String>, String> {
+    info!("📂 [DOCS-CONFIG] Prompting user to select documents directory");
+
+    use tokio::sync::oneshot;
+    
+    let (tx, rx) = oneshot::channel();
+    
+    // Use file dialog in directory selection mode with callback
+    app.dialog()
+        .file()
+        .set_title("Select Documents Storage Location")
+        .pick_folder(move |path_opt| {
+            let _ = tx.send(path_opt);
+        });
+
+    // Wait for the result from the callback (non-blocking in async context)
+    let result = rx.await.map_err(|e| format!("Failed to receive dialog result: {}", e))?;
+
+    match result {
+        Some(file_path) => {
+            // Convert FilePath to PathBuf via string conversion
+            let path_str = file_path.to_string();
+            let path_buf = PathBuf::from(&path_str);
+            info!("✅ [DOCS-CONFIG] User selected directory: {}", path_str);
+            
+            // Ensure directory exists
+            if !path_buf.exists() {
+                std::fs::create_dir_all(&path_buf)
+                    .map_err(|e| format!("Failed to create directory: {}", e))?;
+            }
+            
+            Ok(Some(path_str))
+        }
+        None => {
+            info!("ℹ️ [DOCS-CONFIG] User cancelled directory selection");
+            Ok(None)
+        }
+    }
+}
+
+/// Set custom documents storage path (user-chosen)
+#[command]
+pub fn set_custom_documents_path(path: String) -> Result<String, String> {
+    let custom_path = PathBuf::from(&path);
+    
+    if !custom_path.exists() {
+        std::fs::create_dir_all(&custom_path)
+            .map_err(|e| format!("Failed to create custom documents directory: {}", e))?;
+        info!("Created custom documents directory: {:?}", custom_path);
+    }
+    
+    // Store the custom path in settings (we'll add this to the database later)
+    Ok(path)
 }
 
 /// Get the cache storage path

@@ -50,7 +50,7 @@ export function LicenseActivation({ onNavigate }: LicenseActivationProps) {
   useEffect(() => {
     async function checkStoredLicense() {
       try {
-        const key = await invoke<string>("get_stored_license");
+        const key = await invoke<string>("get_stored_license").catch(() => null);
         if (key) {
           setStoredLicenseKey(key);
         }
@@ -190,14 +190,31 @@ export function LicenseActivation({ onNavigate }: LicenseActivationProps) {
 
       // Store session token if provided
       if (result.sessionToken && result.userId) {
-        try {
-          console.log("💾 Storing session token...");
-          // Store session token in localStorage (will be used by LicenseAuthContext)
-          localStorage.setItem("standalone_session_token", result.sessionToken);
-          localStorage.setItem("standalone_user_id", result.userId);
-          console.log("✅ Session token stored successfully");
-        } catch (sessionError) {
-          console.error("❌ Failed to store session token:", sessionError);
+        const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
+        
+        // SECURITY: In Tauri, always use secure storage (keyring) - never localStorage
+        if (isTauri) {
+          try {
+            console.log("💾 [ACTIVATION] Storing session token in secure storage...");
+            await invoke("store_session_token", { token: result.sessionToken });
+            // Store user ID in localStorage (non-sensitive metadata)
+            localStorage.setItem("standalone_user_id", result.userId);
+            console.log("✅ [ACTIVATION] Token stored in secure storage (keyring)");
+          } catch (sessionError) {
+            console.error("❌ [ACTIVATION] Failed to store in secure storage:", sessionError);
+            throw new Error("Failed to store session securely. Please try again.");
+          }
+        } else {
+          // Browser dev mode only: Use localStorage (NOT SECURE - dev only)
+          console.warn("⚠️ [ACTIVATION] Browser dev mode - using localStorage (NOT SECURE, dev only)");
+          try {
+            localStorage.setItem("standalone_session_token", result.sessionToken);
+            localStorage.setItem("standalone_user_id", result.userId);
+            console.log("✅ [ACTIVATION] Token stored in localStorage (dev mode only)");
+          } catch (e) {
+            console.error("❌ [ACTIVATION] Failed to store session token:", e);
+            throw new Error("Failed to store session token.");
+          }
         }
       }
 
@@ -346,8 +363,10 @@ export function LicenseInfo() {
   useEffect(() => {
     async function loadLicense() {
       try {
-        const key = await invoke<string>("get_stored_license");
-        setLicenseKey(key);
+        const key = await invoke<string>("get_stored_license").catch(() => null);
+        if (key) {
+          setLicenseKey(key);
+        }
       } catch (err) {
         console.error("No license found:", err);
       }

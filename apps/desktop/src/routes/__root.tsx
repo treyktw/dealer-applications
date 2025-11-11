@@ -7,6 +7,7 @@ import { SubscriptionProvider } from '@/lib/subscription/SubscriptionProvider'
 import { useEffect } from 'react'
 import { setupDeepLinkListener } from '@/lib/deeplink-listener'
 import { getCachedAppMode } from '@/lib/mode-detection'
+import { RouteLoader } from '@/components/ui/route-loader'
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -40,6 +41,7 @@ function RootComponent() {
 
   const content = (
     <SubscriptionProvider>
+      <RouteLoader />
       <ModeRouteGuard>
         <Outlet />
       </ModeRouteGuard>

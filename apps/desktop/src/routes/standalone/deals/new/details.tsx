@@ -16,11 +16,12 @@ import {
   FieldGroup,
 } from "@/components/ui/field";
 import { DollarSign } from "lucide-react";
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useWizard } from "@/lib/providers/WizardProvider";
-import { updateDeal, getDealsByStatus } from "@/lib/local-storage/local-deals-service";
+import { getDealsByStatus } from "@/lib/sqlite/local-deals-service";
+import { useUnifiedAuth } from "@/components/auth/useUnifiedAuth";
 
 export const Route = createFileRoute("/standalone/deals/new/details")({
   component: DetailsStep,
@@ -28,124 +29,158 @@ export const Route = createFileRoute("/standalone/deals/new/details")({
 
 function DetailsStep() {
   const navigate = useNavigate();
-  const { formData, updateFormData, setCurrentStep } = useWizard();
+  const auth = useUnifiedAuth();
+  
+  // Get wizard context - hooks must be called unconditionally
+  // If useWizard throws, it will crash anyway, so we can't catch it here
+  const wizard = useWizard();
+  const formData = wizard.formData || {
+    type: "retail",
+    clientId: "",
+    vehicleId: "",
+    status: "draft",
+    totalAmount: 0,
+    documentIds: [],
+  };
+  const updateFormData = wizard.updateFormData || (() => {});
+  const setCurrentStep = wizard.setCurrentStep || (() => {});
 
   // Track dealId using ref to persist across renders
   const dealIdRef = useRef<string>("");
   const isInitializedRef = useRef(false);
 
   // Load most recent draft deal on mount
-  const { data: draftDeal } = useQuery({
-    queryKey: ["draft-deal"],
+  const { data: draftDeal, error: draftDealError } = useQuery({
+    queryKey: ["draft-deal", auth.user?.id],
     queryFn: async () => {
-      const drafts = await getDealsByStatus("draft");
-      const sorted = drafts.sort((a, b) => b.updatedAt - a.updatedAt);
-      return sorted[0];
+      if (!auth.user?.id) return null;
+      try {
+        const drafts = await getDealsByStatus("draft", auth.user.id);
+        if (!Array.isArray(drafts)) {
+          console.warn("⚠️ [DETAILS] getDealsByStatus returned non-array:", drafts);
+          return null;
+        }
+        const sorted = drafts.sort((a, b) => {
+          const aTime = a?.updated_at || 0;
+          const bTime = b?.updated_at || 0;
+          return bTime - aTime;
+        });
+        return sorted[0] || null;
+      } catch (error) {
+        console.error("❌ [DETAILS] Error loading draft deal:", error);
+        return null; // Return null instead of undefined - React Query doesn't allow undefined
+      }
     },
     staleTime: Infinity,
+    retry: false, // Don't retry on error
   });
 
-  // Initialize dealId from draft
-  useEffect(() => {
-    if (draftDeal && !dealIdRef.current) {
-      dealIdRef.current = draftDeal.id;
+  // Initialize dealId from draft (no useEffect needed)
+  if (draftDeal?.id && !dealIdRef.current) {
+    dealIdRef.current = draftDeal.id;
+  }
+
+  // Compute initial deal details from draft deal or formData
+  const initialDealDetails = useMemo(() => {
+    try {
+      if (!isInitializedRef.current && !draftDealError) {
+        // Prefer draft deal data (SQLite uses snake_case), then formData (camelCase), then defaults
+        if (draftDeal && typeof draftDeal === 'object') {
+          // Draft deal from SQLite uses snake_case
+          return {
+            type: draftDeal.type || "retail",
+            saleAmount: draftDeal.sale_amount != null && draftDeal.sale_amount !== undefined ? String(draftDeal.sale_amount) : "",
+            salesTax: draftDeal.sales_tax != null && draftDeal.sales_tax !== undefined ? String(draftDeal.sales_tax) : "",
+            docFee: draftDeal.doc_fee != null && draftDeal.doc_fee !== undefined ? String(draftDeal.doc_fee) : "",
+            tradeInValue: draftDeal.trade_in_value != null && draftDeal.trade_in_value !== undefined ? String(draftDeal.trade_in_value) : "",
+            downPayment: draftDeal.down_payment != null && draftDeal.down_payment !== undefined ? String(draftDeal.down_payment) : "",
+          };
+        } else if (formData && typeof formData === 'object' && (formData.saleAmount != null || formData.salesTax != null)) {
+          // FormData uses camelCase
+          return {
+            type: formData.type || "retail",
+            saleAmount: formData.saleAmount != null && formData.saleAmount !== undefined ? String(formData.saleAmount) : "",
+            salesTax: formData.salesTax != null && formData.salesTax !== undefined ? String(formData.salesTax) : "",
+            docFee: formData.docFee != null && formData.docFee !== undefined ? String(formData.docFee) : "",
+            tradeInValue: formData.tradeInValue != null && formData.tradeInValue !== undefined ? String(formData.tradeInValue) : "",
+            downPayment: formData.downPayment != null && formData.downPayment !== undefined ? String(formData.downPayment) : "",
+          };
+        }
+      }
+      // Use defaults
+      return {
+        type: "retail",
+        saleAmount: "",
+        salesTax: "",
+        docFee: "",
+        tradeInValue: "",
+        downPayment: "",
+      };
+    } catch (error) {
+      console.error("❌ [DETAILS] Error computing initial deal details:", error);
+      return {
+        type: "retail",
+        saleAmount: "",
+        salesTax: "",
+        docFee: "",
+        tradeInValue: "",
+        downPayment: "",
+      };
     }
-  }, [draftDeal]);
+  }, [draftDeal, draftDealError, formData]);
 
   // Store number fields as strings to allow clearing/editing
-  const [dealDetails, setDealDetails] = useState({
-    type: "retail",
-    saleAmount: "",
-    salesTax: "",
-    docFee: "",
-    tradeInValue: "",
-    downPayment: "",
-  });
+  const [dealDetails, setDealDetails] = useState(() => initialDealDetails);
 
-  // Load saved data from draft deal or formData
-  useEffect(() => {
-    if (!isInitializedRef.current) {
-      // Prefer draft deal data, then formData, then defaults
-      const savedData = draftDeal || formData;
-      
-      setDealDetails({
-        type: savedData.type || "retail",
-        saleAmount: savedData.saleAmount != null ? savedData.saleAmount.toString() : "",
-        salesTax: savedData.salesTax != null ? savedData.salesTax.toString() : "",
-        docFee: savedData.docFee != null ? savedData.docFee.toString() : "",
-        tradeInValue: savedData.tradeInValue != null ? savedData.tradeInValue.toString() : "",
-        downPayment: savedData.downPayment != null ? savedData.downPayment.toString() : "",
-      });
-      
-      isInitializedRef.current = true;
-    }
-  }, [draftDeal, formData]);
+  // Sync state when initial values change (only if not user-modified)
+  const prevInitialDealDetailsRef = useRef(initialDealDetails);
+  if (prevInitialDealDetailsRef.current !== initialDealDetails && !isInitializedRef.current) {
+    setDealDetails(initialDealDetails);
+    prevInitialDealDetailsRef.current = initialDealDetails;
+    isInitializedRef.current = true;
+  }
 
   // Convert string numbers to actual numbers for calculations
   const numericValues = useMemo(() => {
-    return {
-      saleAmount: dealDetails.saleAmount.trim() ? parseFloat(dealDetails.saleAmount) || 0 : 0,
-      salesTax: dealDetails.salesTax.trim() ? parseFloat(dealDetails.salesTax) || 0 : 0,
-      docFee: dealDetails.docFee.trim() ? parseFloat(dealDetails.docFee) || 0 : 0,
-      tradeInValue: dealDetails.tradeInValue.trim() ? parseFloat(dealDetails.tradeInValue) || 0 : 0,
-      downPayment: dealDetails.downPayment.trim() ? parseFloat(dealDetails.downPayment) || 0 : 0,
-    };
+    try {
+      return {
+        saleAmount: (dealDetails.saleAmount && typeof dealDetails.saleAmount === 'string' && dealDetails.saleAmount.trim()) ? parseFloat(dealDetails.saleAmount) || 0 : 0,
+        salesTax: (dealDetails.salesTax && typeof dealDetails.salesTax === 'string' && dealDetails.salesTax.trim()) ? parseFloat(dealDetails.salesTax) || 0 : 0,
+        docFee: (dealDetails.docFee && typeof dealDetails.docFee === 'string' && dealDetails.docFee.trim()) ? parseFloat(dealDetails.docFee) || 0 : 0,
+        tradeInValue: (dealDetails.tradeInValue && typeof dealDetails.tradeInValue === 'string' && dealDetails.tradeInValue.trim()) ? parseFloat(dealDetails.tradeInValue) || 0 : 0,
+        downPayment: (dealDetails.downPayment && typeof dealDetails.downPayment === 'string' && dealDetails.downPayment.trim()) ? parseFloat(dealDetails.downPayment) || 0 : 0,
+      };
+    } catch (error) {
+      console.error("❌ [DETAILS] Error calculating numeric values:", error);
+      return {
+        saleAmount: 0,
+        salesTax: 0,
+        docFee: 0,
+        tradeInValue: 0,
+        downPayment: 0,
+      };
+    }
   }, [dealDetails.saleAmount, dealDetails.salesTax, dealDetails.docFee, dealDetails.tradeInValue, dealDetails.downPayment]);
 
   // Calculate financed amount using useMemo
   const financedAmount = useMemo(() => {
-    const { saleAmount, salesTax, docFee, tradeInValue, downPayment } = numericValues;
-    const subtotal = saleAmount + salesTax + docFee - tradeInValue;
-    const financed = subtotal - downPayment;
-    return Math.max(0, financed);
+    try {
+      const { saleAmount = 0, salesTax = 0, docFee = 0, tradeInValue = 0, downPayment = 0 } = numericValues || {};
+      const subtotal = saleAmount + salesTax + docFee - tradeInValue;
+      const financed = subtotal - downPayment;
+      return Math.max(0, financed);
+    } catch (error) {
+      console.error("❌ [DETAILS] Error calculating financed amount:", error);
+      return 0;
+    }
   }, [numericValues]);
 
-  // Auto-save form data with debouncing
-  const debouncedFormData = useMemo(() => {
-    return {
-      type: dealDetails.type,
-      saleAmount: numericValues.saleAmount,
-      salesTax: numericValues.salesTax,
-      docFee: numericValues.docFee,
-      tradeInValue: numericValues.tradeInValue,
-      downPayment: numericValues.downPayment,
-      financedAmount,
-      totalAmount: numericValues.saleAmount + numericValues.salesTax + numericValues.docFee - numericValues.tradeInValue,
-    };
-  }, [dealDetails.type, numericValues, financedAmount]);
 
-  // Debounced auto-save effect - saves to both wizard context and IndexedDB
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      // Update wizard context
-      updateFormData(debouncedFormData);
-
-      // Save to IndexedDB if we have a deal ID (from draft deal or formData)
-      const dealId = dealIdRef.current || draftDeal?.id;
-      if (dealId) {
-        try {
-          await updateDeal(dealId, {
-            type: dealDetails.type,
-            saleAmount: numericValues.saleAmount,
-            salesTax: numericValues.salesTax,
-            docFee: numericValues.docFee,
-            tradeInValue: numericValues.tradeInValue,
-            downPayment: numericValues.downPayment,
-            financedAmount,
-            totalAmount: numericValues.saleAmount + numericValues.salesTax + numericValues.docFee - numericValues.tradeInValue,
-          });
-        } catch (error) {
-          console.error("❌ [AUTO-SAVE] Error saving deal details to database:", error);
-        }
-      }
-    }, 500); // 500ms debounce
-
-    return () => clearTimeout(timer);
-  }, [debouncedFormData, updateFormData, numericValues, dealDetails.type, financedAmount, draftDeal]);
-
-  // Memoized update handler
+  // Simple update handler
   const updateDealField = useCallback((field: keyof typeof dealDetails, value: string) => {
     setDealDetails((prev) => ({ ...prev, [field]: value }));
+    // Mark as initialized when user starts typing
+    isInitializedRef.current = true;
   }, []);
 
   const totalAmount = numericValues.saleAmount + numericValues.salesTax + numericValues.docFee - numericValues.tradeInValue;
@@ -156,6 +191,7 @@ function DetailsStep() {
       return;
     }
 
+    // Update wizard context only - save to database will happen in finalize step
     updateFormData({
       type: dealDetails.type,
       saleAmount: numericValues.saleAmount,
@@ -298,7 +334,7 @@ function DetailsStep() {
                   <Input
                     type="number"
                     step="0.01"
-                    value={financedAmount}
+                    value={financedAmount.toString()}
                     className="pl-9 bg-muted"
                     readOnly
                   />

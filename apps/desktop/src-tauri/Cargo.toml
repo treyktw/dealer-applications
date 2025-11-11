@@ -40,10 +40,20 @@ fs = "0.0.5"
 tauri-plugin-fs = "2.4.4"
 dirs = "6.0.0"
 tokio = "1.48.0"
+tokio-stream = "0.1"
 
 # License management dependencies
 hostname = "0.4"        # Get machine hostname
 sha2 = "0.10"           # SHA-256 hashing for machine ID fallback
+
+# SQLite database
+rusqlite = { version = "0.37", features = ["bundled", "backup", "blob", "chrono", "serde_json"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# AWS S3 for document sync
+aws-config = "1.1.7"
+aws-sdk-s3 = "1.28.0"
+aws-credential-types = "1.1.1"
 
 # Desktop-specific dependencies (macOS, Windows, Linux)
 [target."cfg(any(target_os = \"macos\", windows, target_os = \"linux\"))".dependencies]

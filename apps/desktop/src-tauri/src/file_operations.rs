@@ -222,6 +222,60 @@ pub fn write_file_to_path(file_path: String, file_data: Vec<u8>) -> Result<(), S
     }
 }
 
+/// Read binary file from a path
+#[tauri::command]
+pub fn read_binary_file(file_path: String) -> Result<Vec<u8>, String> {
+    info!("📖 Reading binary file: {}", file_path);
+    
+    use std::fs;
+    
+    match fs::read(&file_path) {
+        Ok(data) => {
+            info!("✅ File read successfully: {} bytes", data.len());
+            Ok(data)
+        }
+        Err(e) => {
+            error!("❌ Failed to read file: {}", e);
+            Err(format!("Failed to read file: {}", e))
+        }
+    }
+}
+
+/// Remove/delete a file
+#[tauri::command]
+pub fn remove_file(file_path: String) -> Result<(), String> {
+    info!("🗑️  Removing file: {}", file_path);
+    
+    use std::fs;
+    
+    match fs::remove_file(&file_path) {
+        Ok(_) => {
+            info!("✅ File removed successfully: {}", file_path);
+            Ok(())
+        }
+        Err(e) => {
+            error!("❌ Failed to remove file: {}", e);
+            Err(format!("Failed to remove file: {}", e))
+        }
+    }
+}
+
+/// Join path segments
+#[tauri::command]
+pub fn join_path(segments: Vec<String>) -> Result<String, String> {
+    use std::path::PathBuf;
+    
+    let mut path = PathBuf::new();
+    for segment in segments {
+        path.push(segment);
+    }
+    
+    match path.to_str() {
+        Some(path_str) => Ok(path_str.to_string()),
+        None => Err("Invalid path encoding".to_string()),
+    }
+}
+
 /// Open a URL in the system's default browser
 #[tauri::command]
 pub async fn open_url(url: String, app: AppHandle) -> Result<(), String> {

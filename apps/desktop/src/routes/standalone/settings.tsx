@@ -25,9 +25,20 @@ import {
   Globe,
   Save,
   X,
+  Cloud,
+  CloudOff,
+  FolderOpen,
 } from "lucide-react";
 import { useId, useState, useEffect } from "react";
 import { toast } from "sonner";
+import { clearDatabase } from "@/lib/sqlite/clear-database";
+import { getSyncStatus, getLastSyncAt, formatLastSyncTime, type SyncStatus } from "@/lib/sqlite/sync-status";
+import { Badge } from "@/components/ui/badge";
+import {
+  promptSelectDocumentsDirectory,
+  hasDocumentsRootPath,
+  getDocumentsPath,
+} from "@/lib/sqlite/local-documents-service";
 
 export const Route = createFileRoute("/standalone/settings")({
   component: StandaloneSettingsPage,
@@ -35,6 +46,10 @@ export const Route = createFileRoute("/standalone/settings")({
 
 function StandaloneSettingsPage() {
   const [isEditing, setIsEditing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("not_synced");
+  const [lastSyncTime, setLastSyncTime] = useState<string>("Never");
+  const [documentsPath, setDocumentsPath] = useState<string>("");
+  const [isLoadingDocumentsPath, setIsLoadingDocumentsPath] = useState(true);
 
   const emailNotificationsId = useId();
   const pushNotificationsId = useId();
@@ -67,6 +82,56 @@ function StandaloneSettingsPage() {
     }
   }, []);
 
+  // Load sync status
+  useEffect(() => {
+    async function loadSyncStatus() {
+      const status = await getSyncStatus();
+      setSyncStatus(status);
+
+      const lastSync = await getLastSyncAt();
+      setLastSyncTime(formatLastSyncTime(lastSync));
+    }
+
+    loadSyncStatus();
+    // Refresh sync status every minute
+    const interval = setInterval(loadSyncStatus, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Load documents path
+  useEffect(() => {
+    async function loadDocumentsPath() {
+      try {
+        setIsLoadingDocumentsPath(true);
+        const path = await getDocumentsPath();
+        setDocumentsPath(path);
+      } catch (error) {
+        console.error("Error loading documents path:", error);
+        setDocumentsPath("Not configured");
+      } finally {
+        setIsLoadingDocumentsPath(false);
+      }
+    }
+
+    loadDocumentsPath();
+  }, []);
+
+  const handleSelectDocumentsDirectory = async () => {
+    try {
+      const selectedPath = await promptSelectDocumentsDirectory();
+      if (selectedPath) {
+        setDocumentsPath(selectedPath);
+        toast.success("Documents directory updated successfully!");
+      }
+    } catch (error) {
+      console.error("Error selecting documents directory:", error);
+      toast.error("Failed to select documents directory", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  };
+
+
     const handleSave = () => {
       // Save settings to localStorage for standalone users
       localStorage.setItem("standalone_settings", JSON.stringify(settings));
@@ -94,10 +159,33 @@ function StandaloneSettingsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Settings</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold">Settings</h1>
+              <Badge
+                variant={syncStatus === "synced" ? "default" : "secondary"}
+                className="flex items-center gap-1.5"
+              >
+                {syncStatus === "synced" ? (
+                  <>
+                    <Cloud className="h-3 w-3" />
+                    Synced
+                  </>
+                ) : (
+                  <>
+                    <CloudOff className="h-3 w-3" />
+                    Not Synced
+                  </>
+                )}
+              </Badge>
+            </div>
             <p className="text-muted-foreground mt-1">
               Manage your application preferences and settings
             </p>
+            {syncStatus === "synced" && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Last synced: {lastSyncTime}
+              </p>
+            )}
           </div>
           <div className="flex gap-2">
             {isEditing ? (
@@ -290,6 +378,83 @@ function StandaloneSettingsPage() {
                 onClick={() => toast.info("Date format settings coming soon!")}
               >
                 Change
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Documents Storage */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-purple-500/10 rounded-xl">
+                <FolderOpen className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div>
+                <CardTitle>Documents Storage</CardTitle>
+                <CardDescription className="mt-1">
+                  Choose where deal documents are saved on your computer
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Current Documents Directory</Label>
+              {isLoadingDocumentsPath ? (
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              ) : (
+                <div className="p-3 bg-muted rounded-md">
+                  <p className="text-sm font-mono break-all">{documentsPath}</p>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Documents are saved as: <code className="text-xs">documents/firstname/dealid/nameofdeal.pdf</code>
+              </p>
+            </div>
+            <Button
+              onClick={handleSelectDocumentsDirectory}
+              variant="outline"
+              className="w-full sm:w-auto"
+            >
+              <FolderOpen className="mr-2 h-4 w-4" />
+              Choose Documents Directory
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Database Management */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <SettingsIcon className="h-5 w-5" />
+              Database Management
+            </CardTitle>
+            <CardDescription>
+              Manage your local database
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-base font-medium">Clear All Data</Label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Delete all deals, clients, vehicles, and documents from the database
+                </p>
+              </div>
+              <Button
+                variant="destructive"
+                onClick={async () => {
+                  try {
+                    await clearDatabase();
+                    // Reload the page to reflect empty state
+                    window.location.reload();
+                  } catch {
+                    // Error already handled in clearDatabase
+                  }
+                }}
+              >
+                Clear Database
               </Button>
             </div>
           </CardContent>

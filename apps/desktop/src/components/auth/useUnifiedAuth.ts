@@ -20,6 +20,8 @@ interface UnifiedAuth {
     dealershipId?: string;
     licenseKey?: string;
     tier?: "single" | "team" | "enterprise";
+    businessName?: string;
+    subscriptionStatus?: string;
   } | null;
   session: {
     token?: string;
@@ -56,6 +58,7 @@ export function useUnifiedAuth(): UnifiedAuth {
         licenseKey: licenseAuth.user.licenseKey,
         tier: licenseAuth.user.tier,
         dealershipId: licenseAuth.user.dealershipId,
+        businessName: licenseAuth.user.businessName,
       } : null,
       session: licenseAuth.session ? {
         licenseKey: licenseAuth.session.licenseKey,
@@ -77,6 +80,7 @@ export function useUnifiedAuth(): UnifiedAuth {
         name: dealershipAuth.user.name,
         role: dealershipAuth.user.role,
         dealershipId: dealershipAuth.user.dealershipId,
+        subscriptionStatus: dealershipAuth.user.subscriptionStatus,
       } : null,
       session: dealershipAuth.session ? {
         token: dealershipAuth.session.token,

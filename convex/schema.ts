@@ -1883,4 +1883,145 @@ export default defineSchema({
     .index("by_stripe_customer", ["stripeCustomerId"])
     .index("by_stripe_subscription", ["stripeSubscriptionId"])
     .index("by_status", ["status"]),
+
+  /**
+   * Standalone clients (synced from desktop SQLite)
+   * Stores client data for standalone users
+   */
+  standalone_clients: defineTable({
+    userId: v.string(), // Standalone user ID (string, not Convex ID)
+    localId: v.string(), // Local SQLite ID
+
+    // Client information
+    firstName: v.string(),
+    lastName: v.string(),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    address: v.optional(v.string()),
+    city: v.optional(v.string()),
+    state: v.optional(v.string()),
+    zipCode: v.optional(v.string()),
+    driversLicense: v.optional(v.string()),
+
+    // Sync metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    syncedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_updated", ["userId", "updatedAt"])
+    .index("by_local_id", ["userId", "localId"]),
+
+  /**
+   * Standalone vehicles (synced from desktop SQLite)
+   * Stores vehicle inventory data for standalone users
+   */
+  standalone_vehicles: defineTable({
+    userId: v.string(), // Standalone user ID
+    localId: v.string(), // Local SQLite ID
+
+    // Vehicle information
+    vin: v.string(),
+    stockNumber: v.optional(v.string()),
+    year: v.number(),
+    make: v.string(),
+    model: v.string(),
+    trim: v.optional(v.string()),
+    body: v.optional(v.string()),
+    doors: v.optional(v.number()),
+    transmission: v.optional(v.string()),
+    engine: v.optional(v.string()),
+    cylinders: v.optional(v.number()),
+    titleNumber: v.optional(v.string()),
+    mileage: v.number(),
+    color: v.optional(v.string()),
+    price: v.number(),
+    cost: v.number(),
+    status: v.string(),
+    description: v.optional(v.string()),
+
+    // Sync metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    syncedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_updated", ["userId", "updatedAt"])
+    .index("by_local_id", ["userId", "localId"])
+    .index("by_vin", ["userId", "vin"]),
+
+  /**
+   * Standalone deals (synced from desktop SQLite)
+   * Stores deal data for standalone users
+   */
+  standalone_deals: defineTable({
+    userId: v.string(), // Standalone user ID
+    localId: v.string(), // Local SQLite ID
+
+    // Deal information
+    type: v.string(), // "retail", "wholesale", "lease"
+    clientLocalId: v.string(), // Reference to standalone_clients.localId
+    vehicleLocalId: v.string(), // Reference to standalone_vehicles.localId
+    status: v.string(), // "draft", "pending", "sold", etc.
+    totalAmount: v.number(),
+    saleDate: v.optional(v.number()),
+    saleAmount: v.optional(v.number()),
+    salesTax: v.optional(v.number()),
+    docFee: v.optional(v.number()),
+    tradeInValue: v.optional(v.number()),
+    downPayment: v.optional(v.number()),
+    financedAmount: v.optional(v.number()),
+    documentIds: v.array(v.string()), // Array of document local IDs
+    cobuyerData: v.optional(
+      v.object({
+        firstName: v.string(),
+        lastName: v.string(),
+        email: v.optional(v.string()),
+        phone: v.optional(v.string()),
+        address: v.optional(v.string()),
+        addressLine2: v.optional(v.string()),
+        city: v.optional(v.string()),
+        state: v.optional(v.string()),
+        zipCode: v.optional(v.string()),
+        driversLicense: v.optional(v.string()),
+      })
+    ),
+
+    // Sync metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    syncedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_updated", ["userId", "updatedAt"])
+    .index("by_local_id", ["userId", "localId"])
+    .index("by_client", ["userId", "clientLocalId"])
+    .index("by_vehicle", ["userId", "vehicleLocalId"])
+    .index("by_status", ["userId", "status"]),
+
+  /**
+   * Standalone documents (synced from desktop SQLite)
+   * Stores document metadata (actual PDFs stored in S3)
+   */
+  standalone_documents: defineTable({
+    userId: v.string(), // Standalone user ID
+    localId: v.string(), // Local SQLite ID
+    dealLocalId: v.string(), // Reference to standalone_deals.localId
+
+    // Document information
+    type: v.string(), // "bill_of_sale", "buyers_order", etc.
+    filename: v.string(),
+    s3Key: v.string(), // S3 key where PDF is stored
+    fileSize: v.optional(v.number()),
+    fileChecksum: v.optional(v.string()),
+
+    // Sync metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    syncedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_updated", ["userId", "updatedAt"])
+    .index("by_local_id", ["userId", "localId"])
+    .index("by_deal", ["userId", "dealLocalId"]),
 });

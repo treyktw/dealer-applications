@@ -21,7 +21,6 @@ import {
   ChevronLeft,
   Sparkles,
   UserCircle,
-  FilePlus,
 } from "lucide-react";
 import { useUnifiedAuth } from "@/components/auth/useUnifiedAuth";
 import { getCachedAppMode } from "@/lib/mode-detection";
@@ -143,12 +142,6 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                 name: "Deals",
                 path: "/standalone/deals",
                 icon: FileText,
-                badge: null,
-              },
-              {
-                name: "New Deal",
-                path: "/standalone/deals/new",
-                icon: FilePlus,
                 badge: null,
               },
             ],

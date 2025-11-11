@@ -44,14 +44,19 @@ import {
   getDealsByStatus,
   getDealsStats,
   updateDeal,
-} from "@/lib/local-storage/local-deals-service";
-import { getClient } from "@/lib/local-storage/local-clients-service";
-import { getVehicle } from "@/lib/local-storage/local-vehicles-service";
+} from "@/lib/sqlite/local-deals-service";
+import { getClient } from "@/lib/sqlite/local-clients-service";
+import { getVehicle } from "@/lib/sqlite/local-vehicles-service";
+import { useUnifiedAuth } from "@/components/auth/useUnifiedAuth";
 import type {
   LocalDeal,
+} from "@/lib/sqlite/local-deals-service";
+import type {
   LocalClient,
+} from "@/lib/sqlite/local-clients-service";
+import type {
   LocalVehicle,
-} from "@/lib/local-storage/db";
+} from "@/lib/sqlite/local-vehicles-service";
 
 export const Route = createFileRoute("/standalone/deals/")({
   component: DealsPage,
@@ -81,26 +86,29 @@ interface DealWithDetails extends LocalDeal {
 function DealsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const auth = useUnifiedAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
   const { data: deals, isLoading } = useQuery({
-    queryKey: ["standalone-deals", searchQuery, statusFilter],
+    queryKey: ["standalone-deals", searchQuery, statusFilter, auth.user?.id],
     queryFn: async () => {
+      if (!auth.user?.id) return [];
+      
       let dealsList: LocalDeal[] = [];
 
       if (searchQuery) {
-        dealsList = await searchDeals(searchQuery);
+        dealsList = await searchDeals(searchQuery, auth.user.id);
       } else if (statusFilter !== "all") {
-        dealsList = await getDealsByStatus(statusFilter);
+        dealsList = await getDealsByStatus(statusFilter, auth.user.id);
       } else {
-        dealsList = await getAllDeals();
+        dealsList = await getAllDeals(auth.user.id);
       }
 
       const dealsWithDetails: DealWithDetails[] = await Promise.all(
         dealsList.map(async (deal) => {
-          const client = await getClient(deal.clientId);
-          const vehicle = await getVehicle(deal.vehicleId);
+          const client = await getClient(deal.client_id, auth.user.id);
+          const vehicle = await getVehicle(deal.vehicle_id);
           return {
             ...deal,
             client,
@@ -109,17 +117,18 @@ function DealsPage() {
         })
       );
 
-      return dealsWithDetails.sort((a, b) => b.createdAt - a.createdAt);
+      return dealsWithDetails.sort((a, b) => b.created_at - a.created_at);
     },
   });
 
   const { data: stats } = useQuery({
-    queryKey: ["standalone-deals-stats"],
-    queryFn: getDealsStats,
+    queryKey: ["standalone-deals-stats", auth.user?.id],
+    queryFn: () => getDealsStats(auth.user?.id),
+    enabled: !!auth.user?.id,
   });
 
   const deleteMutation = useMutation({
-    mutationFn: deleteDeal,
+    mutationFn: (id: string) => deleteDeal(id, auth.user?.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["standalone-deals"] });
       queryClient.invalidateQueries({ queryKey: ["standalone-deals-stats"] });
@@ -134,7 +143,7 @@ function DealsPage() {
 
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
-      updateDeal(id, { status }),
+      updateDeal(id, { status }, auth.user?.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["standalone-deals"] });
       queryClient.invalidateQueries({ queryKey: ["standalone-deals-stats"] });
@@ -183,13 +192,13 @@ function DealsPage() {
           d.id.slice(-8),
           d.type,
           d.status,
-          d.client ? `${d.client.firstName} ${d.client.lastName}` : "N/A",
+          d.client ? `${d.client.first_name} ${d.client.last_name}` : "N/A",
           d.vehicle
             ? `${d.vehicle.year} ${d.vehicle.make} ${d.vehicle.model}`
             : "N/A",
-          d.totalAmount,
-          d.saleAmount || 0,
-          new Date(d.createdAt).toLocaleDateString(),
+          d.total_amount,
+          d.sale_amount || 0,
+          new Date(d.created_at).toLocaleDateString(),
         ].join(",")
       ),
     ].join("\n");
@@ -219,19 +228,6 @@ function DealsPage() {
     // Navigate directly to the first step of the wizard
     console.log("🔵 [DEALS] Navigating to /standalone/deals/new/client-vehicle");
     navigate({ to: "/standalone/deals/new/client-vehicle" });
-  }
-
-  if (isLoading) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading deals...</p>
-          </div>
-        </div>
-      </Layout>
-    );
   }
 
   const dealsList = deals || [];
@@ -323,7 +319,7 @@ function DealsPage() {
                     </TableCell>
                     <TableCell className="font-medium">
                       {deal.client
-                        ? `${deal.client.firstName} ${deal.client.lastName}`
+                        ? `${deal.client.first_name} ${deal.client.last_name}`
                         : "N/A"}
                     </TableCell>
                     <TableCell>
@@ -380,10 +376,10 @@ function DealsPage() {
                       </DropdownMenu>
                     </TableCell>
                     <TableCell className="font-semibold">
-                      ${deal.totalAmount.toLocaleString()}
+                      ${deal.total_amount.toLocaleString()}
                     </TableCell>
                     <TableCell>
-                      {new Date(deal.createdAt).toLocaleDateString()}
+                      {new Date(deal.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>

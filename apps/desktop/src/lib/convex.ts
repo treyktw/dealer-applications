@@ -23,9 +23,10 @@ const client = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL);
 const STORAGE_KEY = 'dealer_auth_token';
 
 // Helper to get stored token
+// SECURITY: Uses specific dealership auth token command instead of generic secure storage
 export async function getStoredToken(): Promise<string | null> {
   try {
-    const token = await invoke<string | null>('retrieve_secure', { key: STORAGE_KEY });
+    const token = await invoke<string | null>('get_dealership_auth_token');
     return token;
   } catch (error) {
     console.error('Failed to retrieve token:', error);

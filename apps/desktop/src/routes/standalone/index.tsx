@@ -16,12 +16,15 @@ import { useQuery } from "@tanstack/react-query";
 import {
   getDealsStats,
   getRecentDeals,
-} from "@/lib/local-storage/local-deals-service";
-import { getAllClients } from "@/lib/local-storage/local-clients-service";
-import { getVehiclesStats } from "@/lib/local-storage/local-vehicles-service";
-import { getClient } from "@/lib/local-storage/local-clients-service";
-import { getVehicle } from "@/lib/local-storage/local-vehicles-service";
-import type { LocalDeal, LocalClient, LocalVehicle } from "@/lib/local-storage/db";
+} from "@/lib/sqlite/local-deals-service";
+import { getAllClients } from "@/lib/sqlite/local-clients-service";
+import { getVehiclesStats } from "@/lib/sqlite/local-vehicles-service";
+import { getClient } from "@/lib/sqlite/local-clients-service";
+import { getVehicle } from "@/lib/sqlite/local-vehicles-service";
+import type { LocalDeal } from "@/lib/sqlite/local-deals-service";
+import type { LocalClient } from "@/lib/sqlite/local-clients-service";
+import type { LocalVehicle } from "@/lib/sqlite/local-vehicles-service";
+import { useUnifiedAuth } from "@/components/auth/useUnifiedAuth";
 
 export const Route = createFileRoute("/standalone/")({
   component: StandaloneDashboard,
@@ -50,20 +53,23 @@ interface DealWithDetails extends LocalDeal {
 
 function StandaloneDashboard() {
   const navigate = useNavigate();
+  const auth = useUnifiedAuth();
 
-  const { data: dealsStats } = useQuery({
-    queryKey: ["standalone-deals-stats"],
-    queryFn: getDealsStats,
+  const { data: dealsStats, error: dealsStatsError } = useQuery({
+    queryKey: ["standalone-deals-stats", auth.user?.id],
+    queryFn: () => getDealsStats(auth.user?.id),
+    enabled: !!auth.user?.id,
   });
 
-  const { data: recentDeals } = useQuery({
-    queryKey: ["standalone-recent-deals"],
+  const { data: recentDeals, error: recentDealsError } = useQuery({
+    queryKey: ["standalone-recent-deals", auth.user?.id],
     queryFn: async () => {
-      const deals = await getRecentDeals(10);
+      if (!auth.user?.id) return [];
+      const deals = await getRecentDeals(10, auth.user.id);
       const dealsWithDetails: DealWithDetails[] = await Promise.all(
         deals.map(async (deal) => {
-          const client = await getClient(deal.clientId);
-          const vehicle = await getVehicle(deal.vehicleId);
+          const client = await getClient(deal.client_id, auth.user.id);
+          const vehicle = await getVehicle(deal.vehicle_id);
           return {
             ...deal,
             client,
@@ -75,35 +81,45 @@ function StandaloneDashboard() {
     },
   });
 
-  const { data: clientsCount } = useQuery({
-    queryKey: ["standalone-clients-count"],
+  const { data: clientsCount, error: clientsCountError } = useQuery({
+    queryKey: ["standalone-clients-count", auth.user?.id],
     queryFn: async () => {
-      const clients = await getAllClients();
+      const clients = await getAllClients(auth.user?.id);
       return clients.length;
     },
+    enabled: !!auth.user?.id,
   });
 
-  const { data: vehiclesStats } = useQuery({
-    queryKey: ["standalone-vehicles-stats"],
-    queryFn: getVehiclesStats,
+  const { data: vehiclesStats, error: vehiclesStatsError } = useQuery({
+    queryKey: ["standalone-vehicles-stats", auth.user?.id],
+    queryFn: () => getVehiclesStats(auth.user?.id),
+    enabled: !!auth.user?.id,
   });
+
+  const hasError = dealsStatsError || recentDealsError || clientsCountError || vehiclesStatsError;
 
   const totalRevenue = dealsStats?.totalAmount || 0;
   const averageDealSize = dealsStats?.averageAmount || 0;
   const completedDeals = dealsStats?.byStatus.completed || 0;
   const activeDeals = (dealsStats?.byStatus.pending || 0) + (dealsStats?.byStatus.in_progress || 0);
 
+  if (hasError) {
+    console.error("❌ [DASHBOARD] Error loading data:", {
+      dealsStatsError,
+      recentDealsError,
+      clientsCountError,
+      vehiclesStatsError,
+    });
+  }
+
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between">
           <div>
             <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-muted-foreground mt-1">
-              Welcome back! Here's your business overview
-            </p>
           </div>
-          <Link to="/standalone/deals" params={{ action: "new" }} className="gap-2">
+          <Link to="/standalone/deals" params={{ action: "new" }} className="gap-2 flex flex-row items-center justify-center bg-accent text-accent-foreground px-4 py-2 rounded-md">
             <Plus className="h-4 w-4" />
             New Deal
           </Link>
@@ -283,7 +299,7 @@ function StandaloneDashboard() {
                     </TableCell>
                     <TableCell className="font-medium">
                       {deal.client
-                        ? `${deal.client.firstName} ${deal.client.lastName}`
+                        ? `${deal.client.first_name} ${deal.client.last_name}`
                         : "N/A"}
                     </TableCell>
                     <TableCell>
@@ -297,10 +313,10 @@ function StandaloneDashboard() {
                       </Badge>
                     </TableCell>
                     <TableCell className="font-semibold">
-                      ${deal.totalAmount.toLocaleString()}
+                      ${deal.total_amount.toLocaleString()}
                     </TableCell>
                     <TableCell>
-                      {new Date(deal.createdAt).toLocaleDateString()}
+                      {new Date(deal.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button

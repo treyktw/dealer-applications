@@ -77,6 +77,7 @@ import type * as settings from "../settings.js";
 import type * as standaloneAuth from "../standaloneAuth.js";
 import type * as standalonePDF from "../standalonePDF.js";
 import type * as standaloneSubscriptions from "../standaloneSubscriptions.js";
+import type * as standaloneSync from "../standaloneSync.js";
 import type * as standaloneUsers from "../standaloneUsers.js";
 import type * as stripeWebhook from "../stripeWebhook.js";
 import type * as stripe_webhook from "../stripe_webhook.js";
@@ -168,6 +169,7 @@ declare const fullApi: ApiFromModules<{
   standaloneAuth: typeof standaloneAuth;
   standalonePDF: typeof standalonePDF;
   standaloneSubscriptions: typeof standaloneSubscriptions;
+  standaloneSync: typeof standaloneSync;
   standaloneUsers: typeof standaloneUsers;
   stripeWebhook: typeof stripeWebhook;
   stripe_webhook: typeof stripe_webhook;

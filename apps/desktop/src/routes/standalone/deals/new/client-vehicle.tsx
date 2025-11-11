@@ -16,13 +16,23 @@ import {
   FieldGroup,
 } from "@/components/ui/field";
 import { User, Car } from "lucide-react";
-import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { createClient, updateClient, getClient } from "@/lib/local-storage/local-clients-service";
-import { createVehicle, updateVehicle, getVehicleByVIN, getVehicle } from "@/lib/local-storage/local-vehicles-service";
-import { createDeal, updateDeal, getDealsByStatus } from "@/lib/local-storage/local-deals-service";
+import {
+  createClient,
+  getClient,
+} from "@/lib/sqlite/local-clients-service";
+import {
+  createVehicle,
+  getVehicleByVIN,
+  getVehicle,
+} from "@/lib/sqlite/local-vehicles-service";
+import {
+  getDealsByStatus,
+} from "@/lib/sqlite/local-deals-service";
 import { useWizard } from "@/lib/providers/WizardProvider";
+import { useUnifiedAuth } from "@/components/auth/useUnifiedAuth";
 
 export const Route = createFileRoute("/standalone/deals/new/client-vehicle")({
   component: ClientVehicleStep,
@@ -31,68 +41,120 @@ export const Route = createFileRoute("/standalone/deals/new/client-vehicle")({
 function ClientVehicleStep() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  
-  const { formData, updateFormData, setCurrentStep } = useWizard();
-  
+  const auth = useUnifiedAuth();
+
+  // Get wizard context - hooks must be called unconditionally
+  const wizard = useWizard();
+  const formData = wizard?.formData || {};
+  const updateFormData = wizard?.updateFormData || (() => {});
+  const setCurrentStep = wizard?.setCurrentStep || (() => {});
+
   // Track dealId using ref to persist across renders
   const dealIdRef = useRef<string>("");
   const isInitializedRef = useRef(false);
-  
-  // Load most recent draft deal on mount
+
+  // Load most recent draft deal on mount - with error handling
   const { data: draftDeal } = useQuery({
-    queryKey: ["draft-deal"],
+    queryKey: ["draft-deal", auth.user?.id],
     queryFn: async () => {
-      const drafts = await getDealsByStatus("draft");
-      // Get the most recent draft
-      const sorted = drafts.sort((a, b) => b.updatedAt - a.updatedAt);
-      return sorted[0];
+      if (!auth.user?.id) return null;
+      try {
+        const drafts = await getDealsByStatus("draft", auth.user.id);
+        if (!Array.isArray(drafts)) {
+          console.warn("⚠️ [CLIENT-VEHICLE] getDealsByStatus returned non-array:", drafts);
+          return null;
+        }
+        // Get the most recent draft
+        const sorted = drafts.sort((a, b) => (b?.updated_at || 0) - (a?.updated_at || 0));
+        return sorted[0] || null; // Return null instead of undefined
+      } catch (error) {
+        console.error("❌ [CLIENT-VEHICLE] Error loading draft deal:", error);
+        return null; // Return null instead of undefined - React Query doesn't allow undefined
+      }
     },
     staleTime: Infinity, // Only fetch once
+    retry: false, // Don't retry on error
+    refetchOnWindowFocus: false,
   });
 
-  // Load client and vehicle data if draft deal exists
+  // Load client and vehicle data if draft deal exists - with error handling
   const { data: loadedClient } = useQuery({
-    queryKey: ["draft-client", draftDeal?.clientId],
-    queryFn: () => draftDeal?.clientId ? getClient(draftDeal.clientId) : Promise.resolve(undefined),
-    enabled: !!draftDeal?.clientId,
+    queryKey: ["draft-client", draftDeal?.client_id, auth.user?.id],
+    queryFn: async () => {
+      try {
+        if (!draftDeal?.client_id) return null;
+        if (!auth.user?.id) return null;
+        const client = await getClient(draftDeal.client_id, auth.user.id);
+        return client || null; // Return null instead of undefined
+      } catch (error) {
+        console.error("❌ [CLIENT-VEHICLE] Error loading client:", error);
+        return null; // Return null instead of undefined - React Query doesn't allow undefined
+      }
+    },
+    enabled: !!draftDeal?.client_id && !!auth.user?.id,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: loadedVehicle } = useQuery({
-    queryKey: ["draft-vehicle", draftDeal?.vehicleId],
-    queryFn: () => draftDeal?.vehicleId ? getVehicle(draftDeal.vehicleId) : Promise.resolve(undefined),
-    enabled: !!draftDeal?.vehicleId,
+    queryKey: ["draft-vehicle", draftDeal?.vehicle_id],
+    queryFn: async () => {
+      try {
+        if (!draftDeal?.vehicle_id) return null;
+        const vehicle = await getVehicle(draftDeal.vehicle_id);
+        return vehicle || null; // Return null instead of undefined
+      } catch (error) {
+        console.error("❌ [CLIENT-VEHICLE] Error loading vehicle:", error);
+        // Return null instead of undefined - React Query doesn't allow undefined
+        return null;
+      }
+    },
+    enabled: !!draftDeal?.vehicle_id,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
-  // Initialize form data from saved draft or wizard context
+
+  // Initialize form data from saved draft or wizard context or seed data
   const initializeFormData = useCallback(() => {
     if (isInitializedRef.current) return;
     
+    try {
+
     // Normalize client data - convert LocalClient to form data format
     const normalizeClientData = (client: typeof loadedClient) => {
       if (!client) return undefined;
       return {
-        firstName: client.firstName || "",
-        lastName: client.lastName || "",
+        firstName: client.first_name || "",
+        lastName: client.last_name || "",
         email: client.email || "",
         phone: client.phone || "",
         address: client.address || "",
+        addressLine2: "",
         city: client.city || "",
         state: client.state || "",
-        zipCode: client.zipCode || "",
-        driversLicense: client.driversLicense || "",
+        zipCode: client.zip_code || "",
+        driversLicense: client.drivers_license || "",
       };
     };
 
     // Normalize vehicle data - convert LocalVehicle to form data format
+    // Note: formData expects numbers, but local state uses strings for inputs
     const normalizeVehicleData = (vehicle: typeof loadedVehicle) => {
       if (!vehicle) return undefined;
       return {
         vin: vehicle.vin || "",
-        stockNumber: vehicle.stockNumber || "",
+        stockNumber: vehicle.stock_number || "",
         year: vehicle.year || new Date().getFullYear(),
         make: vehicle.make || "",
         model: vehicle.model || "",
         trim: vehicle.trim || "",
+        body: vehicle.body || "",
+        doors: vehicle.doors,
+        transmission: vehicle.transmission || "",
+        engine: vehicle.engine || "",
+        cylinders: vehicle.cylinders,
+        titleNumber: vehicle.title_number || "",
         mileage: vehicle.mileage || 0,
         color: vehicle.color || "",
         price: vehicle.price || 0,
@@ -103,134 +165,240 @@ function ClientVehicleStep() {
     };
 
     // Prefer loaded data from database, then wizard context, then defaults
-    const initialClientData = normalizeClientData(loadedClient) || formData.clientData || {
+    const initialClientData = normalizeClientData(loadedClient) ||
+      formData.clientData || {
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        address: "",
+        addressLine2: "",
+        city: "",
+        state: "",
+        zipCode: "",
+        driversLicense: "",
+      };
+
+    const initialCobuyerData = formData.cobuyerData || {
       firstName: "",
       lastName: "",
       email: "",
       phone: "",
       address: "",
+      addressLine2: "",
       city: "",
       state: "",
       zipCode: "",
       driversLicense: "",
     };
 
-    const initialVehicleData = normalizeVehicleData(loadedVehicle) || formData.vehicleData || {
-      vin: "",
-      stockNumber: "",
-      year: new Date().getFullYear(),
-      make: "",
-      model: "",
-      trim: "",
-      mileage: 0,
-      color: "",
-      price: 0,
-      cost: 0,
-      status: "available",
-      description: "",
-    };
+    // Prefer loaded data from database, then wizard context, then defaults
+    const initialVehicleData = normalizeVehicleData(loadedVehicle) ||
+      formData.vehicleData || {
+        vin: "",
+        stockNumber: "",
+        year: new Date().getFullYear(),
+        make: "",
+        model: "",
+        trim: "",
+        body: "",
+        doors: undefined,
+        transmission: "",
+        engine: "",
+        cylinders: undefined,
+        titleNumber: "",
+        mileage: 0,
+        color: "",
+        price: 0,
+        cost: 0,
+        status: "available",
+        description: "",
+      };
 
     if (draftDeal) {
       dealIdRef.current = draftDeal.id;
       updateFormData({
-        clientId: draftDeal.clientId,
-        vehicleId: draftDeal.vehicleId,
+        clientId: draftDeal.client_id,
+        vehicleId: draftDeal.vehicle_id,
         clientData: initialClientData,
+        cobuyerData: initialCobuyerData,
         vehicleData: initialVehicleData,
       });
     } else {
       updateFormData({
         clientData: initialClientData,
+        cobuyerData: initialCobuyerData,
         vehicleData: initialVehicleData,
       });
     }
 
     isInitializedRef.current = true;
+    } catch (error) {
+      console.error("❌ [INIT] Error in initializeFormData:", error);
+      isInitializedRef.current = true; // Mark as initialized to prevent infinite loops
+    }
   }, [loadedClient, loadedVehicle, draftDeal, formData, updateFormData]);
 
-  // Initialize on mount or when data loads
-  useEffect(() => {
-    if (loadedClient !== undefined || loadedVehicle !== undefined || draftDeal !== undefined) {
-      initializeFormData();
-    }
-  }, [loadedClient, loadedVehicle, draftDeal, initializeFormData]);
-
-  const [clientData, setClientData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    address: "",
-    city: "",
-    state: "",
-    zipCode: "",
-    driversLicense: "",
-  });
-
-  // Store number fields as strings to allow clearing/editing
-  const [vehicleData, setVehicleData] = useState({
-    vin: "",
-    stockNumber: "",
-    year: new Date().getFullYear().toString(),
-    make: "",
-    model: "",
-    trim: "",
-    mileage: "",
-    color: "",
-    price: "",
-    cost: "",
-    status: "available",
-    description: "",
-  });
-
-  // Sync state with loaded data
-  useEffect(() => {
+  // Compute initial values using useMemo (no useEffect needed)
+  const initialClientData = useMemo(() => {
     if (loadedClient) {
-      setClientData({
-        firstName: loadedClient.firstName || "",
-        lastName: loadedClient.lastName || "",
+      return {
+        firstName: loadedClient.first_name || "",
+        lastName: loadedClient.last_name || "",
         email: loadedClient.email || "",
         phone: loadedClient.phone || "",
         address: loadedClient.address || "",
+        addressLine2: "",
         city: loadedClient.city || "",
         state: loadedClient.state || "",
-        zipCode: loadedClient.zipCode || "",
-        driversLicense: loadedClient.driversLicense || "",
-      });
+        zipCode: loadedClient.zip_code || "",
+        driversLicense: loadedClient.drivers_license || "",
+      };
     } else if (formData.clientData) {
-      setClientData(formData.clientData);
+      return {
+        ...formData.clientData,
+        addressLine2: formData.clientData.addressLine2 || "",
+      };
+    } else {
+      return {
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        address: "",
+        addressLine2: "",
+        city: "",
+        state: "",
+        zipCode: "",
+        driversLicense: "",
+      };
     }
   }, [loadedClient, formData.clientData]);
 
-  useEffect(() => {
+  const initialCobuyerData = useMemo(() => {
+    if (formData.cobuyerData) {
+      return {
+        ...formData.cobuyerData,
+        addressLine2: formData.cobuyerData.addressLine2 || "",
+      };
+    }
+    return {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      address: "",
+      addressLine2: "",
+      city: "",
+      state: "",
+      zipCode: "",
+      driversLicense: "",
+    };
+  }, [formData.cobuyerData]);
+
+  const initialVehicleData = useMemo(() => {
     if (loadedVehicle) {
-      setVehicleData({
+      return {
         vin: loadedVehicle.vin || "",
-        stockNumber: loadedVehicle.stockNumber || "",
+        stockNumber: loadedVehicle.stock_number || "",
         year: loadedVehicle.year?.toString() || new Date().getFullYear().toString(),
         make: loadedVehicle.make || "",
         model: loadedVehicle.model || "",
         trim: loadedVehicle.trim || "",
+        body: loadedVehicle.body || "",
+        doors: loadedVehicle.doors?.toString() || "",
+        transmission: loadedVehicle.transmission || "",
+        engine: loadedVehicle.engine || "",
+        cylinders: loadedVehicle.cylinders?.toString() || "",
+        titleNumber: loadedVehicle.title_number || "",
         mileage: loadedVehicle.mileage?.toString() || "",
         color: loadedVehicle.color || "",
         price: loadedVehicle.price?.toString() || "",
         cost: loadedVehicle.cost?.toString() || "",
         status: loadedVehicle.status || "available",
         description: loadedVehicle.description || "",
-      });
+      };
     } else if (formData.vehicleData) {
-      setVehicleData({
+      return {
         ...formData.vehicleData,
         year: formData.vehicleData.year?.toString() || new Date().getFullYear().toString(),
         mileage: formData.vehicleData.mileage?.toString() || "",
         price: formData.vehicleData.price?.toString() || "",
         cost: formData.vehicleData.cost?.toString() || "",
-      });
+        body: formData.vehicleData.body || "",
+        doors: formData.vehicleData.doors?.toString() || "",
+        transmission: formData.vehicleData.transmission || "",
+        engine: formData.vehicleData.engine || "",
+        cylinders: formData.vehicleData.cylinders?.toString() || "",
+        titleNumber: formData.vehicleData.titleNumber || "",
+      };
+    } else {
+      return {
+        vin: "",
+        stockNumber: "",
+        year: new Date().getFullYear().toString(),
+        make: "",
+        model: "",
+        trim: "",
+        body: "",
+        doors: "",
+        transmission: "",
+        engine: "",
+        cylinders: "",
+        titleNumber: "",
+        mileage: "",
+        color: "",
+        price: "",
+        cost: "",
+        status: "available",
+        description: "",
+      };
     }
   }, [loadedVehicle, formData.vehicleData]);
 
+  // Initialize state with computed values, but only once
+  const [clientData, setClientData] = useState(() => initialClientData);
+  const [cobuyerData, setCobuyerData] = useState(() => initialCobuyerData);
+  const [vehicleData, setVehicleData] = useState(() => initialVehicleData);
+
+  // Sync state when initial values change (only if not user-modified)
+  const prevInitialClientDataRef = useRef(initialClientData);
+  const prevInitialVehicleDataRef = useRef(initialVehicleData);
+  const prevInitialCobuyerDataRef = useRef(initialCobuyerData);
+
+  // Update state if initial data changed (but only if user hasn't modified it)
+  if (prevInitialClientDataRef.current !== initialClientData && !isInitializedRef.current) {
+    setClientData(initialClientData);
+    prevInitialClientDataRef.current = initialClientData;
+  }
+  if (prevInitialVehicleDataRef.current !== initialVehicleData && !isInitializedRef.current) {
+    setVehicleData(initialVehicleData);
+    prevInitialVehicleDataRef.current = initialVehicleData;
+  }
+  if (prevInitialCobuyerDataRef.current !== initialCobuyerData && !isInitializedRef.current) {
+    setCobuyerData(initialCobuyerData);
+    prevInitialCobuyerDataRef.current = initialCobuyerData;
+  }
+
+  // Initialize form data when draft deal is available
+  if (draftDeal && !isInitializedRef.current) {
+    initializeFormData();
+  }
+
   const createClientMutation = useMutation({
-    mutationFn: createClient,
+    mutationFn: (args: { client: Parameters<typeof createClient>[0]; userId: string }) => {
+      console.log("🔍 [MUTATION] createClientMutation called with args:", args);
+      console.log("  - args.userId:", args.userId);
+      console.log("  - typeof args.userId:", typeof args.userId);
+      console.log("  - args.userId value:", JSON.stringify(args.userId));
+      
+      if (!args.userId || typeof args.userId !== 'string') {
+        console.error("❌ [MUTATION] Invalid userId in mutation args:", args.userId);
+        throw new Error("User ID is required and must be a string");
+      }
+      
+      return createClient(args.client, args.userId);
+    },
     onSuccess: (newClient) => {
       queryClient.invalidateQueries({ queryKey: ["standalone-clients"] });
       return newClient;
@@ -257,169 +425,49 @@ function ClientVehicleStep() {
     },
   });
 
-  // Auto-save form data with debouncing
-  const debouncedFormData = useMemo(() => {
-    return {
-      clientData,
-      vehicleData: {
-        ...vehicleData,
-        // Convert string numbers back to numbers for storage
-        // Only convert if string is not empty, otherwise keep as empty string for now
-        year: vehicleData.year.trim() ? parseInt(vehicleData.year) || new Date().getFullYear() : new Date().getFullYear(),
-        mileage: vehicleData.mileage.trim() ? parseInt(vehicleData.mileage) || 0 : 0,
-        price: vehicleData.price.trim() ? parseFloat(vehicleData.price) || 0 : 0,
-        cost: vehicleData.cost.trim() ? parseFloat(vehicleData.cost) || 0 : 0,
-      },
-    };
-  }, [clientData, vehicleData]);
 
-  // Debounced auto-save effect - saves to both wizard context and IndexedDB
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      // Update wizard context
-      updateFormData(debouncedFormData);
+  // Simple update handlers for client data
+  const updateClientField = useCallback(
+    (field: keyof typeof clientData, value: string) => {
+      setClientData((prev) => ({ ...prev, [field]: value }));
+      // Mark as initialized when user starts typing
+      isInitializedRef.current = true;
+    },
+    []
+  );
 
-      // Save to IndexedDB
-      try {
-        const { clientData, vehicleData } = debouncedFormData;
-        let clientId = formData.clientId;
-        let vehicleId = formData.vehicleId;
-        let dealId = dealIdRef.current;
+  // Simple update handlers for co-buyer data
+  const updateCobuyerField = useCallback(
+    (field: keyof typeof cobuyerData, value: string) => {
+      setCobuyerData((prev) => ({ ...prev, [field]: value }));
+      // Mark as initialized when user starts typing
+      isInitializedRef.current = true;
+    },
+    []
+  );
 
-        // Create or update client if we have minimum required data
-        if (clientData.firstName && clientData.lastName) {
-          if (clientId) {
-            // Update existing client
-            await updateClient(clientId, {
-              firstName: clientData.firstName,
-              lastName: clientData.lastName,
-              email: clientData.email || undefined,
-              phone: clientData.phone || undefined,
-              address: clientData.address || undefined,
-              city: clientData.city || undefined,
-              state: clientData.state || undefined,
-              zipCode: clientData.zipCode || undefined,
-            });
-          } else {
-            // Create new client
-            const newClient = await createClient({
-              firstName: clientData.firstName,
-              lastName: clientData.lastName,
-              email: clientData.email || undefined,
-              phone: clientData.phone || undefined,
-              address: clientData.address || undefined,
-              city: clientData.city || undefined,
-              state: clientData.state || undefined,
-              zipCode: clientData.zipCode || undefined,
-            });
-            clientId = newClient.id;
-            updateFormData({ clientId, selectedClient: newClient });
-          }
-        }
-
-        // Create or update vehicle if we have minimum required data
-        if (vehicleData.vin && vehicleData.make && vehicleData.model && vehicleData.year) {
-          // Check if vehicle with this VIN already exists
-          const existingVehicle = await getVehicleByVIN(vehicleData.vin);
-          
-          if (existingVehicle) {
-            // Update existing vehicle
-            await updateVehicle(existingVehicle.id, {
-              vin: vehicleData.vin,
-              stockNumber: vehicleData.stockNumber || undefined,
-              year: vehicleData.year,
-              make: vehicleData.make,
-              model: vehicleData.model,
-              trim: vehicleData.trim || undefined,
-              mileage: vehicleData.mileage,
-              color: vehicleData.color || undefined,
-              price: vehicleData.price,
-              cost: vehicleData.cost || undefined,
-              status: vehicleData.status,
-              description: vehicleData.description || undefined,
-            });
-            vehicleId = existingVehicle.id;
-            updateFormData({ vehicleId, selectedVehicle: existingVehicle });
-          } else if (vehicleId) {
-            // Update existing vehicle by ID
-            await updateVehicle(vehicleId, {
-              vin: vehicleData.vin,
-              stockNumber: vehicleData.stockNumber || undefined,
-              year: vehicleData.year,
-              make: vehicleData.make,
-              model: vehicleData.model,
-              trim: vehicleData.trim || undefined,
-              mileage: vehicleData.mileage,
-              color: vehicleData.color || undefined,
-              price: vehicleData.price,
-              cost: vehicleData.cost || undefined,
-              status: vehicleData.status,
-              description: vehicleData.description || undefined,
-            });
-          } else {
-            // Create new vehicle
-            const newVehicle = await createVehicle({
-              vin: vehicleData.vin,
-              stockNumber: vehicleData.stockNumber || undefined,
-              year: vehicleData.year,
-              make: vehicleData.make,
-              model: vehicleData.model,
-              trim: vehicleData.trim || undefined,
-              mileage: vehicleData.mileage,
-              color: vehicleData.color || undefined,
-              price: vehicleData.price,
-              cost: vehicleData.cost || undefined,
-              status: vehicleData.status,
-              description: vehicleData.description || undefined,
-            });
-            vehicleId = newVehicle.id;
-            updateFormData({ vehicleId, selectedVehicle: newVehicle });
-          }
-        }
-
-        // Create or update draft deal if we have client and vehicle
-        if (clientId && vehicleId) {
-          const dealData = {
-            type: formData.type || "retail",
-            clientId,
-            vehicleId,
-            status: "draft",
-            totalAmount: vehicleData.price || 0,
-            saleAmount: vehicleData.price || 0,
-            documentIds: formData.documentIds || [],
-          };
-
-          if (dealId) {
-            // Update existing deal
-            await updateDeal(dealId, dealData);
-          } else {
-            // Create new draft deal
-            const newDeal = await createDeal(dealData);
-            dealId = newDeal.id;
-            dealIdRef.current = newDeal.id;
-            queryClient.invalidateQueries({ queryKey: ["standalone-deals"] });
-          }
-        }
-      } catch (error) {
-        // Silently fail auto-save errors - don't interrupt user typing
-        console.error("❌ [AUTO-SAVE] Error saving to database:", error);
-      }
-    }, 500); // 500ms debounce
-
-    return () => clearTimeout(timer);
-  }, [debouncedFormData, updateFormData, formData, queryClient]);
-
-  // Memoized update handlers for client data
-  const updateClientField = useCallback((field: keyof typeof clientData, value: string) => {
-    setClientData((prev) => ({ ...prev, [field]: value }));
-  }, []);
-
-  // Memoized update handlers for vehicle data
-  const updateVehicleField = useCallback((field: keyof typeof vehicleData, value: string | number) => {
-    setVehicleData((prev) => ({ ...prev, [field]: value }));
-  }, []);
+  // Simple update handlers for vehicle data
+  const updateVehicleField = useCallback(
+    (field: keyof typeof vehicleData, value: string | number) => {
+      setVehicleData((prev) => ({ ...prev, [field]: value }));
+      // Mark as initialized when user starts typing
+      isInitializedRef.current = true;
+    },
+    []
+  );
 
   const handleNext = async () => {
+    console.log("🚀 [CLIENT-VEHICLE] handleNext called");
+    
+    // Capture userId at the start to avoid timing issues
+    const currentUserId = auth.user?.id;
+    if (!currentUserId) {
+      console.error("❌ [CLIENT-VEHICLE] User ID is missing at start of handleNext!");
+      toast.error("Authentication error. Please log in again.");
+      return;
+    }
+    console.log("✅ [CLIENT-VEHICLE] User ID captured:", currentUserId);
+    
     if (!clientData.firstName || !clientData.lastName) {
       toast.error("Please enter client first and last name");
       return;
@@ -430,8 +478,15 @@ function ClientVehicleStep() {
     const priceNum = vehicleData.price ? parseFloat(vehicleData.price) : 0;
     const mileageNum = vehicleData.mileage ? parseInt(vehicleData.mileage) : 0;
 
-    if (!vehicleData.vin || !vehicleData.make || !vehicleData.model || !yearNum) {
-      toast.error("Please enter all required vehicle information (VIN, Make, Model, Year)");
+    if (
+      !vehicleData.vin ||
+      !vehicleData.make ||
+      !vehicleData.model ||
+      !yearNum
+    ) {
+      toast.error(
+        "Please enter all required vehicle information (VIN, Make, Model, Year)"
+      );
       return;
     }
 
@@ -440,6 +495,8 @@ function ClientVehicleStep() {
       return;
     }
 
+    console.log("✅ [CLIENT-VEHICLE] Validation passed, starting save process");
+    
     try {
       // Final update with converted numbers
       const finalVehicleData = {
@@ -448,10 +505,15 @@ function ClientVehicleStep() {
         mileage: mileageNum,
         price: priceNum,
         cost: vehicleData.cost ? parseFloat(vehicleData.cost) : 0,
+        doors: vehicleData.doors ? parseInt(vehicleData.doors) : undefined,
+        cylinders: vehicleData.cylinders
+          ? parseInt(vehicleData.cylinders)
+          : undefined,
       };
 
       updateFormData({
         clientData,
+        cobuyerData,
         vehicleData: finalVehicleData,
       });
 
@@ -459,35 +521,68 @@ function ClientVehicleStep() {
       let finalClient = formData.selectedClient;
       let finalVehicle = formData.selectedVehicle;
 
+      console.log("📝 [CLIENT-VEHICLE] Checking if client/vehicle need to be created");
+      console.log("  - finalClient:", finalClient ? "exists" : "missing");
+      console.log("  - formData.clientId:", formData.clientId || "missing");
+      console.log("  - finalVehicle:", finalVehicle ? "exists" : "missing");
+      console.log("  - formData.vehicleId:", formData.vehicleId || "missing");
+
       if (!finalClient || !formData.clientId) {
+        console.log("📝 [CLIENT-VEHICLE] Creating new client...");
+        console.log("  - Using captured userId:", currentUserId);
+        
+        // Ensure userId is a string
+        const userIdString = String(currentUserId).trim();
+        if (!userIdString || userIdString === "undefined" || userIdString === "null") {
+          console.error("❌ [CLIENT-VEHICLE] User ID is invalid:", currentUserId);
+          throw new Error("User ID is required to create client");
+        }
+        
+        console.log("✅ [CLIENT-VEHICLE] User ID validated:", userIdString);
+        
         // Create client if it doesn't exist
         finalClient = await createClientMutation.mutateAsync({
-          firstName: clientData.firstName,
-          lastName: clientData.lastName,
-          email: clientData.email || undefined,
-          phone: clientData.phone || undefined,
-          address: clientData.address || undefined,
-          city: clientData.city || undefined,
-          state: clientData.state || undefined,
-          zipCode: clientData.zipCode || undefined,
+          client: {
+            first_name: clientData.firstName,
+            last_name: clientData.lastName,
+            email: clientData.email || undefined,
+            phone: clientData.phone || undefined,
+            address: clientData.address || undefined,
+            city: clientData.city || undefined,
+            state: clientData.state || undefined,
+            zip_code: clientData.zipCode || undefined,
+            drivers_license: clientData.driversLicense || undefined,
+          },
+          userId: userIdString,
         });
       }
 
       if (!finalVehicle || !formData.vehicleId) {
+        console.log("📝 [CLIENT-VEHICLE] Checking for existing vehicle or creating new one...");
         // Check if vehicle with this VIN already exists
         const existingVehicle = await getVehicleByVIN(vehicleData.vin);
-        
+
         if (existingVehicle) {
+          console.log("✅ [CLIENT-VEHICLE] Found existing vehicle:", existingVehicle.id);
           finalVehicle = existingVehicle;
         } else {
+          console.log("📝 [CLIENT-VEHICLE] Creating new vehicle...");
           // Create vehicle if it doesn't exist
           finalVehicle = await createVehicleMutation.mutateAsync({
             vin: vehicleData.vin,
-            stockNumber: vehicleData.stockNumber || undefined,
+            stock_number: vehicleData.stockNumber || undefined,
             year: yearNum,
             make: vehicleData.make,
             model: vehicleData.model,
             trim: vehicleData.trim || undefined,
+            body: vehicleData.body || undefined,
+            doors: vehicleData.doors ? parseInt(vehicleData.doors) : undefined,
+            transmission: vehicleData.transmission || undefined,
+            engine: vehicleData.engine || undefined,
+            cylinders: vehicleData.cylinders
+              ? parseInt(vehicleData.cylinders)
+              : undefined,
+            title_number: vehicleData.titleNumber || undefined,
             mileage: mileageNum,
             color: vehicleData.color || undefined,
             price: priceNum,
@@ -498,132 +593,318 @@ function ClientVehicleStep() {
         }
       }
 
-      updateFormData({
+      console.log("✅ [CLIENT-VEHICLE] Client and vehicle created/retrieved successfully");
+      console.log("  - finalClient.id:", finalClient.id);
+      console.log("  - finalVehicle.id:", finalVehicle.id);
+
+      const updatePayload = {
         clientId: finalClient.id,
         vehicleId: finalVehicle.id,
         selectedClient: finalClient,
         selectedVehicle: finalVehicle,
         saleAmount: priceNum,
         totalAmount: priceNum,
+      };
+      
+      console.log("💾 [CLIENT-VEHICLE] Calling updateFormData with:", {
+        clientId: updatePayload.clientId,
+        vehicleId: updatePayload.vehicleId,
       });
 
+      updateFormData(updatePayload);
+
+      console.log("✅ [CLIENT-VEHICLE] Form data updated, navigating to details page...");
       toast.success("Client and vehicle information saved");
       setCurrentStep(2);
+      
+      console.log("🚀 [CLIENT-VEHICLE] Calling navigate({ to: '/standalone/deals/new/details' })");
       navigate({ to: "/standalone/deals/new/details" });
-    } catch {
-      // Error handling is done in mutation onError
+      console.log("✅ [CLIENT-VEHICLE] Navigate call completed");
+    } catch (error) {
+      // Log error for debugging
+      console.error("❌ [CLIENT-VEHICLE] Error in handleNext:", error);
+      
+      // Show error to user if not already shown by mutation onError
+      if (error instanceof Error) {
+        // Only show if it's not already handled by mutation onError
+        // (mutation onError throws, so we catch it here)
+        const errorMessage = error.message || "Failed to save client and vehicle information";
+        toast.error("Failed to proceed", {
+          description: errorMessage,
+        });
+      } else {
+        toast.error("Failed to proceed", {
+          description: "An unexpected error occurred. Please try again.",
+        });
+      }
     }
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold mb-2">Client & Vehicle Information</h2>
+        <h2 className="text-2xl font-semibold mb-2">
+          Client & Vehicle Information
+        </h2>
         <p className="text-muted-foreground">
           Enter the client and vehicle details for this deal
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card className="p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <User className="h-5 w-5 text-blue-600" />
+      <div>
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card className="p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <User className="h-5 w-5 text-blue-600" />
+              </div>
+              <h3 className="font-semibold">Client Information</h3>
             </div>
-            <h3 className="font-semibold">Client Information</h3>
-          </div>
-          <FieldGroup>
-            <div className="grid grid-cols-2 gap-4">
+            <FieldGroup>
+              <div className="grid grid-cols-2 gap-4">
+                <Field>
+                  <FieldLabel>First Name *</FieldLabel>
+                  <FieldContent>
+                    <Input
+                      value={clientData.firstName}
+                      onChange={(e) =>
+                        updateClientField("firstName", e.target.value)
+                      }
+                      required
+                    />
+                  </FieldContent>
+                </Field>
+                <Field>
+                  <FieldLabel>Last Name *</FieldLabel>
+                  <FieldContent>
+                    <Input
+                      value={clientData.lastName}
+                      onChange={(e) =>
+                        updateClientField("lastName", e.target.value)
+                      }
+                      required
+                    />
+                  </FieldContent>
+                </Field>
+              </div>
               <Field>
-                <FieldLabel>First Name *</FieldLabel>
+                <FieldLabel>Email</FieldLabel>
                 <FieldContent>
                   <Input
-                    value={clientData.firstName}
-                    onChange={(e) => updateClientField("firstName", e.target.value)}
-                    required
+                    type="email"
+                    value={clientData.email}
+                    onChange={(e) => updateClientField("email", e.target.value)}
                   />
                 </FieldContent>
               </Field>
               <Field>
-                <FieldLabel>Last Name *</FieldLabel>
+                <FieldLabel>Phone</FieldLabel>
                 <FieldContent>
                   <Input
-                    value={clientData.lastName}
-                    onChange={(e) => updateClientField("lastName", e.target.value)}
-                    required
+                    type="tel"
+                    value={clientData.phone}
+                    onChange={(e) => updateClientField("phone", e.target.value)}
                   />
                 </FieldContent>
               </Field>
+              <Field>
+                <FieldLabel>Address</FieldLabel>
+                <FieldContent>
+                  <Input
+                    value={clientData.address}
+                    onChange={(e) =>
+                      updateClientField("address", e.target.value)
+                    }
+                  />
+                </FieldContent>
+              </Field>
+              <Field>
+                <FieldLabel>Address Line 2</FieldLabel>
+                <FieldContent>
+                  <Input
+                    value={clientData.addressLine2}
+                    onChange={(e) =>
+                      updateClientField("addressLine2", e.target.value)
+                    }
+                  />
+                </FieldContent>
+              </Field>
+              <div className="grid grid-cols-3 gap-4">
+                <Field>
+                  <FieldLabel>City</FieldLabel>
+                  <FieldContent>
+                    <Input
+                      value={clientData.city}
+                      onChange={(e) =>
+                        updateClientField("city", e.target.value)
+                      }
+                    />
+                  </FieldContent>
+                </Field>
+                <Field>
+                  <FieldLabel>State</FieldLabel>
+                  <FieldContent>
+                    <Input
+                      value={clientData.state}
+                      onChange={(e) =>
+                        updateClientField("state", e.target.value)
+                      }
+                    />
+                  </FieldContent>
+                </Field>
+                <Field>
+                  <FieldLabel>ZIP Code</FieldLabel>
+                  <FieldContent>
+                    <Input
+                      value={clientData.zipCode}
+                      onChange={(e) =>
+                        updateClientField("zipCode", e.target.value)
+                      }
+                    />
+                  </FieldContent>
+                </Field>
+              </div>
+              <Field>
+                <FieldLabel>Driver's License</FieldLabel>
+                <FieldContent>
+                  <Input
+                    value={clientData.driversLicense}
+                    onChange={(e) =>
+                      updateClientField("driversLicense", e.target.value)
+                    }
+                  />
+                </FieldContent>
+              </Field>
+            </FieldGroup>
+          </Card>
+
+          <Card className="p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <User className="h-5 w-5 text-green-600" />
+              </div>
+              <h3 className="font-semibold">Co-Buyer Information (Optional)</h3>
             </div>
-            <Field>
-              <FieldLabel>Email</FieldLabel>
-              <FieldContent>
-                <Input
-                  type="email"
-                  value={clientData.email}
-                  onChange={(e) => updateClientField("email", e.target.value)}
-                />
-              </FieldContent>
-            </Field>
-            <Field>
-              <FieldLabel>Phone</FieldLabel>
-              <FieldContent>
-                <Input
-                  type="tel"
-                  value={clientData.phone}
-                  onChange={(e) => updateClientField("phone", e.target.value)}
-                />
-              </FieldContent>
-            </Field>
-            <Field>
-              <FieldLabel>Address</FieldLabel>
-              <FieldContent>
-                <Input
-                  value={clientData.address}
-                  onChange={(e) => updateClientField("address", e.target.value)}
-                />
-              </FieldContent>
-            </Field>
-            <div className="grid grid-cols-3 gap-4">
+            <FieldGroup>
+              <div className="grid grid-cols-2 gap-4">
+                <Field>
+                  <FieldLabel>First Name</FieldLabel>
+                  <FieldContent>
+                    <Input
+                      value={cobuyerData.firstName}
+                      onChange={(e) =>
+                        updateCobuyerField("firstName", e.target.value)
+                      }
+                    />
+                  </FieldContent>
+                </Field>
+                <Field>
+                  <FieldLabel>Last Name</FieldLabel>
+                  <FieldContent>
+                    <Input
+                      value={cobuyerData.lastName}
+                      onChange={(e) =>
+                        updateCobuyerField("lastName", e.target.value)
+                      }
+                    />
+                  </FieldContent>
+                </Field>
+              </div>
               <Field>
-                <FieldLabel>City</FieldLabel>
+                <FieldLabel>Email</FieldLabel>
                 <FieldContent>
                   <Input
-                    value={clientData.city}
-                    onChange={(e) => updateClientField("city", e.target.value)}
+                    type="email"
+                    value={cobuyerData.email}
+                    onChange={(e) =>
+                      updateCobuyerField("email", e.target.value)
+                    }
                   />
                 </FieldContent>
               </Field>
               <Field>
-                <FieldLabel>State</FieldLabel>
+                <FieldLabel>Phone</FieldLabel>
                 <FieldContent>
                   <Input
-                    value={clientData.state}
-                    onChange={(e) => updateClientField("state", e.target.value)}
+                    type="tel"
+                    value={cobuyerData.phone}
+                    onChange={(e) =>
+                      updateCobuyerField("phone", e.target.value)
+                    }
                   />
                 </FieldContent>
               </Field>
               <Field>
-                <FieldLabel>ZIP Code</FieldLabel>
+                <FieldLabel>Address</FieldLabel>
                 <FieldContent>
                   <Input
-                    value={clientData.zipCode}
-                    onChange={(e) => updateClientField("zipCode", e.target.value)}
+                    value={cobuyerData.address}
+                    onChange={(e) =>
+                      updateCobuyerField("address", e.target.value)
+                    }
                   />
                 </FieldContent>
               </Field>
-            </div>
-            <Field>
-              <FieldLabel>Driver's License</FieldLabel>
-              <FieldContent>
-                <Input
-                  value={clientData.driversLicense}
-                  onChange={(e) => updateClientField("driversLicense", e.target.value)}
-                />
-              </FieldContent>
-            </Field>
-          </FieldGroup>
-        </Card>
+              <Field>
+                <FieldLabel>Address Line 2</FieldLabel>
+                <FieldContent>
+                  <Input
+                    value={cobuyerData.addressLine2}
+                    onChange={(e) =>
+                      updateCobuyerField("addressLine2", e.target.value)
+                    }
+                  />
+                </FieldContent>
+              </Field>
+              <div className="grid grid-cols-3 gap-4">
+                <Field>
+                  <FieldLabel>City</FieldLabel>
+                  <FieldContent>
+                    <Input
+                      value={cobuyerData.city}
+                      onChange={(e) =>
+                        updateCobuyerField("city", e.target.value)
+                      }
+                    />
+                  </FieldContent>
+                </Field>
+                <Field>
+                  <FieldLabel>State</FieldLabel>
+                  <FieldContent>
+                    <Input
+                      value={cobuyerData.state}
+                      onChange={(e) =>
+                        updateCobuyerField("state", e.target.value)
+                      }
+                    />
+                  </FieldContent>
+                </Field>
+                <Field>
+                  <FieldLabel>ZIP Code</FieldLabel>
+                  <FieldContent>
+                    <Input
+                      value={cobuyerData.zipCode}
+                      onChange={(e) =>
+                        updateCobuyerField("zipCode", e.target.value)
+                      }
+                    />
+                  </FieldContent>
+                </Field>
+              </div>
+              <Field>
+                <FieldLabel>Driver's License</FieldLabel>
+                <FieldContent>
+                  <Input
+                    value={cobuyerData.driversLicense}
+                    onChange={(e) =>
+                      updateCobuyerField("driversLicense", e.target.value)
+                    }
+                  />
+                </FieldContent>
+              </Field>
+            </FieldGroup>
+          </Card>
+        </div>
 
         <Card className="p-6">
           <div className="flex items-center gap-3 mb-6">
@@ -649,7 +930,9 @@ function ClientVehicleStep() {
                 <FieldContent>
                   <Input
                     value={vehicleData.stockNumber}
-                    onChange={(e) => updateVehicleField("stockNumber", e.target.value)}
+                    onChange={(e) =>
+                      updateVehicleField("stockNumber", e.target.value)
+                    }
                   />
                 </FieldContent>
               </Field>
@@ -681,7 +964,9 @@ function ClientVehicleStep() {
                 <FieldContent>
                   <Input
                     value={vehicleData.model}
-                    onChange={(e) => updateVehicleField("model", e.target.value)}
+                    onChange={(e) =>
+                      updateVehicleField("model", e.target.value)
+                    }
                     required
                   />
                 </FieldContent>
@@ -698,11 +983,107 @@ function ClientVehicleStep() {
                 </FieldContent>
               </Field>
               <Field>
+                <FieldLabel>Body Type</FieldLabel>
+                <FieldContent>
+                  <Select
+                    value={vehicleData.body}
+                    onValueChange={(value) => updateVehicleField("body", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select body type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sedan">Sedan</SelectItem>
+                      <SelectItem value="coupe">Coupe</SelectItem>
+                      <SelectItem value="truck">Truck</SelectItem>
+                      <SelectItem value="suv">SUV</SelectItem>
+                      <SelectItem value="hatchback">Hatchback</SelectItem>
+                      <SelectItem value="convertible">Convertible</SelectItem>
+                      <SelectItem value="wagon">Wagon</SelectItem>
+                      <SelectItem value="van">Van</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FieldContent>
+              </Field>
+            </div>
+            <div className="grid grid-cols-4 gap-4">
+              <Field>
+                <FieldLabel>Doors</FieldLabel>
+                <FieldContent>
+                  <Input
+                    type="number"
+                    value={vehicleData.doors}
+                    onChange={(e) =>
+                      updateVehicleField("doors", e.target.value)
+                    }
+                  />
+                </FieldContent>
+              </Field>
+              <Field>
+                <FieldLabel>Transmission</FieldLabel>
+                <FieldContent>
+                  <Select
+                    value={vehicleData.transmission}
+                    onValueChange={(value) =>
+                      updateVehicleField("transmission", value)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="automatic">Automatic</SelectItem>
+                      <SelectItem value="manual">Manual</SelectItem>
+                      <SelectItem value="cvt">CVT</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FieldContent>
+              </Field>
+              <Field>
+                <FieldLabel>Engine</FieldLabel>
+                <FieldContent>
+                  <Input
+                    value={vehicleData.engine}
+                    onChange={(e) =>
+                      updateVehicleField("engine", e.target.value)
+                    }
+                    placeholder="e.g., 2.0L"
+                  />
+                </FieldContent>
+              </Field>
+              <Field>
+                <FieldLabel>Cylinders</FieldLabel>
+                <FieldContent>
+                  <Input
+                    type="number"
+                    value={vehicleData.cylinders}
+                    onChange={(e) =>
+                      updateVehicleField("cylinders", e.target.value)
+                    }
+                  />
+                </FieldContent>
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Field>
+                <FieldLabel>Title Number</FieldLabel>
+                <FieldContent>
+                  <Input
+                    value={vehicleData.titleNumber}
+                    onChange={(e) =>
+                      updateVehicleField("titleNumber", e.target.value)
+                    }
+                  />
+                </FieldContent>
+              </Field>
+              <Field>
                 <FieldLabel>Color</FieldLabel>
                 <FieldContent>
                   <Input
                     value={vehicleData.color}
-                    onChange={(e) => updateVehicleField("color", e.target.value)}
+                    onChange={(e) =>
+                      updateVehicleField("color", e.target.value)
+                    }
                   />
                 </FieldContent>
               </Field>
@@ -714,7 +1095,9 @@ function ClientVehicleStep() {
                   <Input
                     type="number"
                     value={vehicleData.mileage}
-                    onChange={(e) => updateVehicleField("mileage", e.target.value)}
+                    onChange={(e) =>
+                      updateVehicleField("mileage", e.target.value)
+                    }
                     required
                   />
                 </FieldContent>
@@ -726,7 +1109,9 @@ function ClientVehicleStep() {
                     type="number"
                     step="0.01"
                     value={vehicleData.price}
-                    onChange={(e) => updateVehicleField("price", e.target.value)}
+                    onChange={(e) =>
+                      updateVehicleField("price", e.target.value)
+                    }
                     required
                   />
                 </FieldContent>
@@ -767,7 +1152,9 @@ function ClientVehicleStep() {
               <FieldContent>
                 <Input
                   value={vehicleData.description}
-                  onChange={(e) => updateVehicleField("description", e.target.value)}
+                  onChange={(e) =>
+                    updateVehicleField("description", e.target.value)
+                  }
                 />
               </FieldContent>
             </Field>

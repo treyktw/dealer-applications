@@ -84,15 +84,61 @@ export function LicenseAuthProvider({ children }: { children: React.ReactNode })
     loadMachineInfo();
   }, []);
 
-  // Load stored session token first (preferred method)
+  // Load stored session token from Rust secure storage
+  // SECURITY: Always use secure storage (keyring) in Tauri. Only fallback to localStorage in browser dev mode.
   const { data: storedSessionToken, isLoading: sessionTokenLoading } = useQuery({
     queryKey: ["stored-session-token"],
     queryFn: async () => {
+      const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
+      console.log("🔍 [AUTH] Retrieving session token, isTauri:", isTauri);
+      
+      // In Tauri: Always use secure storage (keyring) - never localStorage for security
+      if (isTauri) {
+        try {
+          const token = await invoke<string | null>("get_session_token");
+          console.log("🔍 [AUTH] Secure storage token:", token ? "Found" : "Not found");
+          
+          if (token) {
+            return token;
+          }
+          
+          // One-time migration: Check localStorage and migrate to secure storage
+          // This is safe because we're migrating FROM localStorage TO secure storage
+          const legacyToken = localStorage.getItem("standalone_session_token");
+          if (legacyToken) {
+            console.log("🔄 [AUTH] Migrating legacy token from localStorage to secure storage...");
+            try {
+              await invoke("store_session_token", { token: legacyToken });
+              // Remove from localStorage after successful migration
+              localStorage.removeItem("standalone_session_token");
+              console.log("✅ [AUTH] Token migrated to secure storage, removed from localStorage");
+              return legacyToken;
+            } catch (error) {
+              console.error("❌ [AUTH] Failed to migrate token to secure storage:", error);
+              // Don't return legacyToken - force re-authentication for security
+              localStorage.removeItem("standalone_session_token");
+              return null;
+            }
+          }
+          
+          console.log("🔍 [AUTH] No session token found in secure storage");
+          return null;
+        } catch (error) {
+          console.error("❌ [AUTH] Error retrieving from secure storage:", error);
+          // In Tauri, never fallback to localStorage - force re-authentication
+          return null;
+        }
+      }
+      
+      // Browser dev mode only: Use localStorage as fallback (NOT SECURE - dev only)
+      // In production Tauri builds, this path should never be reached
+      console.warn("⚠️ [AUTH] Browser dev mode - using localStorage (NOT SECURE, dev only)");
       try {
-        const token = localStorage.getItem("standalone_session_token");
-        console.log("🔍 Checking for stored session token:", token ? "Found" : "Not found");
-        return token;
-      } catch {
+        const browserToken = localStorage.getItem("standalone_session_token");
+        console.log("🔍 [AUTH] Browser mode - localStorage token:", browserToken ? "Found" : "Not found");
+        return browserToken;
+      } catch (error) {
+        console.error("❌ [AUTH] Error accessing localStorage:", error);
         return null;
       }
     },
@@ -121,13 +167,32 @@ export function LicenseAuthProvider({ children }: { children: React.ReactNode })
         } else {
           console.log("❌ Standalone session validation failed");
           // Clear invalid session
-          localStorage.removeItem("standalone_session_token");
+          const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
+          if (isTauri) {
+            try {
+              await invoke("remove_session_token");
+            } catch (error) {
+              console.error("Failed to remove from secure storage:", error);
+            }
+          } else {
+            localStorage.removeItem("standalone_session_token");
+          }
           localStorage.removeItem("standalone_user_id");
           return null;
         }
       } catch (error) {
         console.error("Session validation error:", error);
-        localStorage.removeItem("standalone_session_token");
+        // Clear invalid session
+        const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
+        if (isTauri) {
+          try {
+            await invoke("remove_secure", { key: "standalone_session_token" });
+          } catch (e) {
+            console.error("Failed to remove from secure storage:", e);
+          }
+        } else {
+          localStorage.removeItem("standalone_session_token");
+        }
         localStorage.removeItem("standalone_user_id");
         return null;
       }
@@ -182,10 +247,30 @@ export function LicenseAuthProvider({ children }: { children: React.ReactNode })
         
         // If activation returned a session token, update it
         if (result.sessionToken && result.userId) {
-          localStorage.setItem("standalone_session_token", result.sessionToken);
-          localStorage.setItem("standalone_user_id", result.userId);
-          queryClient.setQueryData(["stored-session-token"], result.sessionToken);
-          queryClient.invalidateQueries({ queryKey: ["standalone-session"] });
+          const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
+          
+          // SECURITY: In Tauri, always use secure storage (keyring) - never localStorage
+          if (isTauri) {
+            try {
+              await invoke("store_session_token", { token: result.sessionToken });
+              console.log("✅ [AUTH] Token stored in secure storage (keyring)");
+              // Store user ID in localStorage (non-sensitive metadata)
+              localStorage.setItem("standalone_user_id", result.userId);
+              queryClient.setQueryData(["stored-session-token"], result.sessionToken);
+              queryClient.invalidateQueries({ queryKey: ["standalone-session"] });
+            } catch (error) {
+              console.error("❌ [AUTH] Failed to store in secure storage:", error);
+              // Don't fallback to localStorage - force re-authentication
+              throw new Error("Failed to store session securely.");
+            }
+          } else {
+            // Browser dev mode only: Use localStorage (NOT SECURE - dev only)
+            console.warn("⚠️ [AUTH] Browser dev mode - using localStorage (NOT SECURE, dev only)");
+            localStorage.setItem("standalone_session_token", result.sessionToken);
+            localStorage.setItem("standalone_user_id", result.userId);
+            queryClient.setQueryData(["stored-session-token"], result.sessionToken);
+            queryClient.invalidateQueries({ queryKey: ["standalone-session"] });
+          }
         }
       }
 
@@ -298,6 +383,18 @@ export function LicenseAuthProvider({ children }: { children: React.ReactNode })
       }
     : null;
 
+  // Debug logging
+  useEffect(() => {
+    console.log("🔍 [AUTH] LicenseAuthContext state:", {
+      storedSessionToken: storedSessionToken ? "exists" : "null",
+      sessionTokenLoading,
+      sessionData: sessionData ? "exists" : "null",
+      sessionLoading,
+      authData: authData ? "exists" : "null",
+      user: authData?.user?.email || "null",
+    });
+  }, [storedSessionToken, sessionTokenLoading, sessionData, sessionLoading, authData]);
+
   // Deactivate license mutation
   const deactivateLicenseMutation = useMutation({
     mutationFn: async () => {
@@ -319,8 +416,17 @@ export function LicenseAuthProvider({ children }: { children: React.ReactNode })
         console.error("Failed to remove license:", error);
       }
 
-      // Clear session
-      localStorage.removeItem("standalone_session_token");
+      // Clear session from secure storage
+      const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
+      if (isTauri) {
+        try {
+          await invoke("remove_secure", { key: "standalone_session_token" });
+        } catch (error) {
+          console.error("Failed to remove from secure storage:", error);
+        }
+      } else {
+        localStorage.removeItem("standalone_session_token");
+      }
       localStorage.removeItem("standalone_user_id");
       queryClient.setQueryData(["stored-session-token"], null);
       queryClient.setQueryData(["stored-license"], null);
@@ -373,8 +479,19 @@ export function LicenseAuthProvider({ children }: { children: React.ReactNode })
   const logout = useCallback(async () => {
     console.log("🚪 [LOGOUT] Starting logout process...");
     
+    const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
+    
     // Check what exists before logout
-    const sessionTokenBefore = localStorage.getItem("standalone_session_token");
+    let sessionTokenBefore: string | null = null;
+    if (isTauri) {
+      try {
+        sessionTokenBefore = await invoke<string | null>("get_session_token");
+      } catch {
+        sessionTokenBefore = null;
+      }
+    } else {
+      sessionTokenBefore = localStorage.getItem("standalone_session_token");
+    }
     const userIdBefore = localStorage.getItem("standalone_user_id");
     const storedLicenseBefore = await invoke<string>("get_stored_license").catch(() => null);
     
@@ -393,13 +510,33 @@ export function LicenseAuthProvider({ children }: { children: React.ReactNode })
     });
 
     try {
-      // Remove session tokens
-      console.log("🗑️ [LOGOUT] Removing session tokens from localStorage...");
-      localStorage.removeItem("standalone_session_token");
+      // Remove session tokens from secure storage
+      console.log("🗑️ [LOGOUT] Removing session tokens, isTauri:", isTauri);
+      
+      if (isTauri) {
+        try {
+          await invoke("remove_secure", { key: "standalone_session_token" });
+          console.log("✅ [LOGOUT] Token removed from secure storage");
+        } catch (error) {
+          console.error("❌ [LOGOUT] Failed to remove from secure storage:", error);
+        }
+      } else {
+        localStorage.removeItem("standalone_session_token");
+        console.log("✅ [LOGOUT] Token removed from localStorage (dev mode)");
+      }
       localStorage.removeItem("standalone_user_id");
       
       // Verify removal
-      const sessionTokenAfter = localStorage.getItem("standalone_session_token");
+      let sessionTokenAfter: string | null = null;
+      if (isTauri) {
+        try {
+          sessionTokenAfter = await invoke<string | null>("get_session_token");
+        } catch {
+          sessionTokenAfter = null;
+        }
+      } else {
+        sessionTokenAfter = localStorage.getItem("standalone_session_token");
+      }
       const userIdAfter = localStorage.getItem("standalone_user_id");
       
       console.log("✅ [LOGOUT] Token removal verification:", {
@@ -436,7 +573,16 @@ export function LicenseAuthProvider({ children }: { children: React.ReactNode })
     await queryClient.invalidateQueries({ queryKey: ["license-validation"] });
     
     // Verify final state
-    const sessionTokenFinal = localStorage.getItem("standalone_session_token");
+    let sessionTokenFinal: string | null = null;
+    if (isTauri) {
+      try {
+        sessionTokenFinal = await invoke<string | null>("get_session_token");
+      } catch {
+        sessionTokenFinal = null;
+      }
+    } else {
+      sessionTokenFinal = localStorage.getItem("standalone_session_token");
+    }
     const userIdFinal = localStorage.getItem("standalone_user_id");
     const cachedToken = queryClient.getQueryData(["stored-session-token"]);
     

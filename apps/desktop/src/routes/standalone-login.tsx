@@ -166,15 +166,40 @@ function StandaloneLoginPage() {
       if (result.success && result.sessionToken) {
         console.log("✅ Login successful, storing session token");
         
-        // Store session token
-        localStorage.setItem("standalone_session_token", result.sessionToken);
-        localStorage.setItem("standalone_user_id", result.user.id);
+        const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
         
-        // Update react-query cache so LicenseAuthContext picks up the new token immediately
-        queryClient.setQueryData(["stored-session-token"], result.sessionToken);
-        queryClient.invalidateQueries({ queryKey: ["standalone-session"] });
-        queryClient.invalidateQueries({ queryKey: ["user-license-check"] });
-        queryClient.invalidateQueries({ queryKey: ["license-validation"] });
+        // SECURITY: In Tauri, always use secure storage (keyring) - never localStorage
+        if (isTauri) {
+          try {
+            await invoke("store_session_token", { token: result.sessionToken });
+            console.log("✅ [LOGIN] Token stored in secure storage (keyring)");
+            
+            // Store user ID in localStorage (non-sensitive metadata)
+            localStorage.setItem("standalone_user_id", result.user.id);
+            
+            // Update react-query cache so LicenseAuthContext picks up the new token immediately
+            queryClient.setQueryData(["stored-session-token"], result.sessionToken);
+            queryClient.invalidateQueries({ queryKey: ["standalone-session"] });
+            queryClient.invalidateQueries({ queryKey: ["user-license-check"] });
+            queryClient.invalidateQueries({ queryKey: ["license-validation"] });
+          } catch (error) {
+            console.error("❌ [LOGIN] Failed to store in secure storage:", error);
+            // Don't fallback to localStorage - force user to retry login
+            throw new Error("Failed to store session securely. Please try again.");
+          }
+        } else {
+          // Browser dev mode only: Use localStorage (NOT SECURE - dev only)
+          console.warn("⚠️ [LOGIN] Browser dev mode - using localStorage (NOT SECURE, dev only)");
+          localStorage.setItem("standalone_session_token", result.sessionToken);
+          localStorage.setItem("standalone_user_id", result.user.id);
+          console.log("✅ [LOGIN] Token stored in localStorage (dev mode only)");
+          
+          // Update react-query cache
+          queryClient.setQueryData(["stored-session-token"], result.sessionToken);
+          queryClient.invalidateQueries({ queryKey: ["standalone-session"] });
+          queryClient.invalidateQueries({ queryKey: ["user-license-check"] });
+          queryClient.invalidateQueries({ queryKey: ["license-validation"] });
+        }
         
         toast.success("Login successful!");
         
@@ -193,15 +218,18 @@ function StandaloneLoginPage() {
 
         // Check if license is stored locally
         try {
-          const storedLicense = await invoke<string>("get_stored_license");
+          const storedLicense = await invoke<string>("get_stored_license").catch(() => null);
           if (!storedLicense || storedLicense !== userLicenseCheck.licenseKey) {
             console.log("💾 [STANDALONE-LOGIN] Storing license key locally...");
             // Store license key locally
             await invoke("store_license", { licenseKey: userLicenseCheck.licenseKey });
+            console.log("✅ License key stored successfully");
+          } else {
+            console.log("✅ License key already stored locally and matches");
           }
         } catch (err) {
-          console.error("Failed to store license locally:", err);
-          // Continue anyway - license is in database
+          console.error("❌ Failed to store license locally:", err);
+          // Continue anyway - license is in database, user can still use the app
         }
         
         // User has license - navigate to home

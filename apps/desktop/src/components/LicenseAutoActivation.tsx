@@ -154,9 +154,26 @@ export function LicenseAutoActivation({ email, onComplete, onNoLicense }: Licens
         if (result.sessionToken && result.userId) {
           setStep("creating_session");
 
-          localStorage.setItem("standalone_session_token", result.sessionToken);
-          localStorage.setItem("standalone_user_id", result.userId);
-          console.log("✅ Session token stored");
+          const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
+          
+          // SECURITY: In Tauri, always use secure storage (keyring) - never localStorage
+          if (isTauri) {
+            try {
+              await invoke("store_session_token", { token: result.sessionToken });
+              console.log("✅ [AUTO-ACTIVATION] Token stored in secure storage (keyring)");
+              // Store user ID in localStorage (non-sensitive metadata)
+              localStorage.setItem("standalone_user_id", result.userId);
+            } catch (error) {
+              console.error("❌ [AUTO-ACTIVATION] Failed to store in secure storage:", error);
+              throw new Error("Failed to store session securely. Please try again.");
+            }
+          } else {
+            // Browser dev mode only: Use localStorage (NOT SECURE - dev only)
+            console.warn("⚠️ [AUTO-ACTIVATION] Browser dev mode - using localStorage (NOT SECURE, dev only)");
+            localStorage.setItem("standalone_session_token", result.sessionToken);
+            localStorage.setItem("standalone_user_id", result.userId);
+            console.log("✅ [AUTO-ACTIVATION] Token stored in localStorage (dev mode only)");
+          }
         }
 
         setStep("complete");

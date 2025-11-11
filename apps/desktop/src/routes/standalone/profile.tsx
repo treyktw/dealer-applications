@@ -18,8 +18,8 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useId, useMemo, useRef } from "react";
 import { toast } from "sonner";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@dealer/convex";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { api, type Id } from "@dealer/convex";
 import { useUnifiedAuth } from "@/components/auth/useUnifiedAuth";
 import { checkForUpdatesManually, getCurrentVersion } from "@/components/update/UpdateManager";
 
@@ -76,7 +76,7 @@ function StandaloneProfilePage() {
       });
       prevUserValuesRef.current = { ...userValues };
     }
-  }, [user, userValues.firstName, userValues.lastName, userValues.businessName, isEditing]);
+  }, [user, userValues, isEditing]);
 
   // Get current app version on mount
   useEffect(() => {
@@ -96,7 +96,7 @@ function StandaloneProfilePage() {
 
       const { convexMutation } = await import("@/lib/convex");
       return await convexMutation(api.api.standaloneAuth.updateProfile, {
-        userId: user.id,
+        userId: user.id as unknown as Id<"standalone_users">,
         name: `${data.firstName} ${data.lastName}`.trim(),
         businessName: data.businessName || undefined,
       });
