@@ -4,6 +4,7 @@ import { api } from "./_generated/api";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import type { Doc, Id } from "./_generated/dataModel";
+import type { FunctionReference } from "convex/server";
 import { generateDownloadUrl as generateS3DownloadUrl } from "./lib/s3";
 import { DealStatus, type DealStatusType } from "./lib/statuses";
 import {
@@ -148,7 +149,7 @@ export const getCustomDocumentsForDeal = query({
   },
   handler: async (ctx, args) => {
     // Handle authentication with token support
-    let user: any;
+    let user: Doc<"users"> | null = null;
     if (args.token) {
       // Desktop app authentication
       const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token: args.token });
@@ -282,7 +283,9 @@ export const generateCustomDocumentUploadUrl = action({
     }
 
     // Create file upload record directly
-    const fileUploadId = await ctx.runMutation(api.documents.createFileUploadRecord, {
+    const fileUploadId = await ctx.runMutation(
+      api.documents.createFileUploadRecord as unknown as FunctionReference<"mutation", "public">,
+      {
       dealershipId: user.dealershipId,
       fileName: uniqueFileName,
       originalFileName: args.fileName,
@@ -295,7 +298,9 @@ export const generateCustomDocumentUploadUrl = action({
     });
 
     // Create custom document record
-    const documentId = await ctx.runMutation(api.documents.createCustomDocumentRecord, {
+    const documentId = await ctx.runMutation(
+      api.documents.createCustomDocumentRecord as unknown as FunctionReference<"mutation", "public">,
+      {
       dealId: args.dealId,
       dealershipId: user.dealershipId,
       documentName: args.fileName,
@@ -447,19 +452,22 @@ export const generateCustomDocumentDownloadUrl = action({
       throw new Error("Premium subscription with custom document upload required");
     }
 
-    const document = await ctx.runQuery(api.documents.getDocumentById, {
-      documentId: args.documentId,
-    });
+    const document = await ctx.runQuery(
+      api.documents.getDocumentById as unknown as FunctionReference<"query", "public">,
+      {
+        documentId: args.documentId,
+      }
+    );
     if (!document) {
       throw new Error("Document not found");
     }
 
     // Verify user has access to this document
-    const user = await ctx.runQuery(api.users.getUserByClerkId, {
+    const userData = await ctx.runQuery(api.users.getUserByClerkId, {
       clerkId: identity.subject,
     });
 
-    if (!user || user.dealershipId !== document.dealershipId) {
+    if (!userData || userData.dealershipId !== document.dealershipId) {
       throw new Error("Access denied: Document not authorized");
     }
 
@@ -505,11 +513,11 @@ export const deleteCustomDocument = mutation({
     }
 
     // Verify user has access to this document
-    const user = await ctx.runQuery(api.users.getUserByClerkId, {
+    const userData = await ctx.runQuery(api.users.getUserByClerkId, {
       clerkId: identity.subject,
     });
 
-    if (!user || user.dealershipId !== document.dealershipId) {
+    if (!userData || userData.dealershipId !== document.dealershipId) {
       throw new Error("Access denied: Document not authorized");
     }
 
@@ -530,7 +538,7 @@ export const generateCustomDocumentViewUrl = action({
   },
   handler: async (ctx, args): Promise<{ viewUrl: string; fileName: string; fileType: string }> => {
     // Support both web and desktop auth
-    let user: any;
+    let userDealershipId: Id<"dealerships"> | undefined;
     if (args.token) {
       const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token: args.token });
       if (!sessionData?.user) throw new Error("Invalid or expired session");
@@ -538,20 +546,22 @@ export const generateCustomDocumentViewUrl = action({
       const { id } = sessionData.user as { id?: string; email?: string };
       
       // Try to find user by Clerk ID
-      user = id
-        ? await ctx.runQuery(api.users.getUserByClerkId, { clerkId: id })
-        : null;
+      if (id) {
+        const userData = await ctx.runQuery(api.users.getUserByClerkId, { clerkId: id });
+        userDealershipId = userData?.dealershipId;
+      }
     } else {
       const identity = await ctx.auth.getUserIdentity();
       if (!identity) {
         throw new Error("Not authenticated");
       }
-      user = await ctx.runQuery(api.users.getUserByClerkId, {
+      const userData = await ctx.runQuery(api.users.getUserByClerkId, {
         clerkId: identity.subject,
       });
+      userDealershipId = userData?.dealershipId;
     }
 
-    if (!user) {
+    if (!userDealershipId) {
       throw new Error("User not found");
     }
 
@@ -568,15 +578,18 @@ export const generateCustomDocumentViewUrl = action({
       throw new Error("Premium subscription with custom document upload required");
     }
 
-    const document = await ctx.runQuery(api.documents.getDocumentById, {
-      documentId: args.documentId,
-    });
+    const document = await ctx.runQuery(
+      api.documents.getDocumentById as unknown as FunctionReference<"query", "public">,
+      {
+        documentId: args.documentId,
+      }
+    );
     if (!document) {
       throw new Error("Document not found");
     }
 
     // Verify user has access to this document
-    if (user.dealershipId !== document.dealershipId) {
+    if (userDealershipId !== document.dealershipId) {
       throw new Error("Access denied: Document not authorized");
     }
 
@@ -607,7 +620,7 @@ export const getDocumentWithMetadata = query({
   },
   handler: async (ctx, args) => {
     // Support both web and desktop auth
-    let user: any;
+    let user: Doc<"users"> | null = null;
     if (args.token) {
       const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token: args.token });
       if (!sessionData?.user) throw new Error("Invalid or expired session");
@@ -673,7 +686,7 @@ export const getDocumentPreviewUrl = action({
   },
   handler: async (ctx, args): Promise<{ previewUrl: string; expiresAt: number }> => {
     // Support both web and desktop auth
-    let user: any;
+    let user: Doc<"users"> | null = null;
     if (args.token) {
       // Desktop app authentication
       const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token: args.token });
@@ -700,9 +713,13 @@ export const getDocumentPreviewUrl = action({
       if (!identity) {
         throw new Error("Not authenticated");
       }
-      user = await ctx.runQuery(api.users.getUserByClerkId, {
+      const userData = await ctx.runQuery(api.users.getUserByClerkId, {
         clerkId: identity.subject,
       });
+      user = userData ? {
+        _id: userData.id,
+        dealershipId: userData.dealershipId,
+      } as Doc<"users"> : null;
     }
 
     if (!user) {
@@ -796,26 +813,29 @@ export const sendDealDocumentsEmail = action({
   },
   handler: async (ctx, args): Promise<{ success: boolean; message: string }> => {
     // Authenticate
-    let user: any;
+    let userDealershipId: Id<"dealerships"> | undefined;
     if (args.token) {
       const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token: args.token });
       if (!sessionData?.user) throw new Error("Invalid or expired session");
       const { id, email } = sessionData.user as { id?: string; email?: string };
-      user = id
-        ? await ctx.runQuery(api.users.getUserByClerkId, { clerkId: id })
-        : null;
-      if (!user && email) {
-        user = await ctx.runQuery(api.desktopAuth.getUserByEmail, { email });
+      if (id) {
+        const userData = await ctx.runQuery(api.users.getUserByClerkId, { clerkId: id });
+        userDealershipId = userData?.dealershipId;
+      }
+      if (!userDealershipId && email) {
+        const userData = await ctx.runQuery(api.desktopAuth.getUserByEmail, { email });
+        userDealershipId = userData?.dealershipId;
       }
     } else {
       const identity = await ctx.auth.getUserIdentity();
       if (!identity) throw new Error("Not authenticated");
-      user = await ctx.runQuery(api.users.getUserByClerkId, {
+      const userData = await ctx.runQuery(api.users.getUserByClerkId, {
         clerkId: identity.subject,
       });
+      userDealershipId = userData?.dealershipId;
     }
 
-    if (!user) throw new Error("User not found");
+    if (!userDealershipId) throw new Error("User not found");
 
     // Get deal and verify access
     const deal = await ctx.runQuery(api.deals.getDeal, {
@@ -824,7 +844,7 @@ export const sendDealDocumentsEmail = action({
     });
 
     if (!deal) throw new Error("Deal not found");
-    if (deal.dealershipId !== user.dealershipId) {
+    if (deal.dealershipId !== userDealershipId) {
       throw new Error("Access denied: Deal belongs to different dealership");
     }
 
@@ -840,12 +860,15 @@ export const sendDealDocumentsEmail = action({
     });
 
     // Get custom documents
-    let customDocuments: any[] = [];
+    let customDocuments: Doc<"dealer_uploaded_documents">[] = [];
     try {
-      customDocuments = await ctx.runQuery(api.documents.getCustomDocumentsForDeal, {
-        dealId: args.dealId,
-        token: args.token,
-      });
+      customDocuments = await ctx.runQuery(
+        api.documents.getCustomDocumentsForDeal as unknown as FunctionReference<"query", "public">,
+        {
+          dealId: args.dealId,
+          token: args.token,
+        }
+      );
     } catch (error) {
       // Ignore subscription errors for custom documents
       console.log("Custom documents not available:", error instanceof Error ? error.message : String(error));

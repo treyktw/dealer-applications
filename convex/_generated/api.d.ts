@@ -27,11 +27,11 @@ import type * as desktop_subscriptions from "../desktop_subscriptions.js";
 import type * as developer from "../developer.js";
 import type * as documentPackTemplates from "../documentPackTemplates.js";
 import type * as documentPacks from "../documentPacks.js";
+import type * as documents from "../documents.js";
 import type * as documents_deal_generator from "../documents/deal_generator.js";
 import type * as documents_fields from "../documents/fields.js";
 import type * as documents_generator from "../documents/generator.js";
 import type * as documents_templates from "../documents/templates.js";
-import type * as documents from "../documents.js";
 import type * as domain_verification from "../domain_verification.js";
 import type * as emailService from "../emailService.js";
 import type * as emailTemplates from "../emailTemplates.js";
@@ -91,14 +91,6 @@ import type {
   FunctionReference,
 } from "convex/server";
 
-/**
- * A utility for referencing Convex functions in your app's API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = api.myModule.myFunction;
- * ```
- */
 declare const fullApi: ApiFromModules<{
   adminIpManagement: typeof adminIpManagement;
   allowList: typeof allowList;
@@ -119,11 +111,11 @@ declare const fullApi: ApiFromModules<{
   developer: typeof developer;
   documentPackTemplates: typeof documentPackTemplates;
   documentPacks: typeof documentPacks;
+  documents: typeof documents;
   "documents/deal_generator": typeof documents_deal_generator;
   "documents/fields": typeof documents_fields;
   "documents/generator": typeof documents_generator;
   "documents/templates": typeof documents_templates;
-  documents: typeof documents;
   domain_verification: typeof domain_verification;
   emailService: typeof emailService;
   emailTemplates: typeof emailTemplates;
@@ -177,14 +169,30 @@ declare const fullApi: ApiFromModules<{
   users: typeof users;
   webhooks: typeof webhooks;
 }>;
-declare const fullApiWithMounts: typeof fullApi;
 
+/**
+ * A utility for referencing Convex functions in your app's public API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
 export declare const api: FilterApi<
-  typeof fullApiWithMounts,
+  typeof fullApi,
   FunctionReference<any, "public">
 >;
+
+/**
+ * A utility for referencing Convex functions in your app's internal API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = internal.myModule.myFunction;
+ * ```
+ */
 export declare const internal: FilterApi<
-  typeof fullApiWithMounts,
+  typeof fullApi,
   FunctionReference<any, "internal">
 >;
 
