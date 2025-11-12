@@ -32,29 +32,35 @@ export async function getStoredToken(): Promise<string | null> {
 }
 
 // Helper to run Convex queries with auto-injected auth token
+// Accepts function references with or without _componentPath (handles api.api.* references)
 export async function convexQuery<Query extends FunctionReference<"query">>(
-  query: Query,
+  query: any,
   args: Query["_args"]
 ): Promise<FunctionReturnType<Query>> {
   // Desktop auth: token passed explicitly in args, don't auto-inject
-  return client.query(query, args);  // ✅ Just pass args as-is
+  // Type assertion handles missing _componentPath in api.api.* references
+  return client.query(query as unknown as Query, args);
 }
 
 // Helper to run Convex mutations with auto-injected auth token
+// Accepts function references with or without _componentPath (handles api.api.* references)
 export async function convexMutation<Mutation extends FunctionReference<"mutation">>(
-  mutation: Mutation,
+  mutation: any,
   args: Mutation["_args"]
 ): Promise<FunctionReturnType<Mutation>> {
   // Desktop auth: token passed explicitly in args, don't auto-inject
-  return client.mutation(mutation, args);  // ✅ Just pass args as-is
+  // Type assertion handles missing _componentPath in api.api.* references
+  return client.mutation(mutation as unknown as Mutation, args);
 }
 
 // Helper to run Convex actions
+// Accepts function references with or without _componentPath (handles api.api.* references)
 export async function convexAction<Action extends FunctionReference<"action">>(
-  action: Action,
+  action: any,
   args: Action["_args"]
 ): Promise<FunctionReturnType<Action>> {
-  return client.action(action, args);
+  // Type assertion handles missing _componentPath in api.api.* references
+  return client.action(action as unknown as Action, args);
 }
 
 // Set auth token when available (kept for backwards compatibility)
