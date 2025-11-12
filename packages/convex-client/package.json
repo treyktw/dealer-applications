@@ -1,0 +1,23 @@
+{
+  "name": "@dealer/convex-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": { "react-native": "./index.ts", "import": "./index.ts", "require": "./index.ts" },
+    "./_generated/*": "./_generated/*"
+  },
+  "main": "./index.ts",
+  "module": "./index.ts",
+  "react-native": "./index.ts",
+  "types": "./index.ts",
+  "peerDependencies": {
+    "convex": ">=1.29.0",
+    "react": ">=18"
+  },
+  "dependencies": {
+    "date-fns": "^3.6.0",
+    "nanoid": "^5.1.5"
+  }
+}

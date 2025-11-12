@@ -1,0 +1,356 @@
+---
+title: Mobile Application
+description: React Native mobile app with Expo and Convex integration
+---
+
+# Mobile Application
+
+Build cross-platform mobile applications using React Native, Expo, and Convex for real-time backend synchronization.
+
+## ⚠️ CRITICAL: Package Installation Warning
+
+> ### 🚨 **MANDATORY: Always Use `-C` Flag for Package Installation**
+>
+> **NEVER run `pnpm install` or `pnpm add` from the `apps/mobile` directory directly!**
+>
+> This monorepo contains a shared Convex backend in the root `convex/` directory. Installing packages incorrectly can:
+> - ❌ Break the Convex backend dependencies
+> - ❌ Corrupt the workspace lockfile
+> - ❌ Cause dependency resolution conflicts
+> - ❌ Break other apps in the monorepo
+>
+> ### ✅ **CORRECT Commands:**
+>
+> ```bash
+> # Install a new package
+> pnpm -C apps/mobile add <package-name>
+>
+> # Install all dependencies
+> pnpm -C apps/mobile install
+>
+> # Remove a package
+> pnpm -C apps/mobile remove <package-name>
+> ```
+>
+> **Always run these commands from the repository root (`/Users/treymurray/DevSpace/dealer-applications`), NOT from inside `apps/mobile`!**
+
+## Overview
+
+The Mobile Application provides:
+- **Cross-platform** - iOS and Android support via React Native
+- **Expo SDK** - Development tools and native module access
+- **Convex Integration** - Real-time backend synchronization
+- **NativeWind** - Tailwind CSS styling for React Native
+- **TypeScript** - Full type safety
+- **Workspace Package** - Uses `@dealer/convex-client` from monorepo
+
+## Architecture
+
+### Tech Stack
+
+- **Frontend**: React Native 0.81.5 + React 19
+- **Framework**: Expo SDK 54
+- **Backend**: Convex (shared with web/desktop apps)
+- **Styling**: NativeWind v4 (Tailwind CSS for React Native)
+- **TypeScript**: Full type safety with shared types
+- **State Management**: Convex React hooks (`useQuery`, `useMutation`)
+
+### Project Structure
+
+```
+apps/mobile/
+├── app/                    # App router (Expo Router)
+│   ├── providers/         # Context providers
+│   │   └── ConvexProvider.tsx  # Convex client setup
+│   └── (tabs)/            # Tab navigation routes
+├── components/            # Reusable React Native components
+├── assets/                # Images, fonts, icons
+├── App.tsx                # Root component
+├── index.ts               # Entry point
+├── metro.config.js        # Metro bundler configuration
+├── babel.config.js        # Babel configuration
+├── tailwind.config.js     # NativeWind/Tailwind config
+└── package.json          # Dependencies
+```
+
+## Convex Integration
+
+### ⚠️ Important: Shared Backend
+
+The mobile app shares the **same Convex backend** (`convex/` directory) as the web and desktop applications. This means:
+
+1. **Schema Changes** - Any schema changes in `convex/schema.ts` affect all apps
+2. **API Functions** - All Convex queries/mutations are shared across platforms
+3. **Type Safety** - Types are generated from the shared Convex backend
+4. **Environment Variables** - Uses `EXPO_PUBLIC_CONVEX_URL` (not `NEXT_PUBLIC_CONVEX_URL`)
+
+### Convex Client Setup
+
+The mobile app uses `@dealer/convex-client` workspace package for Convex integration:
+
+```typescript
+// app/providers/ConvexProvider.tsx
+import { ConvexReactClient, ConvexProvider } from "convex/react";
+
+const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL);
+
+export const ConvexContextProvider = ({ children }) => {
+  return <ConvexProvider client={convex}>{children}</ConvexProvider>;
+};
+```
+
+### Using Convex in Components
+
+```typescript
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@dealer/convex-client";
+
+function MyComponent() {
+  // Query data
+  const vehicles = useQuery(api.inventory.listVehicles);
+  
+  // Mutate data
+  const createVehicle = useMutation(api.inventory.createVehicle);
+  
+  // ... component logic
+}
+```
+
+## Expo Integration
+
+### ⚠️ Expo-Specific Considerations
+
+1. **Environment Variables** - Must use `EXPO_PUBLIC_*` prefix (not `NEXT_PUBLIC_*`)
+2. **Metro Bundler** - Uses Metro instead of webpack/Vite
+3. **Native Modules** - Some Node.js modules won't work (use Expo alternatives)
+4. **File System** - Limited file system access (use Expo FileSystem API)
+
+### Expo Configuration
+
+```json
+// app.json
+{
+  "expo": {
+    "name": "mobile",
+    "slug": "mobile",
+    "newArchEnabled": true,  // React Native New Architecture
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "edgeToEdgeEnabled": true
+    }
+  }
+}
+```
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js >= 18
+- pnpm 9.12.3+ (monorepo package manager)
+- Expo CLI (optional, can use `pnpm start`)
+- iOS Simulator (for iOS development) or Android Emulator
+
+### Initial Setup
+
+1. **Install dependencies** (from repository root):
+   ```bash
+   pnpm install
+   ```
+
+2. **Set up environment variables**:
+   Create `.env` or `.env.local` in `apps/mobile/`:
+   ```bash
+   EXPO_PUBLIC_CONVEX_URL=https://your-convex-deployment.convex.cloud
+   ```
+
+3. **Start Expo development server**:
+   ```bash
+   pnpm -C apps/mobile start
+   ```
+
+4. **Run on device/simulator**:
+   ```bash
+   # iOS
+   pnpm -C apps/mobile ios
+   
+   # Android
+   pnpm -C apps/mobile android
+   
+   # Web (for testing)
+   pnpm -C apps/mobile web
+   ```
+
+## Development Workflow
+
+### Adding Dependencies
+
+> **⚠️ REMEMBER: Always use `-C apps/mobile` flag!**
+>
+> ```bash
+> # From repository root
+> pnpm -C apps/mobile add <package-name>
+> ```
+
+### Using Workspace Packages
+
+The mobile app can use workspace packages from `packages/`:
+
+```json
+// apps/mobile/package.json
+{
+  "dependencies": {
+    "@dealer/convex-client": "workspace:*"
+  }
+}
+```
+
+Install with:
+```bash
+pnpm -C apps/mobile add @dealer/convex-client@workspace:*
+```
+
+### Metro Configuration
+
+Metro is configured to:
+- Watch only the mobile app directory (not entire monorepo)
+- Resolve modules from `apps/mobile/node_modules` first
+- Transpile workspace packages (like `@dealer/convex-client`)
+
+```javascript
+// metro.config.js
+const { getDefaultConfig } = require('expo/metro-config');
+
+const config = getDefaultConfig(__dirname);
+
+// Transpile workspace packages
+config.resolver.sourceExts.push('ts', 'tsx');
+
+module.exports = config;
+```
+
+## Styling with NativeWind
+
+NativeWind v4 brings Tailwind CSS to React Native:
+
+```typescript
+import { View, Text } from 'react-native';
+
+export function MyComponent() {
+  return (
+    <View className="flex-1 justify-center items-center bg-white">
+      <Text className="text-2xl font-bold text-blue-600">
+        Hello World
+      </Text>
+    </View>
+  );
+}
+```
+
+### Configuration
+
+```javascript
+// tailwind.config.js
+module.exports = {
+  content: [
+    "./app/**/*.{js,jsx,ts,tsx}",
+    "./components/**/*.{js,jsx,ts,tsx}",
+  ],
+  // ... rest of config
+};
+```
+
+## TypeScript Configuration
+
+The mobile app extends Expo's base TypeScript config:
+
+```json
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./app/*"]
+    }
+  }
+}
+```
+
+## Building for Production
+
+### iOS Build
+
+```bash
+# Build for iOS
+pnpm -C apps/mobile run ios --configuration Release
+
+# Or use EAS Build
+eas build --platform ios
+```
+
+### Android Build
+
+```bash
+# Build for Android
+pnpm -C apps/mobile run android --configuration Release
+
+# Or use EAS Build
+eas build --platform android
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Metro bundler can't resolve modules**
+   - Ensure you're using `pnpm -C apps/mobile` for installs
+   - Clear Metro cache: `pnpm -C apps/mobile start --clear`
+
+2. **Convex connection issues**
+   - Verify `EXPO_PUBLIC_CONVEX_URL` is set correctly
+   - Check that Convex backend is running: `pnpm dev:convex`
+
+3. **Workspace package not found**
+   - Ensure package is added with `workspace:*` protocol
+   - Run `pnpm install` from repository root
+
+4. **Type errors with Convex**
+   - Regenerate Convex types: `pnpm convex:codegen`
+   - Restart TypeScript server in your IDE
+
+### Clearing Caches
+
+```bash
+# Clear Metro cache
+pnpm -C apps/mobile start --clear
+
+# Clear Expo cache
+expo start -c
+
+# Clear all caches and reinstall
+rm -rf apps/mobile/node_modules
+pnpm -C apps/mobile install
+```
+
+## Best Practices
+
+1. **Always use `-C apps/mobile`** for package management
+2. **Use workspace packages** for shared code (`@dealer/convex-client`)
+3. **Follow Expo conventions** for file structure and naming
+4. **Test on both iOS and Android** before committing
+5. **Keep Convex types in sync** - run `pnpm convex:codegen` after schema changes
+
+## Related Documentation
+
+- [API Reference](/docs/api) - Convex API functions
+- [Authentication](/docs/authentication) - Auth setup
+- [Desktop App](/docs/desktop-app) - Desktop app documentation
+- [Schema](/docs/schema) - Database schema reference
+
+---
+
+**Remember: Always use `pnpm -C apps/mobile` for package operations to avoid breaking the Convex backend!**
+

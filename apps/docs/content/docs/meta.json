@@ -1,4 +1,4 @@
 {
   "title": "Documentation",
-  "pages": ["index", "authentication", "api", "desktop-app", "schema", "workflows", "configuration", "security", "mobile"]
+  "pages": ["index", "authentication", "api", "desktop-app", "mobile-app", "schema", "workflows", "configuration", "security"]
 }
