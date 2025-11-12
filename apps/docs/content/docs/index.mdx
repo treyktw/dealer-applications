@@ -1,0 +1,95 @@
+---
+title: Getting Started
+description: Welcome to the Dealer Applications API documentation
+---
+
+# Welcome to Dealer Applications
+
+Comprehensive API reference and developer documentation for the Dealer Applications platform - a modern dealership management system built with Convex, Next.js, and React Native.
+
+## Quick Links
+
+<Cards>
+  <Card title="API Reference" href="/docs/api">
+    Explore all available Convex queries, mutations, and actions
+  </Card>
+  <Card title="Authentication" href="/docs/authentication">
+    Learn how to authenticate with Clerk and manage sessions
+  </Card>
+  <Card title="Database Schema" href="/docs/schema">
+    View the complete database schema with 37 tables
+  </Card>
+  <Card title="Mobile App" href="/docs/mobile">
+    Build mobile apps with React Native and Expo
+  </Card>
+</Cards>
+
+## Platform Overview
+
+The Dealer Applications platform provides:
+
+- **Vehicle Inventory Management** - Track and manage vehicle inventory with VIN decoding
+- **Customer CRM** - Manage leads, customers, and relationships
+- **Deal Processing** - Handle sales transactions and paperwork
+- **Document Generation** - Create and manage legal documents with PDF generation
+- **Subscription Management** - Stripe-powered billing for web and desktop apps
+- **Real-time Sync** - Convex backend enables instant updates across all platforms
+
+## Tech Stack
+
+### Backend
+- **Convex** - Real-time backend-as-a-service with TypeScript
+- **Clerk** - Authentication and user management
+- **Stripe** - Payment processing and subscriptions
+- **AWS S3** - File storage for documents and images
+
+### Frontend
+- **Next.js 15** - Web admin dashboard with App Router
+- **React 19** - Modern React with Server Components
+- **Tailwind CSS v4** - Utility-first styling
+- **Radix UI** - Accessible component primitives
+
+### Mobile
+- **React Native** - Cross-platform mobile development
+- **Expo** - Development tools and SDK
+- **NativeWind** - Tailwind CSS for React Native
+
+### Desktop
+- **Tauri 2.0** - Native desktop application framework
+- **Rust** - High-performance backend
+
+## API Architecture
+
+All API functions are organized by domain:
+
+```typescript
+// Convex API structure
+api.inventory.*      // Vehicle management
+api.clients.*        // Customer CRM
+api.deals.*          // Sales transactions
+api.documents.*      // Document generation
+api.dealerships.*    // Dealership management
+api.employees.*      // Team management
+api.subscriptions.*  // Billing and subscriptions
+```
+
+## Rate Limiting
+
+Public API endpoints are rate-limited per IP address:
+
+| Endpoint | Rate Limit |
+|----------|------------|
+| Get Vehicles | 60 requests/hour |
+| Get Single Vehicle | 100 requests/hour |
+| Search Vehicles | 30 requests/hour |
+| Get Dealership | 20 requests/hour |
+
+## Getting Help
+
+- **GitHub Issues** - Report bugs or request features
+- **Discord Community** - Join our developer community
+- **Email Support** - Contact support@dealerapps.com
+
+---
+
+Ready to start building? Check out the [API Reference](/docs/api) or [Authentication Guide](/docs/authentication).

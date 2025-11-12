@@ -1,0 +1,463 @@
+---
+title: Clients API
+description: Customer CRM and lead management functions
+---
+
+# Clients API
+
+Manage customers, leads, and client relationships with a comprehensive CRM system.
+
+## Mutations
+
+### createClient
+
+Create a new client or lead in the system.
+
+```typescript
+api.clients.createClient
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `clientId` | `string` | ✅ | Unique client identifier |
+| `dealershipId` | `string` | ✅ | Dealership ID |
+| `firstName` | `string` | ✅ | Client's first name |
+| `lastName` | `string` | ✅ | Client's last name |
+| `email` | `string` | ❌ | Email address |
+| `phone` | `string` | ❌ | Phone number |
+| `address` | `string` | ❌ | Street address |
+| `city` | `string` | ❌ | City |
+| `state` | `string` | ❌ | State/Province |
+| `zipCode` | `string` | ❌ | ZIP/Postal code |
+| `source` | `string` | ❌ | Lead source (website, referral, etc.) |
+| `status` | `"LEAD" \| "CUSTOMER" \| "PREVIOUS"` | ❌ | Client status (default: "LEAD") |
+| `notes` | `string` | ❌ | Internal notes |
+
+**Returns:**
+
+```typescript
+{
+  clientId: Id<"clients">;
+}
+```
+
+**Example:**
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { nanoid } from "nanoid";
+
+function CreateClientForm() {
+  const createClient = useMutation(api.clients.createClient);
+
+  const handleSubmit = async (formData: FormData) => {
+    const result = await createClient({
+      clientId: nanoid(),
+      dealershipId: "dealership123",
+      firstName: formData.get("firstName") as string,
+      lastName: formData.get("lastName") as string,
+      email: formData.get("email") as string,
+      phone: formData.get("phone") as string,
+      source: "website",
+      status: "LEAD",
+      notes: formData.get("notes") as string,
+    });
+
+    console.log("Client created:", result.clientId);
+  };
+
+  return (
+    <form onSubmit={(e) => {
+      e.preventDefault();
+      handleSubmit(new FormData(e.currentTarget));
+    }}>
+      <input name="firstName" placeholder="First Name" required />
+      <input name="lastName" placeholder="Last Name" required />
+      <input name="email" type="email" placeholder="Email" />
+      <input name="phone" type="tel" placeholder="Phone" />
+      <textarea name="notes" placeholder="Notes" />
+      <button type="submit">Create Client</button>
+    </form>
+  );
+}
+```
+
+---
+
+### updateClient
+
+Update an existing client's information.
+
+```typescript
+api.clients.updateClient
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `clientId` | `Id<"clients">` | ✅ | Client ID to update |
+| `firstName` | `string` | ❌ | Updated first name |
+| `lastName` | `string` | ❌ | Updated last name |
+| `email` | `string` | ❌ | Updated email |
+| `phone` | `string` | ❌ | Updated phone |
+| `address` | `string` | ❌ | Updated address |
+| `city` | `string` | ❌ | Updated city |
+| `state` | `string` | ❌ | Updated state |
+| `zipCode` | `string` | ❌ | Updated ZIP code |
+| `source` | `string` | ❌ | Updated source |
+| `status` | `"LEAD" \| "CUSTOMER" \| "PREVIOUS"` | ❌ | Updated status |
+| `notes` | `string` | ❌ | Updated notes |
+
+**Returns:**
+
+```typescript
+{
+  success: boolean;
+}
+```
+
+**Example:**
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function ConvertLeadToCustomer({ clientId }: { clientId: Id<"clients"> }) {
+  const updateClient = useMutation(api.clients.updateClient);
+
+  const handleConvert = async () => {
+    await updateClient({
+      clientId,
+      status: "CUSTOMER",
+      notes: "Converted from lead after purchase",
+    });
+
+    console.log("Lead converted to customer!");
+  };
+
+  return (
+    <button onClick={handleConvert}>
+      Convert to Customer
+    </button>
+  );
+}
+```
+
+---
+
+## Queries
+
+### getClientById
+
+Fetch a single client by ID.
+
+```typescript
+api.clients.getClientById
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `clientId` | `Id<"clients">` | ✅ | Client ID |
+
+**Returns:**
+
+```typescript
+Client | null
+```
+
+**Example:**
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function ClientProfile({ clientId }: { clientId: Id<"clients"> }) {
+  const client = useQuery(api.clients.getClientById, { clientId });
+
+  if (!client) return <LoadingSpinner />;
+
+  return (
+    <div className="p-4">
+      <h1 className="text-2xl font-bold">
+        {client.firstName} {client.lastName}
+      </h1>
+      <p className="text-muted-foreground">{client.email}</p>
+      <p className="text-muted-foreground">{client.phone}</p>
+      <div className="mt-4">
+        <span className={`badge ${client.status.toLowerCase()}`}>
+          {client.status}
+        </span>
+      </div>
+      {client.notes && (
+        <div className="mt-4">
+          <h3 className="font-semibold">Notes</h3>
+          <p>{client.notes}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+---
+
+### getClientVehicles
+
+Get all vehicles associated with a client.
+
+```typescript
+api.clients.getClientVehicles
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `clientId` | `Id<"clients">` | ✅ | Client ID |
+
+**Returns:**
+
+```typescript
+Vehicle[]
+```
+
+**Example:**
+
+```typescript
+function ClientVehicles({ clientId }: { clientId: Id<"clients"> }) {
+  const vehicles = useQuery(api.clients.getClientVehicles, { clientId });
+
+  if (!vehicles) return <LoadingSpinner />;
+
+  return (
+    <div>
+      <h2>Client Vehicles ({vehicles.length})</h2>
+      {vehicles.map(vehicle => (
+        <div key={vehicle._id}>
+          {vehicle.year} {vehicle.make} {vehicle.model}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+---
+
+### getClientActivities
+
+Get all activities/interactions with a client.
+
+```typescript
+api.clients.getClientActivities
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `clientId` | `Id<"clients">` | ✅ | Client ID |
+
+**Returns:**
+
+```typescript
+Activity[]
+```
+
+**Example:**
+
+```typescript
+function ClientTimeline({ clientId }: { clientId: Id<"clients"> }) {
+  const activities = useQuery(api.clients.getClientActivities, { clientId });
+
+  if (!activities) return <LoadingSpinner />;
+
+  return (
+    <div className="space-y-4">
+      <h2>Activity Timeline</h2>
+      {activities.map(activity => (
+        <div key={activity._id} className="border-l-2 pl-4">
+          <p className="font-semibold">{activity.type}</p>
+          <p className="text-sm text-muted-foreground">
+            {new Date(activity.createdAt).toLocaleDateString()}
+          </p>
+          <p>{activity.description}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+---
+
+## Client Status Types
+
+Clients can have three statuses:
+
+```typescript
+type ClientStatus =
+  | "LEAD"      // Potential customer, not yet purchased
+  | "CUSTOMER"  // Active customer who has purchased
+  | "PREVIOUS"; // Past customer
+```
+
+**Status Transitions:**
+
+```typescript
+import { canTransitionClientStatus } from "@/convex/lib/statuses";
+
+// Check if status transition is valid
+canTransitionClientStatus("LEAD", "CUSTOMER");     // true
+canTransitionClientStatus("CUSTOMER", "PREVIOUS"); // true
+canTransitionClientStatus("PREVIOUS", "LEAD");     // false
+```
+
+---
+
+## Mobile Example
+
+Building a client management screen in React Native:
+
+```typescript
+// app/clients/[id].tsx
+import { useLocalSearchParams } from "expo-router";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import type { Id } from "@/convex/_generated/dataModel";
+
+export default function ClientDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: Id<"clients"> }>();
+  const client = useQuery(api.clients.getClientById, { clientId: id });
+  const vehicles = useQuery(api.clients.getClientVehicles, { clientId: id });
+  const updateClient = useMutation(api.clients.updateClient);
+
+  if (!client) return <LoadingSpinner />;
+
+  const handleConvertToCustomer = async () => {
+    await updateClient({
+      clientId: id,
+      status: "CUSTOMER",
+    });
+  };
+
+  return (
+    <ScrollView className="flex-1 bg-background">
+      <View className="p-4">
+        <Text className="text-3xl font-bold text-foreground">
+          {client.firstName} {client.lastName}
+        </Text>
+
+        <View className="mt-4 space-y-2">
+          <Text className="text-muted-foreground">{client.email}</Text>
+          <Text className="text-muted-foreground">{client.phone}</Text>
+          {client.address && (
+            <Text className="text-muted-foreground">
+              {client.address}, {client.city}, {client.state} {client.zipCode}
+            </Text>
+          )}
+        </View>
+
+        <View className="mt-4">
+          <Text className={`badge-${client.status.toLowerCase()}`}>
+            {client.status}
+          </Text>
+        </View>
+
+        {client.status === "LEAD" && (
+          <TouchableOpacity
+            className="mt-4 bg-primary p-4 rounded-lg"
+            onPress={handleConvertToCustomer}
+          >
+            <Text className="text-primary-foreground text-center font-semibold">
+              Convert to Customer
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        <View className="mt-6">
+          <Text className="text-xl font-bold">Vehicles ({vehicles?.length ?? 0})</Text>
+          {vehicles?.map(vehicle => (
+            <View key={vehicle._id} className="p-4 mt-2 bg-card rounded-lg">
+              <Text className="font-semibold">
+                {vehicle.year} {vehicle.make} {vehicle.model}
+              </Text>
+              <Text className="text-muted-foreground">{vehicle.vin}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+```
+
+---
+
+## Best Practices
+
+### Generating Client IDs
+
+Use a library like `nanoid` to generate unique client IDs:
+
+```typescript
+import { nanoid } from "nanoid";
+
+const clientId = nanoid(); // Generates: "V1StGXR8_Z5jdHi6B-myT"
+```
+
+### Validating Data
+
+Validate input before creating clients:
+
+```typescript
+import { z } from "zod";
+
+const clientSchema = z.object({
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  email: z.string().email().optional(),
+  phone: z.string().regex(/^\d{10}$/).optional(),
+});
+
+// In your form
+const validated = clientSchema.parse(formData);
+await createClient({ ...validated, clientId, dealershipId });
+```
+
+### Tracking Lead Sources
+
+Always track where leads come from:
+
+```typescript
+const leadSources = [
+  "website",
+  "facebook",
+  "google",
+  "referral",
+  "walk-in",
+  "phone",
+  "email",
+  "other",
+] as const;
+
+await createClient({
+  // ... other fields
+  source: "facebook",
+});
+```
+
+---
+
+## Next Steps
+
+- [Inventory API](/docs/api/inventory) - Manage vehicles
+- [Deals API](/docs/api/deals) - Create sales transactions
+- [Database Schema](/docs/schema) - View the clients table schema

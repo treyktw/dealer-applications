@@ -1,0 +1,233 @@
+---
+title: API Reference
+description: Complete API reference for Convex queries, mutations, and actions
+---
+
+# API Reference
+
+Comprehensive reference for all Convex API functions organized by domain.
+
+## API Structure
+
+All API functions are organized by domain and exposed through the generated `api` object:
+
+```typescript
+import { api } from "@/convex/_generated/api";
+
+// Access functions by domain
+api.inventory.getVehicles
+api.clients.createClient
+api.deals.createDeal
+api.documents.generateDocument
+```
+
+## Function Types
+
+Convex functions come in three types:
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| **Query** | Read-only operations | Fetching data, filtering, searching |
+| **Mutation** | Write operations | Creating, updating, deleting records |
+| **Action** | External operations | Calling third-party APIs, sending emails |
+
+## Domains
+
+<Cards>
+  <Card title="Inventory" href="/docs/api/inventory">
+    Vehicle inventory management and statistics
+  </Card>
+  <Card title="Clients" href="/docs/api/clients">
+    Customer CRM and lead management
+  </Card>
+  <Card title="Deals" href="/docs/api/deals">
+    Sales transactions and deal processing
+  </Card>
+  <Card title="Documents" href="/docs/api/documents">
+    PDF generation and document management
+  </Card>
+  <Card title="Dealerships" href="/docs/api/dealerships">
+    Dealership settings and configuration
+  </Card>
+  <Card title="Employees" href="/docs/api/employees">
+    Team management and permissions
+  </Card>
+</Cards>
+
+## Quick Examples
+
+### Fetching Data (Query)
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function VehicleList() {
+  const vehicles = useQuery(api.inventory.getVehicles, {
+    dealershipId: "dealership123",
+    page: 1,
+    limit: 25,
+    status: "AVAILABLE",
+  });
+
+  if (!vehicles) return <LoadingSpinner />;
+
+  return (
+    <div>
+      {vehicles.map(vehicle => (
+        <VehicleCard key={vehicle._id} {...vehicle} />
+      ))}
+    </div>
+  );
+}
+```
+
+### Modifying Data (Mutation)
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function CreateClientForm() {
+  const createClient = useMutation(api.clients.createClient);
+
+  const handleSubmit = async (data: ClientFormData) => {
+    const result = await createClient({
+      firstName: data.firstName,
+      lastName: data.lastName,
+      email: data.email,
+      phone: data.phone,
+      clientId: generateClientId(),
+      dealershipId: "dealership123",
+      status: "LEAD",
+    });
+
+    console.log("Client created:", result.clientId);
+  };
+
+  return <form onSubmit={handleSubmit}>...</form>;
+}
+```
+
+### Calling External APIs (Action)
+
+```typescript
+import { useAction } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function VINDecoder() {
+  const decodeVIN = useAction(api.inventory.decodeVIN);
+
+  const handleDecode = async (vin: string) => {
+    const vehicleData = await decodeVIN({ vin });
+
+    console.log("Decoded data:", vehicleData);
+    // Returns: { make, model, year, trim, ... }
+  };
+
+  return <input onChange={(e) => handleDecode(e.target.value)} />;
+}
+```
+
+## Type Safety
+
+All Convex functions are fully typed with TypeScript:
+
+```typescript
+import type { Id } from "@/convex/_generated/dataModel";
+import type { Doc } from "@/convex/_generated/dataModel";
+
+// ID types are validated
+const vehicleId: Id<"vehicles"> = "jh7x5..."; // ✅ Type-safe
+
+// Document types match schema
+const vehicle: Doc<"vehicles"> = {
+  _id: vehicleId,
+  _creationTime: Date.now(),
+  dealershipId: "dealership123",
+  vin: "1HGCM82633A123456",
+  make: "Honda",
+  model: "Accord",
+  year: 2023,
+  // ... all required fields
+};
+```
+
+## Error Handling
+
+Handle errors gracefully in your application:
+
+```typescript
+try {
+  const result = await createClient({
+    firstName: "John",
+    lastName: "Doe",
+    // ... other fields
+  });
+} catch (error) {
+  if (error instanceof ConvexError) {
+    console.error("Convex error:", error.data);
+  } else {
+    console.error("Unexpected error:", error);
+  }
+}
+```
+
+## Pagination
+
+Many query functions support pagination:
+
+```typescript
+const { vehicles, totalCount, hasMore } = useQuery(
+  api.inventory.getVehicles,
+  {
+    dealershipId: "dealership123",
+    page: 1,
+    limit: 25,
+  }
+);
+
+console.log(`Showing 25 of ${totalCount} vehicles`);
+console.log(`Has more pages: ${hasMore}`);
+```
+
+## Filtering
+
+Apply filters to queries:
+
+```typescript
+const vehicles = useQuery(api.inventory.getVehicles, {
+  dealershipId: "dealership123",
+  status: "AVAILABLE",      // Filter by status
+  make: "Honda",            // Filter by make
+  year: 2023,               // Filter by year
+  priceMin: 20000,          // Min price
+  priceMax: 35000,          // Max price
+  mileageMax: 50000,        // Max mileage
+  featured: true,           // Featured only
+});
+```
+
+## Real-time Updates
+
+Convex queries automatically update in real-time:
+
+```typescript
+function LiveVehicleCount() {
+  // This will automatically re-render when vehicles are added/removed
+  const stats = useQuery(api.inventory.getStats);
+
+  return <div>Total Vehicles: {stats?.totalVehicles}</div>;
+}
+```
+
+No polling, no manual refetching - it just works!
+
+## Next Steps
+
+Explore specific domain APIs:
+
+- [Inventory API](/docs/api/inventory) - Vehicle management
+- [Clients API](/docs/api/clients) - Customer CRM
+- [Deals API](/docs/api/deals) - Sales transactions
+- [Documents API](/docs/api/documents) - PDF generation

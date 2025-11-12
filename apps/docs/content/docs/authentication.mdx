@@ -1,0 +1,279 @@
+---
+title: Authentication
+description: Learn how to authenticate users with Clerk and manage sessions
+---
+
+# Authentication
+
+The Dealer Applications platform uses **Clerk** for authentication in web and mobile apps, with a standalone auth system for the desktop application.
+
+## Web & Mobile Authentication
+
+### Clerk Setup
+
+All web and mobile applications use Clerk for authentication with the following features:
+
+- Email/password authentication
+- Social login (Google, GitHub, etc.)
+- Multi-factor authentication (MFA)
+- Session management
+- Role-based access control (RBAC)
+
+### User Roles
+
+The platform supports four user roles:
+
+| Role | Permissions | Description |
+|------|-------------|-------------|
+| `ADMIN` | Full access | Dealership owner with complete control |
+| `MANAGER` | Most features | Can manage inventory, deals, and employees |
+| `EMPLOYEE` | Limited access | Can view and update assigned tasks |
+| `READONLY` | View only | Can view data but cannot make changes |
+
+### Getting the Current User
+
+Use the `auth` helper in Convex functions to get the authenticated user:
+
+```typescript
+import { auth } from "./auth";
+import { query } from "./_generated/server";
+
+export const getCurrentUser = query({
+  handler: async (ctx) => {
+    // Get authenticated user identity
+    const identity = await auth(ctx);
+
+    // Find user in database
+    const user = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("clerkId"), identity.subject))
+      .first();
+
+    return user;
+  },
+});
+```
+
+### Session Management
+
+Sessions are managed automatically by Clerk:
+
+- **Web App** - Clerk middleware protects routes in `middleware.ts`
+- **Mobile App** - Clerk Expo SDK manages tokens automatically
+- **Token Refresh** - Handled automatically by Clerk SDKs
+
+### Protected Routes
+
+The web app uses Next.js middleware to protect routes:
+
+```typescript
+// apps/web/src/middleware.ts
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+
+const isPublicRoute = createRouteMatcher([
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+  "/api/webhooks(.*)",
+]);
+
+export default clerkMiddleware(async (auth, request) => {
+  if (!isPublicRoute(request)) {
+    await auth.protect();
+  }
+});
+```
+
+## Desktop Authentication
+
+The desktop app uses a standalone email/password authentication system:
+
+### Standalone Auth Flow
+
+1. User enters email/password
+2. Backend validates credentials
+3. Session token stored in Tauri keyring (secure)
+4. License key validation
+5. Desktop app syncs data with Convex
+
+### License Management
+
+Desktop apps require a valid license key:
+
+```typescript
+// Validate license
+const license = await ctx.db
+  .query("licenses")
+  .filter((q) => q.eq(q.field("licenseKey"), licenseKey))
+  .first();
+
+if (!license || license.status !== "active") {
+  throw new Error("Invalid or inactive license");
+}
+```
+
+## API Key Authentication
+
+For external API access, use API keys:
+
+### Creating API Keys
+
+```typescript
+import { v } from "convex/values";
+import { mutation } from "./_generated/server";
+
+export const createApiKey = mutation({
+  args: {
+    dealershipId: v.id("dealerships"),
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Generate secure API key
+    const apiKey = generateSecureApiKey();
+
+    // Store in database
+    const keyId = await ctx.db.insert("api_keys", {
+      dealershipId: args.dealershipId,
+      key: apiKey,
+      name: args.name,
+      createdAt: Date.now(),
+      lastUsed: null,
+    });
+
+    return { apiKey, keyId };
+  },
+});
+```
+
+### Using API Keys
+
+Include the API key in request headers:
+
+```bash
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  https://api.dealerapps.com/api/vehicles/dealership123
+```
+
+## Security Best Practices
+
+### IP Restrictions
+
+Configure IP-based access restrictions:
+
+```typescript
+// convex/dealerships.ts
+const dealership = await ctx.db.get(dealershipId);
+
+if (dealership.ipRestrictions?.enabled) {
+  const clientIP = getClientIP(ctx);
+
+  if (!dealership.ipRestrictions.allowedIPs.includes(clientIP)) {
+    throw new Error("Access denied: IP not allowed");
+  }
+}
+```
+
+### Rate Limiting
+
+All public APIs are rate-limited:
+
+```typescript
+import { checkRateLimit } from "./security";
+
+export const getVehicles = query({
+  handler: async (ctx, args) => {
+    // Check rate limit (60 requests/hour)
+    await checkRateLimit(ctx, {
+      key: clientIP,
+      limit: 60,
+      window: 3600000, // 1 hour
+    });
+
+    // Continue with query...
+  },
+});
+```
+
+### Security Logging
+
+All authentication events are logged:
+
+```typescript
+await ctx.db.insert("security_logs", {
+  eventType: "login_success",
+  userId: user._id,
+  ipAddress: clientIP,
+  userAgent: userAgent,
+  timestamp: Date.now(),
+});
+```
+
+## Mobile App Integration
+
+### Clerk Expo Setup
+
+Install Clerk for Expo:
+
+```bash
+npx expo install @clerk/clerk-expo
+```
+
+Configure the provider:
+
+```typescript
+// app/_layout.tsx
+import { ClerkProvider } from "@clerk/clerk-expo";
+
+export default function RootLayout() {
+  return (
+    <ClerkProvider publishableKey={process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY}>
+      {/* Your app */}
+    </ClerkProvider>
+  );
+}
+```
+
+### Protecting Screens
+
+Use Clerk hooks to protect screens:
+
+```typescript
+import { useAuth } from "@clerk/clerk-expo";
+import { Redirect } from "expo-router";
+
+export default function ProtectedScreen() {
+  const { isSignedIn, isLoaded } = useAuth();
+
+  if (!isLoaded) return <LoadingScreen />;
+  if (!isSignedIn) return <Redirect href="/sign-in" />;
+
+  return <YourScreen />;
+}
+```
+
+### Convex + Clerk Integration
+
+Authenticate Convex requests with Clerk tokens:
+
+```typescript
+import { ConvexProviderWithClerk } from "convex/react-clerk";
+import { ConvexReactClient } from "convex/react";
+import { useAuth } from "@clerk/clerk-expo";
+
+const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!);
+
+export default function App() {
+  return (
+    <ClerkProvider publishableKey={...}>
+      <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+        {/* Your app */}
+      </ConvexProviderWithClerk>
+    </ClerkProvider>
+  );
+}
+```
+
+## Next Steps
+
+- [API Reference](/docs/api) - Explore available API functions
+- [Database Schema](/docs/schema) - View the complete database schema
+- [Mobile Development](/docs/mobile) - Build mobile apps with React Native

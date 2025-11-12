@@ -1,0 +1,322 @@
+---
+title: Inventory API
+description: Vehicle inventory management functions
+---
+
+# Inventory API
+
+Manage vehicle inventory with comprehensive querying, filtering, and statistics.
+
+## Queries
+
+### getVehicles
+
+Fetch paginated vehicle inventory with advanced filtering.
+
+```typescript
+api.inventory.getVehicles
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealershipId` | `string` | ✅ | Dealership ID to filter vehicles |
+| `page` | `number` | ❌ | Page number (default: 1) |
+| `limit` | `number` | ❌ | Items per page (default: 25) |
+| `search` | `string` | ❌ | Search by VIN, make, model |
+| `status` | `string` | ❌ | Filter by status (AVAILABLE, SOLD, etc.) |
+| `make` | `string` | ❌ | Filter by manufacturer |
+| `year` | `number` | ❌ | Filter by year |
+| `priceMin` | `number` | ❌ | Minimum price filter |
+| `priceMax` | `number` | ❌ | Maximum price filter |
+| `mileageMax` | `number` | ❌ | Maximum mileage filter |
+| `featured` | `boolean` | ❌ | Show only featured vehicles |
+
+**Returns:**
+
+```typescript
+{
+  vehicles: Vehicle[];
+  totalCount: number;
+  hasMore: boolean;
+}
+```
+
+**Example:**
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function AvailableHondas() {
+  const result = useQuery(api.inventory.getVehicles, {
+    dealershipId: "dealership123",
+    page: 1,
+    limit: 10,
+    make: "Honda",
+    status: "AVAILABLE",
+    priceMax: 35000,
+  });
+
+  if (!result) return <LoadingSpinner />;
+
+  return (
+    <div>
+      <h2>Found {result.totalCount} vehicles</h2>
+      {result.vehicles.map(vehicle => (
+        <div key={vehicle._id}>
+          <h3>{vehicle.year} {vehicle.make} {vehicle.model}</h3>
+          <p>Price: ${vehicle.price?.toLocaleString()}</p>
+          <p>Mileage: {vehicle.mileage?.toLocaleString()} miles</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+---
+
+### getStats
+
+Get comprehensive inventory statistics and analytics.
+
+```typescript
+api.inventory.getStats
+```
+
+**Arguments:**
+
+None
+
+**Returns:**
+
+```typescript
+{
+  totalVehicles: number;
+  totalValue: number;
+  avgPrice: number;
+  availableVehicles: number;
+  pendingVehicles: number;
+  soldVehicles: number;
+  reservedVehicles: number;
+  newInventoryThisMonth: number;
+  inventoryChange: number; // Percentage change from last month
+  topMake: string;
+  topMakeCount: number;
+  recentSales: number;
+}
+```
+
+**Example:**
+
+```typescript
+function InventoryDashboard() {
+  const stats = useQuery(api.inventory.getStats);
+
+  if (!stats) return <LoadingSpinner />;
+
+  return (
+    <div className="grid grid-cols-4 gap-4">
+      <StatCard
+        title="Total Vehicles"
+        value={stats.totalVehicles}
+        change={stats.inventoryChange}
+      />
+      <StatCard
+        title="Total Value"
+        value={`$${stats.totalValue.toLocaleString()}`}
+      />
+      <StatCard
+        title="Average Price"
+        value={`$${stats.avgPrice.toLocaleString()}`}
+      />
+      <StatCard
+        title="Recent Sales"
+        value={stats.recentSales}
+      />
+    </div>
+  );
+}
+```
+
+---
+
+## Vehicle Status Types
+
+Vehicles can have the following statuses:
+
+```typescript
+type VehicleStatus =
+  | "AVAILABLE"    // Available for sale
+  | "PENDING"      // Deal in progress
+  | "SOLD"         // Sold to customer
+  | "RESERVED"     // Reserved by customer
+  | "TRADE_IN"     // Accepted as trade-in
+  | "WHOLESALE"    // For wholesale
+  | "SERVICE"      // In service
+  | "UNAVAILABLE"; // Not available for sale
+```
+
+**Status Transitions:**
+
+```typescript
+import { canTransitionVehicleStatus } from "@/convex/lib/statuses";
+
+// Check if status transition is valid
+const canSell = canTransitionVehicleStatus("AVAILABLE", "SOLD"); // true
+const invalid = canTransitionVehicleStatus("SOLD", "AVAILABLE"); // false
+```
+
+---
+
+## Filtering Strategies
+
+### Search
+
+The `search` parameter searches across multiple fields:
+
+```typescript
+const results = useQuery(api.inventory.getVehicles, {
+  dealershipId: "dealership123",
+  search: "Honda Accord", // Searches VIN, make, model, trim
+});
+```
+
+### Price Range
+
+Filter by price range:
+
+```typescript
+const affordableVehicles = useQuery(api.inventory.getVehicles, {
+  dealershipId: "dealership123",
+  priceMin: 15000,
+  priceMax: 25000,
+});
+```
+
+### Year Filter
+
+Show only specific years:
+
+```typescript
+const newVehicles = useQuery(api.inventory.getVehicles, {
+  dealershipId: "dealership123",
+  year: 2024,
+});
+```
+
+### Featured Vehicles
+
+Display featured inventory:
+
+```typescript
+const featured = useQuery(api.inventory.getVehicles, {
+  dealershipId: "dealership123",
+  featured: true,
+  limit: 5,
+});
+```
+
+---
+
+## Mobile Example
+
+Using the Inventory API in a React Native mobile app:
+
+```typescript
+// app/vehicles/index.tsx
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { FlatList, View, Text } from "react-native";
+
+export default function VehiclesScreen() {
+  const { vehicles, totalCount } = useQuery(api.inventory.getVehicles, {
+    dealershipId: "dealership123",
+    page: 1,
+    limit: 20,
+    status: "AVAILABLE",
+  }) ?? { vehicles: [], totalCount: 0 };
+
+  return (
+    <View className="flex-1 bg-background">
+      <Text className="text-2xl font-bold p-4">
+        Inventory ({totalCount})
+      </Text>
+      <FlatList
+        data={vehicles}
+        keyExtractor={(item) => item._id}
+        renderItem={({ item }) => (
+          <View className="p-4 border-b border-border">
+            <Text className="text-lg font-semibold">
+              {item.year} {item.make} {item.model}
+            </Text>
+            <Text className="text-muted-foreground">
+              {item.vin}
+            </Text>
+            <Text className="text-primary font-bold">
+              ${item.price?.toLocaleString()}
+            </Text>
+          </View>
+        )}
+      />
+    </View>
+  );
+}
+```
+
+---
+
+## Performance Tips
+
+### Pagination
+
+Always use pagination for large datasets:
+
+```typescript
+const [page, setPage] = useState(1);
+
+const result = useQuery(api.inventory.getVehicles, {
+  dealershipId: "dealership123",
+  page,
+  limit: 25,
+});
+
+// Load more
+const loadMore = () => {
+  if (result?.hasMore) {
+    setPage(page + 1);
+  }
+};
+```
+
+### Filtering vs Search
+
+- Use specific filters (`make`, `year`, `status`) when possible
+- Use `search` only when user enters free-form text
+- Combine filters for optimal performance
+
+```typescript
+// Good: Specific filters
+const vehicles = useQuery(api.inventory.getVehicles, {
+  dealershipId: "dealership123",
+  make: "Honda",
+  year: 2023,
+  status: "AVAILABLE",
+});
+
+// Less optimal: Broad search
+const vehicles = useQuery(api.inventory.getVehicles, {
+  dealershipId: "dealership123",
+  search: "Honda 2023 Available",
+});
+```
+
+---
+
+## Next Steps
+
+- [Clients API](/docs/api/clients) - Manage customers
+- [Deals API](/docs/api/deals) - Create sales transactions
+- [Database Schema](/docs/schema) - View the vehicles table schema
