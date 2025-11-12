@@ -1,0 +1,459 @@
+---
+title: Subscriptions API
+description: Subscription and billing management
+---
+
+# Subscriptions API
+
+Manage subscriptions, billing, and feature access for dealerships.
+
+## Overview
+
+The Subscriptions API provides complete subscription management including plan selection, billing cycles, Stripe integration, and feature gating. Subscriptions control access to premium features like deal management and advanced inventory.
+
+## Subscription Plans
+
+### Available Plans
+
+| Plan | Price | Features |
+|------|-------|----------|
+| **Basic** | $29/month | Up to 100 vehicles, basic inventory |
+| **Premium** | $79/month | Up to 500 vehicles, deal management, 50GB storage |
+| **Enterprise** | $199/month | Unlimited vehicles, custom integrations, priority support |
+
+### Billing Cycles
+
+- **Monthly** - Billed every month
+- **Yearly** - Billed annually (save 20%)
+
+## Queries
+
+### getUserSubscription
+
+Get the current user's subscription.
+
+```typescript
+api.subscriptions.getUserSubscription
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  subscription: Doc<"subscriptions"> | null;
+  hasActiveSubscription: boolean;
+  plan: SubscriptionPlan | null;
+  status: SubscriptionStatus | null;
+  features: string[];
+}
+```
+
+**Example:**
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function SubscriptionStatus() {
+  const { subscription, hasActiveSubscription, plan } = useQuery(
+    api.subscriptions.getUserSubscription
+  );
+
+  if (!hasActiveSubscription) {
+    return <UpgradePrompt />;
+  }
+
+  return (
+    <div>
+      <h2>Current Plan: {plan}</h2>
+      <p>Status: {subscription?.status}</p>
+    </div>
+  );
+}
+```
+
+### checkSubscriptionStatus
+
+Check subscription status and feature access.
+
+```typescript
+api.subscriptions.checkSubscriptionStatus
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  hasActiveSubscription: boolean;
+  subscription: Doc<"subscriptions"> | null;
+  hasDealsManagement: boolean;
+  hasAdvancedInventory: boolean;
+  features: string[];
+}
+```
+
+### getStats
+
+Get subscription statistics.
+
+```typescript
+api.subscriptions.getStats
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealershipId` | `Id<"dealerships">` | ✅ | Dealership ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  totalSubscriptions: number;
+  activeSubscriptions: number;
+  cancelledSubscriptions: number;
+  revenue: number;
+  byPlan: {
+    [plan: string]: number;
+  };
+}
+```
+
+## Mutations
+
+### createSubscriptionCheckout
+
+Create a Stripe checkout session for subscription.
+
+```typescript
+api.subscriptions.createSubscriptionCheckout
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `plan` | `SubscriptionPlan` | ✅ | Plan (BASIC/PREMIUM/ENTERPRISE) |
+| `billingCycle` | `BillingCycle` | ✅ | Billing cycle (MONTHLY/YEARLY) |
+| `successUrl` | `string` | ✅ | Success redirect URL |
+| `cancelUrl` | `string` | ✅ | Cancel redirect URL |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  url: string; // Stripe checkout URL
+  sessionId: string;
+}
+```
+
+**Example:**
+
+```typescript
+import { useAction } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function UpgradeButton() {
+  const createCheckout = useAction(api.subscriptions.createSubscriptionCheckout);
+
+  const handleUpgrade = async () => {
+    const { url } = await createCheckout({
+      plan: "PREMIUM",
+      billingCycle: "MONTHLY",
+      successUrl: `${window.location.origin}/dashboard?success=true`,
+      cancelUrl: `${window.location.origin}/pricing?canceled=true`,
+    });
+
+    // Redirect to Stripe checkout
+    window.location.href = url;
+  };
+
+  return <button onClick={handleUpgrade}>Upgrade to Premium</button>;
+}
+```
+
+### cancel
+
+Cancel an active subscription.
+
+```typescript
+api.subscriptions.cancel
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `subscriptionId` | `Id<"subscriptions">` | ✅ | Subscription ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  success: boolean;
+  cancelAtPeriodEnd: boolean;
+  currentPeriodEnd: number;
+}
+```
+
+**Example:**
+
+```typescript
+const cancel = useMutation(api.subscriptions.cancel);
+
+await cancel({
+  subscriptionId: subscription._id,
+});
+
+// Subscription remains active until period end
+// Then automatically cancels
+```
+
+### reactivate
+
+Reactivate a cancelled subscription.
+
+```typescript
+api.subscriptions.reactivate
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `subscriptionId` | `Id<"subscriptions">` | ✅ | Subscription ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  success: boolean;
+}
+```
+
+### createBillingPortalSession
+
+Create a Stripe billing portal session.
+
+```typescript
+api.subscriptions.createBillingPortalSession
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `returnUrl` | `string` | ✅ | Return URL after portal session |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  url: string; // Stripe billing portal URL
+}
+```
+
+**Example:**
+
+```typescript
+const createPortal = useAction(api.subscriptions.createBillingPortalSession);
+
+const handleManageBilling = async () => {
+  const { url } = await createPortal({
+    returnUrl: `${window.location.origin}/settings/billing`,
+  });
+
+  window.location.href = url;
+};
+```
+
+## Feature Gating
+
+### Check Feature Access
+
+```typescript
+import { planHasFeature, FeatureFlags } from "@/convex/lib/subscription/config";
+
+// Check if plan has feature
+const hasDeals = planHasFeature("PREMIUM", FeatureFlags.DEALS_MANAGEMENT);
+const hasAdvancedInventory = planHasFeature("PREMIUM", FeatureFlags.ADVANCED_INVENTORY);
+```
+
+### Feature Flags
+
+```typescript
+enum FeatureFlags {
+  DEALS_MANAGEMENT = "deals_management",
+  ADVANCED_INVENTORY = "advanced_inventory",
+  CUSTOM_DOCUMENTS = "custom_documents",
+  API_ACCESS = "api_access",
+  ANALYTICS = "analytics",
+  EXPORT_DATA = "export_data",
+}
+```
+
+### Usage Limits
+
+Check subscription limits:
+
+```typescript
+import { checkVehiclesLimit, checkDealsLimit } from "@/convex/lib/subscription/limits";
+
+// Check vehicle limit
+const vehicleLimit = await checkVehiclesLimit(dealershipId);
+if (vehicleCount >= vehicleLimit) {
+  throw new Error("Vehicle limit reached");
+}
+
+// Check deal limit
+const dealLimit = await checkDealsLimit(dealershipId);
+if (dealCount >= dealLimit) {
+  throw new Error("Deal limit reached");
+}
+```
+
+## Subscription Status
+
+### Status Values
+
+- `ACTIVE` - Subscription is active
+- `CANCELLED` - Subscription is cancelled (active until period end)
+- `PAST_DUE` - Payment failed, retrying
+- `PENDING` - Subscription is being set up
+- `TRIALING` - In trial period
+
+### Status Transitions
+
+```typescript
+// Active subscription
+subscription.status === "ACTIVE"
+
+// Cancelled but still active
+subscription.status === "CANCELLED"
+subscription.cancelAtPeriodEnd === true
+
+// Payment issue
+subscription.status === "PAST_DUE"
+```
+
+## Stripe Integration
+
+### Webhooks
+
+Stripe webhooks are automatically handled:
+
+- `checkout.session.completed` - New subscription created
+- `customer.subscription.updated` - Subscription updated
+- `customer.subscription.deleted` - Subscription cancelled
+- `invoice.payment_succeeded` - Payment successful
+- `invoice.payment_failed` - Payment failed
+
+### Webhook Handler
+
+```typescript
+// Automatically handled by Convex
+api.stripe_webhook.handleStripeWebhook
+```
+
+## Subscription Lifecycle
+
+### 1. Create Checkout Session
+
+```typescript
+const { url } = await createSubscriptionCheckout({
+  plan: "PREMIUM",
+  billingCycle: "MONTHLY",
+  successUrl: "...",
+  cancelUrl: "...",
+});
+```
+
+### 2. User Completes Payment
+
+User is redirected to Stripe checkout, completes payment.
+
+### 3. Webhook Received
+
+Stripe sends webhook, subscription is created automatically.
+
+### 4. Subscription Active
+
+User gains access to premium features.
+
+### 5. Renewal
+
+Subscription automatically renews each billing period.
+
+### 6. Cancellation
+
+User cancels, subscription remains active until period end.
+
+## Usage Tracking
+
+### Track Feature Usage
+
+```typescript
+// Track API calls
+await trackUsage({
+  subscriptionId: subscription._id,
+  feature: "api_calls",
+  count: 1,
+});
+
+// Track storage usage
+await trackUsage({
+  subscriptionId: subscription._id,
+  feature: "storage",
+  bytes: fileSize,
+});
+```
+
+## Error Handling
+
+Common errors:
+
+```typescript
+try {
+  await createSubscriptionCheckout({...});
+} catch (error) {
+  if (error.message.includes("stripe")) {
+    // Stripe API error
+  } else if (error.message.includes("subscription")) {
+    // Subscription error
+  } else {
+    // Other errors
+  }
+}
+```
+
+## Best Practices
+
+1. **Check subscription status** before accessing premium features
+2. **Handle webhooks properly** for reliable subscription updates
+3. **Track usage** to enforce limits
+4. **Provide clear upgrade paths** for users
+5. **Handle cancellations gracefully** - allow access until period end
+
+## Next Steps
+
+- [Dealerships API](/docs/api/dealerships) - Link subscriptions to dealerships
+- [Authentication](/docs/authentication) - User authentication
+- [Pricing](/docs/pricing) - Detailed pricing information

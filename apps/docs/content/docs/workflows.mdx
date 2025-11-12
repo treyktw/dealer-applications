@@ -1,0 +1,520 @@
+---
+title: Workflows
+description: Common business workflows and processes
+---
+
+# Workflows
+
+Step-by-step guides for common business processes and workflows in the Dealer Applications platform.
+
+## Deal Processing Workflow
+
+### Complete Deal Lifecycle
+
+The standard deal processing workflow from lead to completion.
+
+#### 1. Create Deal
+
+```typescript
+// Step 1: Create deal linking client and vehicle
+const deal = await createDeal({
+  dealershipId: "dealership123",
+  clientId: "client123",
+  vehicleId: "vehicle123",
+  salePrice: 25000,
+  downPayment: 5000,
+  status: "DRAFT",
+});
+```
+
+#### 2. Add Financing Terms
+
+```typescript
+// Step 2: Update deal with financing details
+await updateDeal({
+  dealId: deal.dealId,
+  financingTerms: {
+    termMonths: 60,
+    interestRate: 4.5,
+    monthlyPayment: 450,
+    lender: "ABC Finance",
+  },
+});
+```
+
+#### 3. Generate Documents
+
+```typescript
+// Step 3: Generate required documents
+const documents = await generateDocuments({
+  dealId: deal.dealId,
+  templateIds: [
+    "bill_of_sale_template",
+    "odometer_disclosure_template",
+    "buyers_guide_template",
+  ],
+  clientId: "client123",
+  vehicleId: "vehicle123",
+});
+```
+
+#### 4. Move to In Progress
+
+```typescript
+// Step 4: Update deal status
+await updateDealStatus({
+  dealId: deal.dealId,
+  newStatus: "IN_PROGRESS",
+});
+```
+
+#### 5. Await Signatures
+
+```typescript
+// Step 5: Move to pending signatures
+await updateDealStatus({
+  dealId: deal.dealId,
+  newStatus: "PENDING_SIGNATURE",
+});
+
+// Send documents for signing
+await sendDealDocumentsEmail({
+  dealId: deal.dealId,
+  recipientEmail: "client@example.com",
+  documentIds: documents.documentIds,
+});
+```
+
+#### 6. Complete Deal
+
+```typescript
+// Step 6: Mark as signed and completed
+await updateDealStatus({
+  dealId: deal.dealId,
+  newStatus: "SIGNED",
+});
+
+// Finalize
+await updateDealStatus({
+  dealId: deal.dealId,
+  newStatus: "COMPLETED",
+});
+
+// Vehicle status automatically updates to SOLD
+// Client status automatically updates to CUSTOMER
+```
+
+## Client Onboarding Workflow
+
+### From Lead to Customer
+
+#### 1. Create Lead
+
+```typescript
+// Step 1: Create new lead
+const client = await createClient({
+  dealershipId: "dealership123",
+  clientId: generateClientId(),
+  firstName: "John",
+  lastName: "Doe",
+  email: "john@example.com",
+  phone: "555-1234",
+  status: "LEAD",
+  source: "website",
+});
+```
+
+#### 2. Track Interactions
+
+```typescript
+// Step 2: Add notes and track interactions
+await updateClient({
+  clientId: client.clientId,
+  notes: "Interested in Honda Accord. Follow up next week.",
+});
+```
+
+#### 3. Convert to Customer
+
+```typescript
+// Step 3: When first deal is completed, status auto-updates
+// Or manually update:
+await updateClientStatus({
+  clientId: client.clientId,
+  newStatus: "CUSTOMER",
+});
+```
+
+## Employee Onboarding Workflow
+
+### Invite and Onboard Team Members
+
+#### 1. Create Invitation
+
+```typescript
+// Step 1: Admin creates invitation
+const invitation = await createInvitation({
+  email: "employee@example.com",
+  role: "EMPLOYEE",
+  dealershipId: "dealership123",
+});
+
+// Email sent automatically with invitation link
+```
+
+#### 2. User Accepts Invitation
+
+```typescript
+// Step 2: User clicks link and signs up
+// Invitation token validated
+await acceptInvitation({
+  token: invitation.token,
+  userId: clerkUserId,
+  name: "Jane Employee",
+});
+```
+
+#### 3. User Account Created
+
+```typescript
+// Step 3: User account automatically created
+// - Added to dealership
+// - Assigned role
+// - Granted permissions
+// - Invitation marked as accepted
+```
+
+#### 4. Onboarding Complete
+
+```typescript
+// Step 4: User completes onboarding
+await updateUser({
+  userId: newUserId,
+  needsOnboarding: false,
+});
+```
+
+## Document Generation Workflow
+
+### Generate and Process Documents
+
+#### 1. Prepare Deal Data
+
+```typescript
+// Step 1: Ensure all deal data is complete
+const deal = await getDealById({ dealId: "deal123" });
+const client = await getClient({ clientId: deal.clientId });
+const vehicle = await getVehicle({ vehicleId: deal.vehicleId });
+```
+
+#### 2. Select Templates
+
+```typescript
+// Step 2: Choose document templates
+const templates = await getTemplates({
+  jurisdiction: "CA",
+  packType: "finance",
+});
+```
+
+#### 3. Generate Documents
+
+```typescript
+// Step 3: Generate documents
+const result = await generateDocuments({
+  dealId: deal._id,
+  templateIds: templates.map(t => t._id),
+  clientId: client._id,
+  vehicleId: vehicle._id,
+});
+```
+
+#### 4. Review Documents
+
+```typescript
+// Step 4: Review generated documents
+const documents = await getCustomDocumentsForDeal({
+  dealId: deal._id,
+});
+
+// Get preview URLs
+for (const doc of documents) {
+  const { viewUrl } = await getDocumentPreviewUrl({
+    documentId: doc._id,
+  });
+  // Display preview
+}
+```
+
+#### 5. Send for Signing
+
+```typescript
+// Step 5: Send documents to client
+await sendDealDocumentsEmail({
+  dealId: deal._id,
+  recipientEmail: client.email,
+  documentIds: documents.map(d => d._id),
+  message: "Please review and sign these documents.",
+});
+```
+
+## Inventory Management Workflow
+
+### Add Vehicle to Inventory
+
+#### 1. Decode VIN
+
+```typescript
+// Step 1: Decode VIN to get vehicle details
+const vehicleData = await decodeVIN({
+  vin: "1HGCM82633A123456",
+});
+
+// Returns: make, model, year, trim, etc.
+```
+
+#### 2. Create Vehicle Record
+
+```typescript
+// Step 2: Create vehicle in inventory
+const vehicle = await createVehicle({
+  dealershipId: "dealership123",
+  vin: vehicleData.vin,
+  make: vehicleData.make,
+  model: vehicleData.model,
+  year: vehicleData.year,
+  trim: vehicleData.trim,
+  price: 25000,
+  status: "AVAILABLE",
+});
+```
+
+#### 3. Upload Images
+
+```typescript
+// Step 3: Upload vehicle images
+for (const image of vehicleImages) {
+  const { uploadUrl } = await generateImageUploadUrl({
+    vehicleId: vehicle.vehicleId,
+    fileName: image.name,
+  });
+  
+  await fetch(uploadUrl, {
+    method: "PUT",
+    body: image,
+  });
+}
+```
+
+#### 4. Update Vehicle Details
+
+```typescript
+// Step 4: Add additional details
+await updateVehicle({
+  vehicleId: vehicle.vehicleId,
+  mileage: 15000,
+  color: "Blue",
+  features: ["Leather Seats", "Sunroof", "Navigation"],
+  description: "Excellent condition, one owner.",
+});
+```
+
+## Subscription Management Workflow
+
+### Subscribe and Manage Billing
+
+#### 1. Select Plan
+
+```typescript
+// Step 1: User selects subscription plan
+const plan = "PREMIUM";
+const billingCycle = "MONTHLY";
+```
+
+#### 2. Create Checkout Session
+
+```typescript
+// Step 2: Create Stripe checkout session
+const { url } = await createSubscriptionCheckout({
+  plan,
+  billingCycle,
+  successUrl: `${window.location.origin}/dashboard?success=true`,
+  cancelUrl: `${window.location.origin}/pricing?canceled=true`,
+});
+```
+
+#### 3. Complete Payment
+
+```typescript
+// Step 3: User redirected to Stripe checkout
+// Payment processed by Stripe
+// Webhook received automatically
+```
+
+#### 4. Subscription Activated
+
+```typescript
+// Step 4: Webhook handler activates subscription
+// User gains access to premium features
+const subscription = await getUserSubscription();
+// subscription.status === "ACTIVE"
+```
+
+#### 5. Manage Billing
+
+```typescript
+// Step 5: Access billing portal
+const { url } = await createBillingPortalSession({
+  returnUrl: `${window.location.origin}/settings/billing`,
+});
+
+// User can update payment method, view invoices, etc.
+```
+
+## Custom Document Upload Workflow
+
+### Upload and Process Custom Documents
+
+#### 1. Generate Upload URL
+
+```typescript
+// Step 1: Generate presigned upload URL
+const { uploadUrl, documentId } = await generateCustomDocumentUploadUrl({
+  dealId: "deal123",
+  fileName: "custom_contract.pdf",
+  fileSize: 1024000,
+  mimeType: "application/pdf",
+});
+```
+
+#### 2. Upload File
+
+```typescript
+// Step 2: Upload file to S3
+await fetch(uploadUrl, {
+  method: "PUT",
+  body: file,
+  headers: {
+    "Content-Type": "application/pdf",
+  },
+});
+```
+
+#### 3. Document Record Created
+
+```typescript
+// Step 3: Document record automatically created
+// Status: DRAFT
+const document = await getDocumentById({
+  documentId,
+});
+```
+
+#### 4. Update Status
+
+```typescript
+// Step 4: Update document status
+await updateDocumentStatus({
+  documentId,
+  status: "READY",
+});
+```
+
+## Multi-Dealership Workflow
+
+### Manage Multiple Dealerships
+
+#### 1. Create Organization
+
+```typescript
+// Step 1: Create organization
+const org = await createOrg({
+  name: "ABC Auto Group",
+  ownerId: userId,
+});
+```
+
+#### 2. Add Dealerships
+
+```typescript
+// Step 2: Create dealerships under organization
+const dealership1 = await createDealership({
+  name: "ABC Auto Downtown",
+  orgId: org.orgId,
+  // ... other fields
+});
+
+const dealership2 = await createDealership({
+  name: "ABC Auto Uptown",
+  orgId: org.orgId,
+  // ... other fields
+});
+```
+
+#### 3. Manage Access
+
+```typescript
+// Step 3: Add users to organization
+await addOrgMember({
+  orgId: org.orgId,
+  userId: employeeId,
+  role: "MEMBER",
+});
+```
+
+## Error Handling Workflows
+
+### Handle Common Errors
+
+#### Subscription Required
+
+```typescript
+try {
+  await createDeal({...});
+} catch (error) {
+  if (error.message.includes("subscription")) {
+    // Redirect to pricing page
+    router.push("/pricing");
+  }
+}
+```
+
+#### Permission Denied
+
+```typescript
+try {
+  await updateDealership({...});
+} catch (error) {
+  if (error.message.includes("permission")) {
+    // Show error message
+    showError("You don't have permission to perform this action");
+  }
+}
+```
+
+#### Rate Limit Exceeded
+
+```typescript
+try {
+  await getVehicles({...});
+} catch (error) {
+  if (error.message.includes("rate limit")) {
+    // Show rate limit message
+    showError("Too many requests. Please try again later.");
+  }
+}
+```
+
+## Best Practices
+
+1. **Follow status transitions** - Use valid status transitions
+2. **Handle errors gracefully** - Provide user-friendly error messages
+3. **Validate data** - Check data completeness before operations
+4. **Use transactions** - Group related operations
+5. **Log important actions** - Track workflow progress
+
+## Next Steps
+
+- [API Reference](/docs/api) - Detailed API documentation
+- [Database Schema](/docs/schema) - Data structure reference
+- [Configuration](/docs/configuration) - Setup and configuration

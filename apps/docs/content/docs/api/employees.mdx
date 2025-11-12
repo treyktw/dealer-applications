@@ -1,0 +1,531 @@
+---
+title: Employees API
+description: Team management and employee permissions
+---
+
+# Employees API
+
+Manage team members, invitations, roles, and permissions for your dealership.
+
+## Overview
+
+The Employees API provides comprehensive team management including employee invitations, role assignment, permission management, and user onboarding workflows.
+
+## Queries
+
+### getEmployees
+
+Get all employees for a dealership.
+
+```typescript
+api.employees.getEmployees
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealershipId` | `Id<"dealerships">` | ✅ | Dealership ID |
+| `role` | `string` | ❌ | Filter by role |
+| `status` | `string` | ❌ | Filter by status (active/inactive) |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+Doc<"users">[]
+```
+
+**Example:**
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function EmployeeList() {
+  const employees = useQuery(api.employees.getEmployees, {
+    dealershipId: "dealership123",
+    role: "MANAGER",
+  });
+
+  return (
+    <div>
+      {employees?.map(employee => (
+        <EmployeeCard key={employee._id} employee={employee} />
+      ))}
+    </div>
+  );
+}
+```
+
+### getEmployeeById
+
+Get a single employee by ID.
+
+```typescript
+api.employees.getEmployeeById
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `employeeId` | `Id<"users">` | ✅ | Employee ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+Doc<"users"> | null
+```
+
+### getInvitations
+
+Get pending employee invitations.
+
+```typescript
+api.employees.getInvitations
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealershipId` | `Id<"dealerships">` | ✅ | Dealership ID |
+| `status` | `string` | ❌ | Filter by status (pending/accepted/expired) |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+Doc<"invitations">[]
+```
+
+## Mutations
+
+### createInvitation
+
+Create an employee invitation.
+
+```typescript
+api.employees.createInvitation
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `email` | `string` | ✅ | Employee email address |
+| `role` | `string` | ✅ | Employee role (ADMIN/MANAGER/EMPLOYEE/READONLY) |
+| `dealershipId` | `Id<"dealerships">` | ✅ | Dealership ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  invitationId: Id<"invitations">;
+  token: string;
+  expiresAt: number;
+  isUpdate: boolean; // true if updating existing invitation
+}
+```
+
+**Example:**
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function InviteEmployeeForm() {
+  const createInvitation = useMutation(api.employees.createInvitation);
+
+  const handleSubmit = async (data: InviteFormData) => {
+    const result = await createInvitation({
+      email: data.email,
+      role: data.role,
+      dealershipId: "dealership123",
+    });
+
+    // Send invitation email (handled automatically)
+    console.log("Invitation created:", result.invitationId);
+  };
+
+  return <form onSubmit={handleSubmit}>...</form>;
+}
+```
+
+### acceptInvitation
+
+Accept an employee invitation.
+
+```typescript
+api.employees.acceptInvitation
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `token` | `string` | ✅ | Invitation token |
+| `userId` | `string` | ✅ | Clerk user ID |
+| `name` | `string` | ✅ | User's name |
+| `image` | `string` | ❌ | User's profile image URL |
+
+**Returns:**
+
+```typescript
+{
+  success: boolean;
+  userId: Id<"users">;
+}
+```
+
+### updateEmployeeRole
+
+Update an employee's role.
+
+```typescript
+api.employees.updateEmployeeRole
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `employeeId` | `Id<"users">` | ✅ | Employee ID |
+| `role` | `string` | ✅ | New role |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  success: boolean;
+}
+```
+
+**Example:**
+
+```typescript
+await updateEmployeeRole({
+  employeeId: "user123",
+  role: "MANAGER",
+});
+```
+
+### updateEmployeePermissions
+
+Update custom permissions for an employee.
+
+```typescript
+api.employees.updateEmployeePermissions
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `employeeId` | `Id<"users">` | ✅ | Employee ID |
+| `permissions` | `string[]` | ✅ | Array of permission strings |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  success: boolean;
+}
+```
+
+**Example:**
+
+```typescript
+await updateEmployeePermissions({
+  employeeId: "user123",
+  permissions: [
+    "view_inventory",
+    "manage_inventory",
+    "view_deals",
+    "create_deals",
+  ],
+});
+```
+
+### deactivateEmployee
+
+Deactivate an employee account.
+
+```typescript
+api.employees.deactivateEmployee
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `employeeId` | `Id<"users">` | ✅ | Employee ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  success: boolean;
+}
+```
+
+### reactivateEmployee
+
+Reactivate a deactivated employee account.
+
+```typescript
+api.employees.reactivateEmployee
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `employeeId` | `Id<"users">` | ✅ | Employee ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  success: boolean;
+}
+```
+
+### cancelInvitation
+
+Cancel a pending invitation.
+
+```typescript
+api.employees.cancelInvitation
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `invitationId` | `Id<"invitations">` | ✅ | Invitation ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  success: boolean;
+}
+```
+
+## Roles and Permissions
+
+### Available Roles
+
+| Role | Description | Default Permissions |
+|------|-------------|-------------------|
+| `ADMIN` | Full access | All permissions |
+| `MANAGER` | Management access | Most permissions except user management |
+| `EMPLOYEE` | Standard access | Limited permissions for daily tasks |
+| `READONLY` | View only | Read-only access to all data |
+
+### Permission Constants
+
+```typescript
+import { PERMISSIONS } from "@/convex/permissions";
+
+// Available permissions
+PERMISSIONS.VIEW_DASHBOARD
+PERMISSIONS.MANAGE_INVENTORY
+PERMISSIONS.CREATE_DEALS
+PERMISSIONS.VIEW_CLIENTS
+PERMISSIONS.MANAGE_DOCUMENTS
+// ... and more
+```
+
+### Role-Based Access Control
+
+Roles automatically grant permissions:
+
+```typescript
+// ADMIN has all permissions
+const adminPermissions = getAllPermissions();
+
+// MANAGER has most permissions
+const managerPermissions = [
+  PERMISSIONS.VIEW_DASHBOARD,
+  PERMISSIONS.MANAGE_INVENTORY,
+  PERMISSIONS.CREATE_DEALS,
+  // ... but not MANAGE_USERS
+];
+
+// EMPLOYEE has limited permissions
+const employeePermissions = [
+  PERMISSIONS.VIEW_INVENTORY,
+  PERMISSIONS.VIEW_DEALS,
+  PERMISSIONS.VIEW_CLIENTS,
+];
+
+// READONLY has view-only permissions
+const readonlyPermissions = [
+  PERMISSIONS.VIEW_DASHBOARD,
+  PERMISSIONS.VIEW_INVENTORY,
+  PERMISSIONS.VIEW_DEALS,
+  PERMISSIONS.VIEW_CLIENTS,
+];
+```
+
+## Invitation Workflow
+
+### 1. Create Invitation
+
+```typescript
+const invitation = await createInvitation({
+  email: "employee@example.com",
+  role: "EMPLOYEE",
+  dealershipId: "dealership123",
+});
+```
+
+### 2. Send Invitation Email
+
+Invitation emails are sent automatically with:
+- Invitation link
+- Expiration date (7 days)
+- Role information
+- Dealership name
+
+### 3. User Accepts Invitation
+
+```typescript
+// User clicks link and signs up
+await acceptInvitation({
+  token: invitation.token,
+  userId: clerkUserId,
+  name: "John Doe",
+});
+```
+
+### 4. User Account Created
+
+User is automatically:
+- Added to dealership
+- Assigned role
+- Granted permissions
+- Invitation marked as accepted
+
+## Custom Permissions
+
+### Grant Custom Permissions
+
+Override default role permissions:
+
+```typescript
+await updateEmployeePermissions({
+  employeeId: "user123",
+  permissions: [
+    "view_inventory",
+    "manage_inventory",
+    "view_deals",
+    // Custom permission not in default role
+    "export_data",
+  ],
+});
+```
+
+### Check Permissions
+
+```typescript
+// In your Convex functions
+import { hasPermission } from "@/convex/permissions";
+
+if (!hasPermission(user, PERMISSIONS.MANAGE_INVENTORY)) {
+  throw new Error("Permission denied");
+}
+```
+
+## Employee Status
+
+### Active Employees
+
+Active employees can:
+- Log in to the system
+- Access assigned features
+- Perform permitted actions
+
+### Inactive Employees
+
+Inactive employees:
+- Cannot log in
+- Retain data access history
+- Can be reactivated
+
+### Deactivation
+
+```typescript
+// Deactivate employee
+await deactivateEmployee({
+  employeeId: "user123",
+});
+
+// Employee can no longer log in
+// But data remains accessible for audit
+```
+
+## Email Notifications
+
+### Invitation Emails
+
+Automatically sent when:
+- New invitation created
+- Invitation updated
+- Invitation expires (reminder)
+
+### Email Templates
+
+Customize invitation emails:
+
+```typescript
+// Email template includes:
+// - Invitation link
+// - Expiration date
+// - Role information
+// - Dealership branding
+```
+
+## Error Handling
+
+Common errors:
+
+```typescript
+try {
+  await createInvitation({...});
+} catch (error) {
+  if (error.message.includes("already exists")) {
+    // User already exists
+  } else if (error.message.includes("permission")) {
+    // Permission denied
+  } else if (error.message.includes("expired")) {
+    // Invitation expired
+  } else {
+    // Other errors
+  }
+}
+```
+
+## Best Practices
+
+1. **Use appropriate roles** - Don't grant ADMIN unless necessary
+2. **Review permissions regularly** - Audit employee access
+3. **Cancel unused invitations** - Clean up expired invitations
+4. **Deactivate instead of delete** - Preserve audit trail
+5. **Use custom permissions** - For fine-grained access control
+
+## Next Steps
+
+- [Authentication](/docs/authentication) - User authentication
+- [Dealerships API](/docs/api/dealerships) - Dealership management
+- [Permissions](/docs/permissions) - Permission system details

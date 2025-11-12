@@ -1,0 +1,408 @@
+---
+title: Security
+description: Security features and best practices
+---
+
+# Security
+
+Comprehensive security features, best practices, and compliance guidelines for the Dealer Applications platform.
+
+## Security Overview
+
+The platform implements multiple layers of security to protect data, prevent unauthorized access, and ensure compliance with industry standards.
+
+## Authentication & Authorization
+
+### Multi-Factor Authentication
+
+Clerk supports MFA for enhanced security:
+
+```typescript
+// Enable MFA in Clerk dashboard
+// Users can enable:
+// - SMS verification
+// - TOTP authenticator apps
+// - WebAuthn (biometric)
+```
+
+### Role-Based Access Control (RBAC)
+
+Four user roles with different permission levels:
+
+| Role | Permissions | Use Case |
+|------|-------------|----------|
+| **ADMIN** | Full access | Dealership owners |
+| **MANAGER** | Most features | Department managers |
+| **EMPLOYEE** | Limited access | Sales staff |
+| **READONLY** | View only | Auditors, analysts |
+
+### Permission System
+
+Granular permissions for fine-grained access control:
+
+```typescript
+import { PERMISSIONS } from "@/convex/permissions";
+
+// Check permissions
+if (!hasPermission(user, PERMISSIONS.MANAGE_INVENTORY)) {
+  throw new Error("Permission denied");
+}
+```
+
+### Session Management
+
+- **Secure token storage** - Tokens stored in secure keyring (desktop)
+- **Session expiration** - Automatic session timeout
+- **Token refresh** - Automatic token renewal
+- **Session invalidation** - Logout invalidates all sessions
+
+## Data Protection
+
+### Encryption
+
+#### Data at Rest
+
+- **S3 encryption** - All files encrypted in S3
+- **Database encryption** - Sensitive fields encrypted
+- **Local storage** - Desktop app uses encrypted storage
+
+#### Data in Transit
+
+- **HTTPS/TLS** - All API calls use TLS 1.3
+- **Secure WebSockets** - Real-time updates over WSS
+- **Encrypted tokens** - JWT tokens signed and encrypted
+
+### Sensitive Data Handling
+
+Fields marked for encryption:
+
+```typescript
+// Encrypted fields
+taxId: string;              // Encrypted
+s3AccessKeyId: string;      // Encrypted
+s3SecretKey: string;        // Encrypted
+apiKey: string;             // Hashed (SHA-256)
+```
+
+### Data Isolation
+
+Multi-tenant data isolation:
+
+```typescript
+// Always filter by dealershipId
+const vehicles = await ctx.db
+  .query("vehicles")
+  .withIndex("by_dealership", (q) => 
+    q.eq("dealershipId", dealershipId)
+  )
+  .collect();
+```
+
+## API Security
+
+### Rate Limiting
+
+Protect APIs from abuse:
+
+```typescript
+// Rate limits by endpoint
+const limits = {
+  "public:getVehicles": { limit: 60, window: 3600000 },  // 60/hour
+  "public:searchVehicles": { limit: 30, window: 3600000 }, // 30/hour
+  "auth:createDeal": { limit: 100, window: 3600000 },      // 100/hour
+};
+```
+
+### API Key Management
+
+Secure API key handling:
+
+```typescript
+// API keys are hashed (SHA-256)
+const keyHash = crypto
+  .createHash("sha256")
+  .update(apiKey)
+  .digest("hex");
+
+// Store hash, never plain text
+await ctx.db.insert("api_keys", {
+  keyHash,
+  keyPrefix: apiKey.substring(0, 8), // For identification only
+  // ... other fields
+});
+```
+
+### IP Restrictions
+
+Restrict API access by IP:
+
+```typescript
+// Check IP whitelist
+if (dealership.ipWhitelist?.length > 0) {
+  const clientIP = getClientIP(ctx);
+  if (!dealership.ipWhitelist.includes(clientIP)) {
+    throw new Error("IP not allowed");
+  }
+}
+```
+
+## Security Logging
+
+### Audit Trail
+
+Comprehensive security logging:
+
+```typescript
+await ctx.db.insert("security_logs", {
+  dealershipId,
+  action: "login_success",
+  userId: user._id,
+  ipAddress: clientIP,
+  userAgent: userAgent,
+  success: true,
+  timestamp: Date.now(),
+  severity: "low",
+});
+```
+
+### Logged Events
+
+- Authentication events (login, logout, failed attempts)
+- Authorization events (permission denied)
+- Data access (sensitive data viewed)
+- Configuration changes (settings updated)
+- API usage (rate limit hits, suspicious activity)
+
+### Log Retention
+
+- **Security logs** - 90 days retention
+- **Audit logs** - 1 year retention
+- **Activity logs** - 30 days retention
+
+## Input Validation
+
+### Schema Validation
+
+All inputs validated with Convex validators:
+
+```typescript
+export const createDeal = mutation({
+  args: {
+    dealershipId: v.id("dealerships"),
+    clientId: v.id("clients"),
+    vehicleId: v.id("vehicles"),
+    salePrice: v.number(),
+    // ... validated fields
+  },
+  handler: async (ctx, args) => {
+    // Types are guaranteed valid
+  },
+});
+```
+
+### Sanitization
+
+Sanitize user inputs:
+
+```typescript
+// Sanitize HTML
+import DOMPurify from "isomorphic-dompurify";
+
+const sanitized = DOMPurify.sanitize(userInput);
+```
+
+### File Upload Validation
+
+Validate file uploads:
+
+```typescript
+// Allowed file types
+const allowedTypes = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+];
+
+// Max file size: 50MB
+const maxSize = 50 * 1024 * 1024;
+
+// Validate
+if (!allowedTypes.includes(file.type)) {
+  throw new Error("Invalid file type");
+}
+
+if (file.size > maxSize) {
+  throw new Error("File too large");
+}
+```
+
+## Secure File Storage
+
+### S3 Security
+
+- **Bucket policies** - Restrict access to specific IAM users
+- **Presigned URLs** - Time-limited access (15 min - 1 hour)
+- **Encryption** - Server-side encryption enabled
+- **Versioning** - File versioning for recovery
+- **Lifecycle policies** - Automatic cleanup of old files
+
+### Presigned URL Security
+
+```typescript
+// Generate presigned URL with expiration
+const url = await getSignedUrl(s3Client, command, {
+  expiresIn: 3600, // 1 hour
+});
+
+// URLs automatically expire
+// Cannot be reused after expiration
+```
+
+## Account Security
+
+### Password Policies
+
+Enforced by Clerk:
+- Minimum 8 characters
+- Require uppercase, lowercase, numbers
+- Password strength indicator
+- Password history (prevent reuse)
+
+### Account Lockout
+
+Protect against brute force:
+
+```typescript
+// Track failed login attempts
+if (loginFailed) {
+  await ctx.db.patch(user._id, {
+    failedLoginAttempts: (user.failedLoginAttempts || 0) + 1,
+    lastFailedLogin: Date.now(),
+  });
+
+  // Lock account after 5 failed attempts
+  if (user.failedLoginAttempts >= 5) {
+    await ctx.db.patch(user._id, {
+      accountLocked: true,
+      lockoutExpires: Date.now() + 3600000, // 1 hour
+    });
+  }
+}
+```
+
+### Session Security
+
+- **Secure cookies** - HttpOnly, Secure, SameSite
+- **CSRF protection** - Token-based CSRF protection
+- **Session timeout** - Automatic logout after inactivity
+- **Concurrent sessions** - Limit active sessions per user
+
+## Compliance
+
+### Data Privacy
+
+- **GDPR compliance** - Right to access, delete, export data
+- **CCPA compliance** - California privacy rights
+- **Data retention** - Automatic cleanup per retention policies
+- **Data export** - Users can export their data
+
+### PCI Compliance
+
+- **No card data storage** - Stripe handles all payment data
+- **Tokenization** - Payment tokens only
+- **Secure transmission** - TLS for all payment operations
+
+### HIPAA Considerations
+
+For healthcare-related dealerships:
+- **Encryption** - All PHI encrypted
+- **Access logs** - Comprehensive audit trail
+- **Data minimization** - Only collect necessary data
+
+## Security Best Practices
+
+### For Developers
+
+1. **Never log sensitive data** - Don't log passwords, tokens, keys
+2. **Use parameterized queries** - Prevent SQL injection
+3. **Validate all inputs** - Never trust user input
+4. **Keep dependencies updated** - Regular security updates
+5. **Use secure defaults** - Secure by default configuration
+
+### For Administrators
+
+1. **Enable MFA** - Require MFA for all admin accounts
+2. **Regular audits** - Review security logs regularly
+3. **IP restrictions** - Restrict admin access by IP
+4. **Least privilege** - Grant minimum necessary permissions
+5. **Monitor alerts** - Set up security alerts
+
+### For Users
+
+1. **Strong passwords** - Use unique, complex passwords
+2. **Enable MFA** - Add extra security layer
+3. **Regular updates** - Keep apps updated
+4. **Secure networks** - Avoid public Wi-Fi for sensitive operations
+5. **Report issues** - Report security concerns immediately
+
+## Security Monitoring
+
+### Monitoring Tools
+
+- **Security logs** - Real-time security event logging
+- **Rate limit alerts** - Alert on rate limit hits
+- **Failed login alerts** - Alert on suspicious login attempts
+- **API usage monitoring** - Track API usage patterns
+
+### Incident Response
+
+1. **Detect** - Security monitoring detects incident
+2. **Contain** - Isolate affected systems
+3. **Investigate** - Analyze security logs
+4. **Remediate** - Fix security issue
+5. **Document** - Document incident and response
+
+## Vulnerability Management
+
+### Regular Updates
+
+- **Dependencies** - Regular dependency updates
+- **Security patches** - Apply security patches promptly
+- **Vulnerability scanning** - Regular security scans
+
+### Reporting Vulnerabilities
+
+Report security vulnerabilities to:
+- **Email**: security@dealerapp.com
+- **Responsible disclosure** - Allow time for fixes
+- **Bug bounty** - Eligible for rewards
+
+## Security Checklist
+
+### Initial Setup
+
+- [ ] Enable MFA for all admin accounts
+- [ ] Configure IP restrictions
+- [ ] Set up security logging
+- [ ] Configure rate limiting
+- [ ] Enable encryption for sensitive data
+- [ ] Set up monitoring alerts
+- [ ] Review default permissions
+- [ ] Configure session timeouts
+
+### Ongoing Maintenance
+
+- [ ] Review security logs weekly
+- [ ] Update dependencies monthly
+- [ ] Audit user permissions quarterly
+- [ ] Review access logs quarterly
+- [ ] Test backup and recovery
+- [ ] Update security policies
+- [ ] Train staff on security
+- [ ] Review compliance requirements
+
+## Next Steps
+
+- [Authentication](/docs/authentication) - Authentication setup
+- [Configuration](/docs/configuration) - Security configuration
+- [API Reference](/docs/api) - Secure API usage

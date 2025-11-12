@@ -1,0 +1,529 @@
+---
+title: Configuration
+description: Setup and configuration guides
+---
+
+# Configuration
+
+Complete setup and configuration guide for the Dealer Applications platform.
+
+## Environment Variables
+
+### Required Environment Variables
+
+#### Convex Configuration
+
+```bash
+# Convex deployment URL
+CONVEX_URL=https://your-deployment.convex.cloud
+
+# Convex deployment key (for production)
+CONVEX_DEPLOY_KEY=your-deploy-key
+```
+
+#### Authentication (Clerk)
+
+```bash
+# Clerk configuration
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+
+# Clerk webhook secret
+CLERK_WEBHOOK_SECRET=whsec_...
+```
+
+#### AWS S3 Configuration
+
+```bash
+# AWS credentials
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_REGION=us-east-1
+
+# S3 bucket name
+AWS_S3_BUCKET_NAME=your-bucket-name
+```
+
+#### Stripe Configuration
+
+```bash
+# Stripe API keys
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_PUBLISHABLE_KEY=pk_test_...
+
+# Stripe webhook secret
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# Stripe price IDs
+STRIPE_BASIC_MONTHLY_PRICE_ID=price_...
+STRIPE_BASIC_YEARLY_PRICE_ID=price_...
+STRIPE_PREMIUM_MONTHLY_PRICE_ID=price_...
+STRIPE_PREMIUM_YEARLY_PRICE_ID=price_...
+STRIPE_ENTERPRISE_MONTHLY_PRICE_ID=price_...
+STRIPE_ENTERPRISE_YEARLY_PRICE_ID=price_...
+```
+
+#### Email Configuration (Resend)
+
+```bash
+# Resend API key
+RESEND_API_KEY=re_...
+
+# From email address
+RESEND_FROM_EMAIL=noreply@yourdomain.com
+```
+
+### Optional Environment Variables
+
+```bash
+# Application URL
+NEXT_PUBLIC_APP_URL=https://app.yourdomain.com
+
+# Environment
+NODE_ENV=production
+
+# Logging
+LOG_LEVEL=info
+
+# Feature flags
+ENABLE_ANALYTICS=true
+ENABLE_MARKETING=true
+```
+
+## Convex Setup
+
+### Initial Setup
+
+1. **Install Convex CLI**
+
+```bash
+npm install -g convex
+```
+
+2. **Login to Convex**
+
+```bash
+convex login
+```
+
+3. **Initialize Convex**
+
+```bash
+cd convex
+convex dev
+```
+
+4. **Deploy Schema**
+
+```bash
+convex deploy
+```
+
+### Configure Convex Functions
+
+Update `convex/auth.config.ts`:
+
+```typescript
+export default {
+  providers: {
+    clerk: {
+      domain: "your-clerk-domain.clerk.accounts.dev",
+      applicationID: "your-application-id",
+    },
+  },
+};
+```
+
+## Clerk Authentication Setup
+
+### 1. Create Clerk Application
+
+1. Go to [Clerk Dashboard](https://dashboard.clerk.com)
+2. Create new application
+3. Configure authentication methods
+4. Set up webhooks
+
+### 2. Configure Webhooks
+
+Add webhook endpoint:
+```
+https://your-domain.com/api/webhooks/clerk
+```
+
+Events to subscribe:
+- `user.created`
+- `user.updated`
+- `user.deleted`
+- `session.created`
+- `session.ended`
+
+### 3. Configure Environment Variables
+
+```bash
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+CLERK_WEBHOOK_SECRET=whsec_...
+```
+
+## AWS S3 Setup
+
+### 1. Create S3 Bucket
+
+```bash
+aws s3 mb s3://your-bucket-name --region us-east-1
+```
+
+### 2. Configure Bucket Policy
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::ACCOUNT_ID:user/YOUR_USER"
+      },
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::your-bucket-name/*"
+    }
+  ]
+}
+```
+
+### 3. Set Up CORS
+
+```json
+[
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["GET", "PUT", "POST", "DELETE"],
+    "AllowedOrigins": ["https://your-domain.com"],
+    "ExposeHeaders": ["ETag"]
+  }
+]
+```
+
+### 4. Configure Lifecycle Policies
+
+```typescript
+// Use setup script
+import { setupS3Lifecycle } from "./scripts/setup-s3-lifecycle";
+
+await setupS3Lifecycle({
+  bucketName: "your-bucket-name",
+  region: "us-east-1",
+});
+```
+
+## Stripe Setup
+
+### 1. Create Stripe Account
+
+1. Sign up at [Stripe](https://stripe.com)
+2. Get API keys from dashboard
+3. Create products and prices
+
+### 2. Create Products
+
+```bash
+# Basic Plan - Monthly
+stripe products create --name="Basic Plan" --type=service
+stripe prices create --product=prod_... --unit-amount=2900 --currency=usd --recurring[interval]=month
+
+# Premium Plan - Monthly
+stripe products create --name="Premium Plan" --type=service
+stripe prices create --product=prod_... --unit-amount=7900 --currency=usd --recurring[interval]=month
+
+# Enterprise Plan - Monthly
+stripe products create --name="Enterprise Plan" --type=service
+stripe prices create --product=prod_... --unit-amount=19900 --currency=usd --recurring[interval]=month
+```
+
+### 3. Configure Webhooks
+
+Add webhook endpoint:
+```
+https://your-domain.com/api/webhooks/stripe
+```
+
+Events to subscribe:
+- `checkout.session.completed`
+- `customer.subscription.created`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+- `invoice.payment_succeeded`
+- `invoice.payment_failed`
+
+### 4. Set Environment Variables
+
+```bash
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_PUBLISHABLE_KEY=pk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_BASIC_MONTHLY_PRICE_ID=price_...
+STRIPE_PREMIUM_MONTHLY_PRICE_ID=price_...
+STRIPE_ENTERPRISE_MONTHLY_PRICE_ID=price_...
+```
+
+## Resend Email Setup
+
+### 1. Create Resend Account
+
+1. Sign up at [Resend](https://resend.com)
+2. Verify domain
+3. Get API key
+
+### 2. Configure Domain
+
+1. Add DNS records:
+   - SPF record
+   - DKIM record
+   - DMARC record
+
+2. Verify domain in Resend dashboard
+
+### 3. Set Environment Variables
+
+```bash
+RESEND_API_KEY=re_...
+RESEND_FROM_EMAIL=noreply@yourdomain.com
+```
+
+## Desktop App Configuration
+
+### Tauri Configuration
+
+Edit `apps/desktop/src-tauri/tauri.conf.json`:
+
+```json
+{
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
+    "devPath": "http://localhost:1420",
+    "distDir": "../dist"
+  },
+  "package": {
+    "productName": "Dealer Applications",
+    "version": "1.0.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "all": false,
+        "open": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "com.dealerapp.desktop",
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/256x256.png",
+        "icons/256x256@2x.png",
+        "icons/512x512.png",
+        "icons/512x512@2x.png"
+      ]
+    },
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "fullscreen": false,
+        "resizable": true,
+        "title": "Dealer Applications",
+        "width": 1200,
+        "height": 800
+      }
+    ]
+  }
+}
+```
+
+### Environment Variables
+
+Create `.env` file:
+
+```bash
+VITE_CONVEX_URL=https://your-deployment.convex.cloud
+VITE_APP_NAME=Dealer Applications
+```
+
+## Database Configuration
+
+### Convex Schema
+
+The schema is automatically deployed with Convex. No manual database setup required.
+
+### Indexes
+
+Indexes are defined in `convex/schema.ts` and automatically created:
+
+```typescript
+.index("by_dealership", ["dealershipId"])
+.index("by_status", ["status"])
+.index("by_email", ["email"])
+```
+
+## Feature Flags
+
+### Configure Feature Flags
+
+Edit `convex/lib/subscription/config.ts`:
+
+```typescript
+export const FeatureFlags = {
+  DEALS_MANAGEMENT: "deals_management",
+  ADVANCED_INVENTORY: "advanced_inventory",
+  CUSTOM_DOCUMENTS: "custom_documents",
+  API_ACCESS: "api_access",
+  ANALYTICS: "analytics",
+  EXPORT_DATA: "export_data",
+} as const;
+
+export const PLAN_FEATURES: Record<SubscriptionPlanType, FeatureFlag[]> = {
+  BASIC: [],
+  PREMIUM: [
+    FeatureFlags.DEALS_MANAGEMENT,
+    FeatureFlags.ADVANCED_INVENTORY,
+    FeatureFlags.CUSTOM_DOCUMENTS,
+  ],
+  ENTERPRISE: [
+    FeatureFlags.DEALS_MANAGEMENT,
+    FeatureFlags.ADVANCED_INVENTORY,
+    FeatureFlags.CUSTOM_DOCUMENTS,
+    FeatureFlags.API_ACCESS,
+    FeatureFlags.ANALYTICS,
+    FeatureFlags.EXPORT_DATA,
+  ],
+};
+```
+
+## Rate Limiting Configuration
+
+### Configure Rate Limits
+
+Edit `convex/security.ts`:
+
+```typescript
+export const RATE_LIMITS = {
+  // Public API endpoints
+  "public:getVehicles": { limit: 60, window: 3600000 }, // 60/hour
+  "public:getVehicle": { limit: 100, window: 3600000 }, // 100/hour
+  "public:searchVehicles": { limit: 30, window: 3600000 }, // 30/hour
+  
+  // Authenticated endpoints
+  "auth:createDeal": { limit: 100, window: 3600000 }, // 100/hour
+  "auth:updateDeal": { limit: 200, window: 3600000 }, // 200/hour
+  
+  // Document generation
+  "documents:generate": { limit: 50, window: 3600000 }, // 50/hour
+} as const;
+```
+
+## IP Restrictions
+
+### Configure IP Whitelist
+
+```typescript
+// In dealership settings
+await updateDealershipSettings({
+  dealershipId: "dealership123",
+  settings: {
+    ipRestrictions: {
+      enabled: true,
+      allowedIPs: [
+        "192.168.1.0/24",  // Office network
+        "203.0.113.45",    // VPN IP
+      ],
+    },
+  },
+});
+```
+
+## Monitoring and Logging
+
+### Configure Logging
+
+```typescript
+// Set log level
+process.env.LOG_LEVEL = "info"; // debug, info, warn, error
+
+// Log to console in development
+if (process.env.NODE_ENV === "development") {
+  console.log("Debug info");
+}
+```
+
+### Configure Monitoring
+
+Set up monitoring for:
+- API response times
+- Error rates
+- Subscription status
+- Storage usage
+- Rate limit hits
+
+## Production Checklist
+
+- [ ] All environment variables set
+- [ ] Convex deployed to production
+- [ ] Clerk webhooks configured
+- [ ] Stripe webhooks configured
+- [ ] S3 bucket configured with CORS
+- [ ] Domain verified in Resend
+- [ ] SSL certificates installed
+- [ ] Rate limiting configured
+- [ ] IP restrictions set (if needed)
+- [ ] Monitoring configured
+- [ ] Backup strategy in place
+
+## Troubleshooting
+
+### Common Issues
+
+**Convex connection errors:**
+```bash
+# Check CONVEX_URL is set correctly
+echo $CONVEX_URL
+
+# Re-login to Convex
+convex login
+```
+
+**Clerk authentication fails:**
+```bash
+# Verify webhook secret matches
+# Check Clerk dashboard for correct keys
+```
+
+**S3 upload fails:**
+```bash
+# Verify AWS credentials
+aws s3 ls s3://your-bucket-name
+
+# Check CORS configuration
+```
+
+**Stripe webhooks not received:**
+```bash
+# Verify webhook endpoint is accessible
+# Check webhook secret matches
+# View webhook logs in Stripe dashboard
+```
+
+## Next Steps
+
+- [Authentication](/docs/authentication) - Authentication setup
+- [Security](/docs/security) - Security configuration
+- [API Reference](/docs/api) - API configuration

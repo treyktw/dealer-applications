@@ -1,0 +1,630 @@
+---
+title: Documents API
+description: PDF generation and document management
+---
+
+# Documents API
+
+Generate, manage, and process legal documents, contracts, and PDFs for deals and clients.
+
+## Overview
+
+The Documents API provides comprehensive document management including PDF generation, template management, custom document uploads, document signing workflows, and secure document storage in AWS S3.
+
+## Document Types
+
+### Generated Documents
+
+Documents generated from templates:
+- Sales contracts
+- Purchase agreements
+- Financing documents
+- Disclosure forms
+- Custom templates
+
+### Custom Documents
+
+User-uploaded documents:
+- Scanned documents
+- Custom forms
+- External contracts
+- Supporting documents
+
+## Queries
+
+### getCustomDocumentsForDeal
+
+Get all custom documents for a deal.
+
+```typescript
+api.documents.getCustomDocumentsForDeal
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealId` | `Id<"deals">` | ✅ | Deal ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+Doc<"dealer_uploaded_documents">[]
+```
+
+**Example:**
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function DealDocuments({ dealId }: { dealId: Id<"deals"> }) {
+  const documents = useQuery(api.documents.getCustomDocumentsForDeal, {
+    dealId,
+  });
+
+  return (
+    <div>
+      {documents?.map(doc => (
+        <DocumentCard key={doc._id} document={doc} />
+      ))}
+    </div>
+  );
+}
+```
+
+### getDocumentById
+
+Get a single document by ID.
+
+```typescript
+api.documents.getDocumentById
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `documentId` | `Id<"dealer_uploaded_documents">` | ✅ | Document ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+Doc<"dealer_uploaded_documents"> | null
+```
+
+### getDocumentWithMetadata
+
+Get document with full metadata.
+
+```typescript
+api.documents.getDocumentWithMetadata
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `documentId` | `Id<"dealer_uploaded_documents">` | ✅ | Document ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  document: Doc<"dealer_uploaded_documents">;
+  metadata: {
+    fileSize: number;
+    mimeType: string;
+    uploadedAt: number;
+    uploadedBy: string;
+  };
+}
+```
+
+## Mutations
+
+### generateDocuments
+
+Generate documents from templates for a deal.
+
+```typescript
+api.documents.generateDocuments
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealId` | `Id<"deals">` | ✅ | Deal ID |
+| `templateIds` | `Id<"document_templates">[]` | ✅ | Template IDs to generate |
+| `clientId` | `Id<"clients">` | ✅ | Client ID |
+| `vehicleId` | `Id<"vehicles">` | ✅ | Vehicle ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  documentIds: Id<"dealer_uploaded_documents">[];
+  success: boolean;
+}
+```
+
+**Example:**
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function GenerateDocumentsButton({ dealId }: { dealId: Id<"deals"> }) {
+  const generateDocuments = useMutation(api.documents.generateDocuments);
+
+  const handleGenerate = async () => {
+    const result = await generateDocuments({
+      dealId,
+      templateIds: ["template1", "template2"],
+      clientId: "client123",
+      vehicleId: "vehicle123",
+    });
+
+    console.log("Documents generated:", result.documentIds);
+  };
+
+  return <button onClick={handleGenerate}>Generate Documents</button>;
+}
+```
+
+### createCustomDocumentRecord
+
+Create a record for a custom uploaded document.
+
+```typescript
+api.documents.createCustomDocumentRecord
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealId` | `Id<"deals">` | ✅ | Deal ID |
+| `fileName` | `string` | ✅ | File name |
+| `fileSize` | `number` | ✅ | File size in bytes |
+| `mimeType` | `string` | ✅ | MIME type |
+| `s3Key` | `string` | ✅ | S3 object key |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  documentId: Id<"dealer_uploaded_documents">;
+}
+```
+
+### updateCustomDocumentAfterUpload
+
+Update document record after file upload completes.
+
+```typescript
+api.documents.updateCustomDocumentAfterUpload
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `documentId` | `Id<"dealer_uploaded_documents">` | ✅ | Document ID |
+| `uploadId` | `Id<"file_uploads">` | ✅ | Upload record ID |
+| `status` | `string` | ✅ | Upload status |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  success: boolean;
+}
+```
+
+### deleteCustomDocument
+
+Delete a custom document.
+
+```typescript
+api.documents.deleteCustomDocument
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `documentId` | `Id<"dealer_uploaded_documents">` | ✅ | Document ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  success: boolean;
+}
+```
+
+## Actions
+
+### generateCustomDocumentUploadUrl
+
+Generate a presigned URL for uploading custom documents.
+
+```typescript
+api.documents.generateCustomDocumentUploadUrl
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealId` | `Id<"deals">` | ✅ | Deal ID |
+| `fileName` | `string` | ✅ | File name |
+| `fileSize` | `number` | ✅ | File size in bytes |
+| `mimeType` | `string` | ✅ | MIME type |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  uploadUrl: string; // Presigned S3 upload URL
+  documentId: Id<"dealer_uploaded_documents">;
+  uploadId: Id<"file_uploads">;
+  expiresAt: number;
+}
+```
+
+**Example:**
+
+```typescript
+import { useAction } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+async function uploadDocument(file: File, dealId: Id<"deals">) {
+  // Generate upload URL
+  const { uploadUrl, documentId } = await generateCustomDocumentUploadUrl({
+    dealId,
+    fileName: file.name,
+    fileSize: file.size,
+    mimeType: file.type,
+  });
+
+  // Upload to S3
+  await fetch(uploadUrl, {
+    method: "PUT",
+    body: file,
+    headers: {
+      "Content-Type": file.type,
+    },
+  });
+
+  // Document record is automatically updated
+  return documentId;
+}
+```
+
+### generateCustomDocumentDownloadUrl
+
+Generate a presigned URL for downloading documents.
+
+```typescript
+api.documents.generateCustomDocumentDownloadUrl
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `documentId` | `Id<"dealer_uploaded_documents">` | ✅ | Document ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  downloadUrl: string; // Presigned S3 download URL
+  expiresAt: number;
+}
+```
+
+**Example:**
+
+```typescript
+const { downloadUrl } = await generateCustomDocumentDownloadUrl({
+  documentId: "doc123",
+});
+
+// Download file
+window.open(downloadUrl, "_blank");
+```
+
+### generateCustomDocumentViewUrl
+
+Generate a presigned URL for viewing documents in browser.
+
+```typescript
+api.documents.generateCustomDocumentViewUrl
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `documentId` | `Id<"dealer_uploaded_documents">` | ✅ | Document ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  viewUrl: string; // Presigned S3 view URL
+  expiresAt: number;
+}
+```
+
+### getDocumentPreviewUrl
+
+Get preview URL for document (for thumbnails/previews).
+
+```typescript
+api.documents.getDocumentPreviewUrl
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `documentId` | `Id<"dealer_uploaded_documents">` | ✅ | Document ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  previewUrl: string;
+  expiresAt: number;
+}
+```
+
+### sendDealDocumentsEmail
+
+Send deal documents via email.
+
+```typescript
+api.documents.sendDealDocumentsEmail
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealId` | `Id<"deals">` | ✅ | Deal ID |
+| `recipientEmail` | `string` | ✅ | Recipient email |
+| `documentIds` | `Id<"dealer_uploaded_documents">[]` | ✅ | Document IDs to send |
+| `message` | `string` | ❌ | Optional message |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  success: boolean;
+  messageId: string;
+}
+```
+
+**Example:**
+
+```typescript
+await sendDealDocumentsEmail({
+  dealId: "deal123",
+  recipientEmail: "client@example.com",
+  documentIds: ["doc1", "doc2"],
+  message: "Please review and sign these documents.",
+});
+```
+
+## Document Templates
+
+### Template System
+
+Documents are generated from templates stored in the database:
+
+```typescript
+// Template structure
+{
+  _id: Id<"document_templates">;
+  name: string;
+  type: "CONTRACT" | "DISCLOSURE" | "FINANCING" | "CUSTOM";
+  templateData: {
+    fields: FieldDefinition[];
+    layout: LayoutDefinition;
+  };
+}
+```
+
+### Field Mapping
+
+Templates map to deal/client/vehicle data:
+
+```typescript
+// Example field mapping
+{
+  fieldName: "client_name",
+  source: "client",
+  path: "firstName + ' ' + lastName",
+}
+
+{
+  fieldName: "vehicle_price",
+  source: "deal",
+  path: "salePrice",
+}
+```
+
+## Document Status
+
+### Status Values
+
+- `DRAFT` - Document is being created
+- `READY` - Document is ready for signing
+- `SIGNED` - Document has been signed
+- `VOID` - Document is voided
+- `FINALIZING` - Document is being finalized
+- `FINALIZED` - Document is finalized
+
+### Status Transitions
+
+```typescript
+// Update document status
+await updateDocumentStatus({
+  documentId: "doc123",
+  status: "READY",
+});
+```
+
+## S3 Storage
+
+### File Storage
+
+All documents are stored in AWS S3:
+
+```typescript
+// S3 path structure
+s3://bucket-name/
+  dealerships/
+    {dealershipId}/
+      deals/
+        {dealId}/
+          documents/
+            {documentId}.pdf
+```
+
+### Presigned URLs
+
+Presigned URLs provide secure, time-limited access:
+
+- **Upload URLs** - Valid for 15 minutes
+- **Download URLs** - Valid for 1 hour
+- **View URLs** - Valid for 1 hour
+
+## Document Workflow
+
+### 1. Generate Documents
+
+```typescript
+const { documentIds } = await generateDocuments({
+  dealId: "deal123",
+  templateIds: ["template1"],
+  clientId: "client123",
+  vehicleId: "vehicle123",
+});
+```
+
+### 2. Upload Custom Documents
+
+```typescript
+// Get upload URL
+const { uploadUrl, documentId } = await generateCustomDocumentUploadUrl({
+  dealId: "deal123",
+  fileName: "custom.pdf",
+  fileSize: 1024000,
+  mimeType: "application/pdf",
+});
+
+// Upload file
+await fetch(uploadUrl, {
+  method: "PUT",
+  body: file,
+});
+```
+
+### 3. Share Documents
+
+```typescript
+// Send via email
+await sendDealDocumentsEmail({
+  dealId: "deal123",
+  recipientEmail: "client@example.com",
+  documentIds: ["doc1", "doc2"],
+});
+```
+
+### 4. Download Documents
+
+```typescript
+// Get download URL
+const { downloadUrl } = await generateCustomDocumentDownloadUrl({
+  documentId: "doc123",
+});
+
+// Download
+window.open(downloadUrl);
+```
+
+## Security
+
+### Access Control
+
+Documents are protected by:
+- Authentication required for all operations
+- Dealership-level data isolation
+- Presigned URLs with expiration
+- Audit logging
+
+### File Validation
+
+Files are validated before upload:
+
+```typescript
+// Allowed file types
+const allowedTypes = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+];
+
+// Max file size: 50MB
+const maxSize = 50 * 1024 * 1024;
+```
+
+## Error Handling
+
+Common errors:
+
+```typescript
+try {
+  await generateDocuments({...});
+} catch (error) {
+  if (error.message.includes("template")) {
+    // Template not found
+  } else if (error.message.includes("s3")) {
+    // S3 upload error
+  } else {
+    // Other errors
+  }
+}
+```
+
+## Best Practices
+
+1. **Use presigned URLs** - Never expose S3 credentials
+2. **Validate file types** - Only allow safe file types
+3. **Set expiration times** - Limit URL validity
+4. **Track document status** - Keep status updated
+5. **Audit document access** - Log all document operations
+
+## Next Steps
+
+- [Deals API](/docs/api/deals) - Link documents to deals
+- [Templates](/docs/templates) - Document template system
+- [S3 Storage](/docs/s3) - File storage details

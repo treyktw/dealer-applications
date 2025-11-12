@@ -1,12 +1,19 @@
 // @ts-nocheck -- skip type checking
-import * as meta_1 from "../content/docs/api/meta.json?collection=meta&hash=1762910184140"
-import * as meta_0 from "../content/docs/meta.json?collection=meta&hash=1762910184140"
-import * as docs_4 from "../content/docs/api/inventory.mdx?collection=docs&hash=1762910184140"
-import * as docs_3 from "../content/docs/api/index.mdx?collection=docs&hash=1762910184140"
-import * as docs_2 from "../content/docs/api/clients.mdx?collection=docs&hash=1762910184140"
-import * as docs_1 from "../content/docs/index.mdx?collection=docs&hash=1762910184140"
-import * as docs_0 from "../content/docs/authentication.mdx?collection=docs&hash=1762910184140"
+import * as d_docs_14 from "../content/docs/api/subscriptions.mdx?collection=docs"
+import * as d_docs_13 from "../content/docs/api/inventory.mdx?collection=docs"
+import * as d_docs_12 from "../content/docs/api/index.mdx?collection=docs"
+import * as d_docs_11 from "../content/docs/api/employees.mdx?collection=docs"
+import * as d_docs_10 from "../content/docs/api/documents.mdx?collection=docs"
+import * as d_docs_9 from "../content/docs/api/deals.mdx?collection=docs"
+import * as d_docs_8 from "../content/docs/api/dealerships.mdx?collection=docs"
+import * as d_docs_7 from "../content/docs/api/clients.mdx?collection=docs"
+import * as d_docs_6 from "../content/docs/workflows.mdx?collection=docs"
+import * as d_docs_5 from "../content/docs/security.mdx?collection=docs"
+import * as d_docs_4 from "../content/docs/schema.mdx?collection=docs"
+import * as d_docs_3 from "../content/docs/index.mdx?collection=docs"
+import * as d_docs_2 from "../content/docs/desktop-app.mdx?collection=docs"
+import * as d_docs_1 from "../content/docs/configuration.mdx?collection=docs"
+import * as d_docs_0 from "../content/docs/authentication.mdx?collection=docs"
 import { _runtime } from "fumadocs-mdx/runtime/next"
 import * as _source from "../source.config"
-export const docs = _runtime.doc<typeof _source.docs>([{ info: {"path":"authentication.mdx","fullPath":"content/docs/authentication.mdx"}, data: docs_0 }, { info: {"path":"index.mdx","fullPath":"content/docs/index.mdx"}, data: docs_1 }, { info: {"path":"api/clients.mdx","fullPath":"content/docs/api/clients.mdx"}, data: docs_2 }, { info: {"path":"api/index.mdx","fullPath":"content/docs/api/index.mdx"}, data: docs_3 }, { info: {"path":"api/inventory.mdx","fullPath":"content/docs/api/inventory.mdx"}, data: docs_4 }]);
-export const meta = _runtime.meta<typeof _source.meta>([{ info: {"path":"meta.json","fullPath":"content/docs/meta.json"}, data: meta_0 }, { info: {"path":"api/meta.json","fullPath":"content/docs/api/meta.json"}, data: meta_1 }]);
+export const docs = _runtime.docs<typeof _source.docs>([{ info: {"path":"authentication.mdx","fullPath":"content/docs/authentication.mdx"}, data: d_docs_0 }, { info: {"path":"configuration.mdx","fullPath":"content/docs/configuration.mdx"}, data: d_docs_1 }, { info: {"path":"desktop-app.mdx","fullPath":"content/docs/desktop-app.mdx"}, data: d_docs_2 }, { info: {"path":"index.mdx","fullPath":"content/docs/index.mdx"}, data: d_docs_3 }, { info: {"path":"schema.mdx","fullPath":"content/docs/schema.mdx"}, data: d_docs_4 }, { info: {"path":"security.mdx","fullPath":"content/docs/security.mdx"}, data: d_docs_5 }, { info: {"path":"workflows.mdx","fullPath":"content/docs/workflows.mdx"}, data: d_docs_6 }, { info: {"path":"api/clients.mdx","fullPath":"content/docs/api/clients.mdx"}, data: d_docs_7 }, { info: {"path":"api/dealerships.mdx","fullPath":"content/docs/api/dealerships.mdx"}, data: d_docs_8 }, { info: {"path":"api/deals.mdx","fullPath":"content/docs/api/deals.mdx"}, data: d_docs_9 }, { info: {"path":"api/documents.mdx","fullPath":"content/docs/api/documents.mdx"}, data: d_docs_10 }, { info: {"path":"api/employees.mdx","fullPath":"content/docs/api/employees.mdx"}, data: d_docs_11 }, { info: {"path":"api/index.mdx","fullPath":"content/docs/api/index.mdx"}, data: d_docs_12 }, { info: {"path":"api/inventory.mdx","fullPath":"content/docs/api/inventory.mdx"}, data: d_docs_13 }, { info: {"path":"api/subscriptions.mdx","fullPath":"content/docs/api/subscriptions.mdx"}, data: d_docs_14 }], [{"info":{"path":"meta.json","fullPath":"content/docs/meta.json"},"data":{"title":"Documentation","pages":["index","authentication","api","desktop-app","schema","workflows","configuration","security","mobile"]}}, {"info":{"path":"api/meta.json","fullPath":"content/docs/api/meta.json"},"data":{"title":"API Reference","pages":["index","inventory","clients","deals","documents","dealerships","employees","subscriptions"]}}])

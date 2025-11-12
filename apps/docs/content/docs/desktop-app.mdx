@@ -1,0 +1,465 @@
+---
+title: Desktop Application
+description: Native desktop application with offline support
+---
+
+# Desktop Application
+
+Build and deploy native desktop applications using Tauri 2.0 with offline capabilities and secure local storage.
+
+## Overview
+
+The Desktop Application provides a native desktop experience with:
+- **Offline Support** - Work without internet connection
+- **Local Data Storage** - SQLite database for local caching
+- **Secure Authentication** - Standalone auth system
+- **Deep Link Support** - Handle document signing workflows
+- **Auto-updater** - Seamless updates
+- **Cross-platform** - macOS, Windows, Linux
+
+## Architecture
+
+### Tech Stack
+
+- **Frontend**: React 19 + TypeScript + TanStack Router
+- **Backend**: Tauri 2.0 + Rust
+- **Database**: SQLite (local) + Convex (cloud sync)
+- **Authentication**: Standalone email/password system
+- **Storage**: Encrypted local storage
+
+### Project Structure
+
+```
+apps/desktop/
+├── src/                    # React frontend
+│   ├── components/        # React components
+│   ├── routes/           # TanStack Router routes
+│   ├── lib/              # Utilities and helpers
+│   └── hooks/            # React hooks
+├── src-tauri/            # Rust backend
+│   ├── src/              # Rust source code
+│   │   ├── main.rs       # Entry point
+│   │   ├── database.rs   # SQLite database
+│   │   ├── storage.rs    # File storage
+│   │   └── auth.rs       # Authentication
+│   └── Cargo.toml        # Rust dependencies
+└── package.json          # Node.js dependencies
+```
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- Rust (latest stable)
+- pnpm
+
+### Installation
+
+```bash
+cd apps/desktop
+pnpm install
+```
+
+### Development
+
+```bash
+# Start development server
+pnpm dev
+
+# Build for production
+pnpm build
+
+# Build for specific platform
+pnpm tauri build --target x86_64-apple-darwin  # macOS
+pnpm tauri build --target x86_64-pc-windows-msvc  # Windows
+pnpm tauri build --target x86_64-unknown-linux-gnu  # Linux
+```
+
+## Authentication
+
+### Standalone Auth System
+
+The desktop app uses a standalone authentication system separate from Clerk:
+
+```typescript
+// Login
+const { token, user } = await login({
+  email: "user@example.com",
+  password: "password",
+});
+
+// Store token securely
+await storeToken(token);
+```
+
+### Session Management
+
+Sessions are stored securely using Tauri's keyring:
+
+```rust
+// Rust backend
+use tauri_plugin_store::StoreBuilder;
+
+let store = StoreBuilder::new("auth.store")
+    .build();
+
+store.insert("token", token)?;
+store.save()?;
+```
+
+### Token Validation
+
+Tokens are validated on each request:
+
+```typescript
+// Frontend
+const response = await convexQuery(
+  api.deals.getDeals,
+  {
+    dealershipId: "dealership123",
+    token: await getStoredToken(),
+  }
+);
+```
+
+## Offline Support
+
+### Local Database
+
+SQLite database stores data locally:
+
+```rust
+// Rust backend
+use rusqlite::{Connection, Result};
+
+let conn = Connection::open("dealer.db")?;
+
+conn.execute(
+    "CREATE TABLE IF NOT EXISTS vehicles (
+        id TEXT PRIMARY KEY,
+        vin TEXT,
+        make TEXT,
+        model TEXT,
+        year INTEGER
+    )",
+    [],
+)?;
+```
+
+### Data Synchronization
+
+Sync local data with Convex when online:
+
+```typescript
+// Sync function
+async function syncData() {
+  if (!navigator.onLine) {
+    return; // Skip if offline
+  }
+
+  // Get local changes
+  const localChanges = await getLocalChanges();
+
+  // Upload to Convex
+  for (const change of localChanges) {
+    await uploadChange(change);
+  }
+
+  // Download remote changes
+  const remoteChanges = await getRemoteChanges();
+  for (const change of remoteChanges) {
+    await applyChange(change);
+  }
+}
+```
+
+### Conflict Resolution
+
+Handle conflicts when syncing:
+
+```typescript
+async function resolveConflict(local: LocalData, remote: RemoteData) {
+  // Use last-write-wins or merge strategy
+  if (local.updatedAt > remote.updatedAt) {
+    return local;
+  } else {
+    return remote;
+  }
+}
+```
+
+## Deep Links
+
+### Handle Deep Links
+
+Register deep link handlers:
+
+```rust
+// Rust backend
+#[tauri::command]
+fn handle_deep_link(url: String) -> Result<(), String> {
+    // Parse URL
+    let parsed = url::Url::parse(&url)?;
+    
+    // Handle different link types
+    match parsed.host_str() {
+        Some("sign-document") => {
+            let doc_id = parsed.query_pairs()
+                .find(|(key, _)| key == "doc_id")
+                .map(|(_, value)| value.to_string());
+            
+            // Open document signing view
+            open_document_signing(doc_id)?;
+        }
+        _ => {}
+    }
+    
+    Ok(())
+}
+```
+
+### Register URL Scheme
+
+```toml
+# tauri.conf.json
+{
+  "tauri": {
+    "bundle": {
+      "macOS": {
+        "urlSchemes": ["dealerapp"]
+      },
+      "windows": {
+        "protocols": ["dealerapp"]
+      }
+    }
+  }
+}
+```
+
+### Usage
+
+```typescript
+// Open deep link
+dealerapp://sign-document?doc_id=123
+
+// Handle in app
+window.addEventListener("deep-link", (event) => {
+  const url = event.detail.url;
+  handleDeepLink(url);
+});
+```
+
+## File Storage
+
+### Local File Storage
+
+Store files locally with encryption:
+
+```rust
+// Rust backend
+use std::fs;
+use std::path::PathBuf;
+
+fn store_file(file_path: PathBuf, data: Vec<u8>) -> Result<(), String> {
+    let app_data_dir = get_app_data_dir()?;
+    let storage_dir = app_data_dir.join("files");
+    
+    fs::create_dir_all(&storage_dir)?;
+    
+    let file_name = file_path.file_name()
+        .ok_or("Invalid file path")?;
+    
+    let dest_path = storage_dir.join(file_name);
+    fs::write(&dest_path, data)?;
+    
+    Ok(())
+}
+```
+
+### Secure Storage
+
+Use Tauri's secure storage for sensitive data:
+
+```typescript
+import { invoke } from "@tauri-apps/api/core";
+
+// Store securely
+await invoke("store_secure", {
+  key: "api_key",
+  value: "secret_value",
+});
+
+// Retrieve securely
+const value = await invoke("get_secure", {
+  key: "api_key",
+});
+```
+
+## Auto-updater
+
+### Configure Auto-updater
+
+```toml
+# tauri.conf.json
+{
+  "tauri": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://updates.dealerapp.com/{{target}}/{{current_version}}"
+      ],
+      "dialog": true,
+      "pubkey": "YOUR_PUBLIC_KEY"
+    }
+  }
+}
+```
+
+### Check for Updates
+
+```typescript
+import { check } from "@tauri-apps/plugin-updater";
+
+async function checkForUpdates() {
+  const update = await check();
+  
+  if (update?.available) {
+    await update.download();
+    await update.install();
+  }
+}
+```
+
+## Tauri Commands
+
+### Custom Commands
+
+Define custom Rust commands:
+
+```rust
+// Rust backend
+#[tauri::command]
+fn get_app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[tauri::command]
+async fn sync_data(token: String) -> Result<(), String> {
+    // Sync logic
+    Ok(())
+}
+```
+
+### Call from Frontend
+
+```typescript
+import { invoke } from "@tauri-apps/api/core";
+
+// Call Rust command
+const version = await invoke("get_app_version");
+const result = await invoke("sync_data", { token });
+```
+
+## Convex Integration
+
+### Convex Client Setup
+
+```typescript
+// lib/convex.ts
+import { ConvexHttpClient } from "convex/browser";
+
+const client = new ConvexHttpClient(process.env.VITE_CONVEX_URL!);
+
+// Helper functions with token support
+export async function convexQuery(query: any, args: any, token?: string) {
+  return client.query(query, {
+    ...args,
+    token, // Pass token for desktop auth
+  });
+}
+```
+
+### Authentication Token
+
+Pass token with each request:
+
+```typescript
+const token = await getStoredToken();
+
+const deals = await convexQuery(
+  api.deals.getDeals,
+  {
+    dealershipId: "dealership123",
+    token, // Desktop auth token
+  }
+);
+```
+
+## Building and Distribution
+
+### Build for Production
+
+```bash
+# Build for current platform
+pnpm tauri build
+
+# Build for specific platform
+pnpm tauri build --target x86_64-apple-darwin
+pnpm tauri build --target x86_64-pc-windows-msvc
+pnpm tauri build --target x86_64-unknown-linux-gnu
+```
+
+### Code Signing (macOS)
+
+```bash
+# Set up code signing
+export APPLE_CERTIFICATE="..."
+export APPLE_CERTIFICATE_PASSWORD="..."
+
+# Build signed app
+pnpm tauri build --target x86_64-apple-darwin
+```
+
+### Distribution
+
+- **macOS**: DMG or App Store
+- **Windows**: MSI or EXE installer
+- **Linux**: AppImage, DEB, or RPM
+
+## Best Practices
+
+1. **Handle offline gracefully** - Show clear offline indicators
+2. **Sync data efficiently** - Batch sync operations
+3. **Secure storage** - Encrypt sensitive data
+4. **Error handling** - Handle network errors gracefully
+5. **Performance** - Optimize for native performance
+
+## Troubleshooting
+
+### Common Issues
+
+**Build fails on macOS:**
+```bash
+# Install Xcode command line tools
+xcode-select --install
+```
+
+**Rust not found:**
+```bash
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+**Tauri build errors:**
+```bash
+# Clean and rebuild
+pnpm tauri clean
+pnpm tauri build
+```
+
+## Next Steps
+
+- [API Reference](/docs/api) - Convex API functions
+- [Authentication](/docs/authentication) - Desktop authentication
+- [Offline Sync](/docs/offline-sync) - Data synchronization guide

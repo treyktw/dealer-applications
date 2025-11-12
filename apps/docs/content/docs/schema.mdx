@@ -1,0 +1,652 @@
+---
+title: Database Schema
+description: Complete database schema reference with 37+ tables
+---
+
+# Database Schema
+
+Complete reference for all database tables, relationships, and data structures in the Dealer Applications platform.
+
+## Overview
+
+The database uses **Convex** as the backend, providing a real-time, type-safe database with automatic synchronization. All tables are defined with TypeScript types for complete type safety.
+
+## Core Tables
+
+### users
+
+User accounts and authentication.
+
+```typescript
+{
+  _id: Id<"users">;
+  clerkId: string;                    // Clerk authentication ID
+  email: string;                      // User email
+  name: string;                       // User name
+  image?: string;                     // Profile image URL
+  role: "ADMIN" | "MANAGER" | "EMPLOYEE" | "READONLY";
+  permissions?: string[];             // Custom permissions
+  dealershipId?: Id<"dealerships">;  // Associated dealership
+  isActive?: boolean;                 // Account status
+  lastLogin?: number;                 // Last login timestamp
+  createdAt: number;
+  updatedAt: number;
+  needsOnboarding?: boolean;
+  subscriptionStatus?: string;
+  subscriptionId?: Id<"subscriptions">;
+  settings?: {
+    emailNotifications: boolean;
+    pushNotifications: boolean;
+    dealUpdates: boolean;
+    marketingEmails: boolean;
+    theme: string;
+    language: string;
+    profileVisibility: string;
+    activityTracking: boolean;
+  };
+  // Security fields
+  failedLoginAttempts?: number;
+  lastFailedLogin?: number;
+  accountLocked?: boolean;
+  lockoutExpires?: number;
+}
+```
+
+**Indexes:**
+- `by_clerk_id` - Lookup by Clerk ID
+- `by_email` - Lookup by email
+- `by_dealership` - Users per dealership
+- `by_role` - Users by role
+
+### dealerships
+
+Dealership entities and configuration.
+
+```typescript
+{
+  _id: Id<"dealerships">;
+  name: string;
+  description?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  logo?: string;
+  primaryColor?: string;              // Brand color
+  secondaryColor?: string;            // Accent color
+  orgId?: Id<"orgs">;                 // Parent organization
+  // S3 Configuration
+  s3BucketName?: string;
+  s3Region?: string;
+  s3AccessKeyId?: string;             // Encrypted
+  s3SecretKey?: string;               // Encrypted
+  // Storage Management
+  storageUsed?: number;               // Bytes
+  storageLimit?: number;              // Bytes (default 5GB)
+  // Business info
+  taxId?: string;                     // Encrypted
+  businessHours?: string;
+  // Subscription
+  subscriptionId?: Id<"subscriptions">;
+  // Billing
+  billingEmail?: string;
+  billingAddress?: string;
+  billingCity?: string;
+  billingState?: string;
+  billingZipCode?: string;
+  billingCountry?: string;
+  stripeCustomerId?: string;
+  // Security settings
+  allowedDomains?: string[];
+  apiKeysEnabled?: boolean;
+  ipWhitelist?: string[];
+  // Service Management
+  isSuspended?: boolean;
+  suspendedAt?: number;
+  suspensionReason?: string;
+  isDeleted?: boolean;
+  deletedAt?: number;
+  deletionReason?: string;
+  notes?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+**Indexes:**
+- `by_org` - Dealerships per organization
+
+### vehicles
+
+Vehicle inventory management.
+
+```typescript
+{
+  _id: Id<"vehicles">;
+  dealershipId: Id<"dealerships">;
+  vin: string;                        // Vehicle Identification Number
+  make: string;
+  model: string;
+  year: number;
+  trim?: string;
+  color?: string;
+  mileage?: number;
+  price?: number;
+  status: "AVAILABLE" | "SOLD" | "PENDING" | "RESERVED" | "ARCHIVED";
+  // Vehicle details
+  bodyType?: string;
+  transmission?: string;
+  drivetrain?: string;
+  engine?: string;
+  fuelType?: string;
+  // Pricing
+  msrp?: number;
+  invoicePrice?: number;
+  salePrice?: number;
+  // Location
+  location?: string;
+  // Images
+  imageUrls?: string[];
+  // Metadata
+  features?: string[];
+  description?: string;
+  notes?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+**Indexes:**
+- `by_dealership` - Vehicles per dealership
+- `by_status` - Vehicles by status
+- `by_vin` - Lookup by VIN
+- `by_make_model` - Search by make/model
+
+### clients
+
+Customer and lead management.
+
+```typescript
+{
+  _id: Id<"clients">;
+  dealershipId: Id<"dealerships">;
+  clientId: string;                   // Unique client identifier
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+  // Address
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  // Status
+  status: "LEAD" | "CUSTOMER" | "PREVIOUS";
+  source?: string;                    // Lead source
+  // Notes and history
+  notes?: string;
+  tags?: string[];
+  // Metadata
+  createdAt: number;
+  updatedAt: number;
+  lastContact?: number;
+}
+```
+
+**Indexes:**
+- `by_dealership` - Clients per dealership
+- `by_status` - Clients by status
+- `by_email` - Lookup by email
+- `by_client_id` - Lookup by client ID
+
+### deals
+
+Sales transactions and deal processing.
+
+```typescript
+{
+  _id: Id<"deals">;
+  dealershipId: Id<"dealerships">;
+  clientId: Id<"clients">;
+  vehicleId: Id<"vehicles">;
+  type: "PURCHASE" | "TRADE" | "LEASE";
+  status: DealStatusType;
+  // Financial details
+  saleAmount: number;
+  totalAmount: number;
+  salePrice?: number;
+  downPayment?: number;
+  tradeInValue?: number;
+  salesTax?: number;
+  docFee?: number;
+  // Financing
+  financingTerms?: {
+    termMonths?: number;
+    interestRate?: number;
+    monthlyPayment?: number;
+    lender?: string;
+  };
+  // Document status
+  generated: boolean;
+  clientSigned: boolean;
+  dealerSigned: boolean;
+  notarized: boolean;
+  // Metadata
+  notes?: string;
+  createdAt: number;
+  updatedAt: number;
+  completedAt?: number;
+}
+```
+
+**Indexes:**
+- `by_dealership` - Deals per dealership
+- `by_client` - Deals per client
+- `by_vehicle` - Deals per vehicle
+- `by_status` - Deals by status
+- `by_date` - Deals by date
+
+## Security Tables
+
+### security_logs
+
+Comprehensive audit trail and security logging.
+
+```typescript
+{
+  _id: Id<"security_logs">;
+  dealershipId?: Id<"dealerships">;
+  action: string;                     // Action performed
+  userId?: string;                    // User who performed action
+  ipAddress: string;                  // Client IP address
+  userAgent?: string;                 // User agent string
+  success: boolean;                   // Action success status
+  details?: string;                   // Additional details
+  timestamp: number;
+  resource?: string;                  // Resource accessed
+  method?: string;                    // HTTP method or action type
+  severity?: "low" | "medium" | "high" | "critical";
+}
+```
+
+**Indexes:**
+- `by_dealership_timestamp` - Logs per dealership by time
+- `by_action` - Logs by action type
+- `by_user_timestamp` - Logs per user by time
+- `by_severity` - Logs by severity
+
+### rate_limits
+
+API rate limiting and throttling.
+
+```typescript
+{
+  _id: Id<"rate_limits">;
+  key: string;                        // Identifier:action
+  timestamp: number;
+  count: number;                     // Request count
+  limit: number;                     // Rate limit
+  window: number;                     // Time window (ms)
+}
+```
+
+**Indexes:**
+- `by_key_timestamp` - Rate limits by key and time
+
+### api_keys
+
+API key management for external access.
+
+```typescript
+{
+  _id: Id<"api_keys">;
+  dealershipId: Id<"dealerships">;
+  orgId?: Id<"orgs">;
+  name: string;                       // Key name/description
+  keyHash: string;                    // SHA-256 hash
+  keyPrefix: string;                  // First 8 chars for identification
+  // Permissions/Scopes
+  permissions: string[];
+  scopes?: string[];                  // e.g., ["inventory:read"]
+  // Status
+  isActive: boolean;
+  status?: "active" | "revoked" | "expired";
+  // Usage tracking
+  lastUsed?: number;
+  usageCount?: number;
+  requestCount?: number;
+  // Rate limiting
+  rateLimit?: {
+    requests: number;
+    window: number;
+  };
+  rateLimitPerHour?: number;
+  rateLimitPerDay?: number;
+  // IP restrictions
+  allowedIps?: string[];
+  // Expiration
+  expiresAt?: number;
+  // Timestamps
+  createdAt: number;
+  updatedAt: number;
+  createdBy: string;
+}
+```
+
+**Indexes:**
+- `by_dealership` - Keys per dealership
+- `by_key_hash` - Lookup by hash
+- `by_active` - Active keys
+- `by_org` - Keys per organization
+
+## Subscription Tables
+
+### subscriptions
+
+Subscription and billing management.
+
+```typescript
+{
+  _id: Id<"subscriptions">;
+  dealershipId: Id<"dealerships">;
+  plan: SubscriptionPlanType;        // BASIC | PREMIUM | ENTERPRISE
+  billingCycle: BillingCycleType;     // MONTHLY | YEARLY
+  status: SubscriptionStatus;         // ACTIVE | CANCELLED | etc.
+  // Stripe integration
+  stripeSubscriptionId?: string;
+  stripeCustomerId?: string;
+  stripePriceId?: string;
+  // Billing dates
+  currentPeriodStart: number;
+  currentPeriodEnd: number;
+  cancelAtPeriodEnd?: boolean;
+  canceledAt?: number;
+  // Features
+  features?: string[];
+  // Usage limits
+  vehicleLimit?: number;
+  dealLimit?: number;
+  storageLimit?: number;
+  // Timestamps
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+**Indexes:**
+- `by_dealership` - Subscriptions per dealership
+- `by_status` - Subscriptions by status
+- `by_stripe_id` - Lookup by Stripe ID
+
+## Document Tables
+
+### documents
+
+Document records and metadata.
+
+```typescript
+{
+  _id: Id<"documents">;
+  dealershipId: Id<"dealerships">;
+  dealId?: Id<"deals">;
+  clientId?: Id<"clients">;
+  type: string;                      // Document type
+  status: DocumentStatus;             // DRAFT | READY | SIGNED | VOID
+  s3Key: string;                     // S3 object key
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  // Signing
+  signedAt?: number;
+  signedBy?: string;
+  // Metadata
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+### dealer_uploaded_documents
+
+Custom uploaded documents.
+
+```typescript
+{
+  _id: Id<"dealer_uploaded_documents">;
+  dealershipId: Id<"dealerships">;
+  dealId: Id<"deals">;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  s3Key: string;                     // S3 object key
+  status: "DRAFT" | "READY" | "SIGNED" | "VOID" | "FINALIZING" | "FINALIZED";
+  uploadedBy: string;                // User ID
+  uploadedAt: number;
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+### document_packs
+
+Document pack collections for deals.
+
+```typescript
+{
+  _id: Id<"document_packs">;
+  dealId: Id<"deals">;
+  dealershipId: Id<"dealerships">;
+  status: "PENDING" | "GENERATING" | "COMPLETE" | "ERROR";
+  documents: Array<{
+    status: string;
+    templateId: string;
+    templateType: string;
+    documentName: string;
+  }>;
+  jurisdiction: string;
+  packType: "cash_sale" | "finance" | "lease";
+  createdBy: string;
+  buyers: any[];
+  dealershipInfo: {
+    salespersonName: string;
+    salespersonId: string;
+  };
+  validationStatus: {
+    buyerDataComplete: boolean;
+    vehicleDataComplete: boolean;
+    dealershipDataComplete: boolean;
+    allRequiredFields: boolean;
+    lastValidated?: number;
+    errors?: string[];
+  };
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+## Employee Management
+
+### invitations
+
+Employee invitation system.
+
+```typescript
+{
+  _id: Id<"invitations">;
+  email: string;
+  role: string;
+  dealershipId: Id<"dealerships">;
+  status: "pending" | "accepted" | "revoked" | "expired";
+  expiresAt: number;
+  invitedBy: Id<"users">;
+  token: string;                      // Invitation token
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+**Indexes:**
+- `by_email` - Invitations by email
+- `by_dealership` - Invitations per dealership
+- `by_status` - Invitations by status
+- `by_token` - Lookup by token
+
+### employees
+
+Employee records (extends users).
+
+```typescript
+{
+  _id: Id<"employees">;
+  userId: Id<"users">;
+  dealershipId: Id<"dealerships">;
+  department?: string;
+  position?: string;
+  hireDate?: number;
+  // Additional employee-specific fields
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+## File Management
+
+### file_uploads
+
+Centralized file upload tracking.
+
+```typescript
+{
+  _id: Id<"file_uploads">;
+  dealershipId: Id<"dealerships">;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  s3Key: string;
+  s3Bucket: string;
+  status: "pending" | "uploading" | "completed" | "failed";
+  uploadedBy: string;
+  uploadedAt: number;
+  expiresAt?: number;
+  metadata?: Record<string, any>;
+}
+```
+
+**Indexes:**
+- `by_dealership` - Uploads per dealership
+- `by_status` - Uploads by status
+- `by_s3_key` - Lookup by S3 key
+
+## Organization Tables
+
+### orgs
+
+Organizations for multi-dealership management.
+
+```typescript
+{
+  _id: Id<"orgs">;
+  name: string;
+  description?: string;
+  ownerId: Id<"users">;
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+### orgMembers
+
+Organization membership.
+
+```typescript
+{
+  _id: Id<"orgMembers">;
+  orgId: Id<"orgs">;
+  userId: Id<"users">;
+  role: "OWNER" | "ADMIN" | "MEMBER";
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+## Relationships
+
+### Entity Relationships
+
+```
+dealerships (1) ──< (many) users
+dealerships (1) ──< (many) vehicles
+dealerships (1) ──< (many) clients
+dealerships (1) ──< (many) deals
+dealerships (1) ──< (1) subscriptions
+
+clients (1) ──< (many) deals
+vehicles (1) ──< (many) deals
+deals (1) ──< (many) documents
+deals (1) ──< (1) document_packs
+
+users (1) ──< (many) invitations (invitedBy)
+users (1) ──< (many) security_logs
+```
+
+## Data Types
+
+### Enums
+
+```typescript
+// User Roles
+UserRole.ADMIN
+UserRole.MANAGER
+UserRole.EMPLOYEE
+UserRole.READONLY
+
+// Subscription Plans
+SubscriptionPlan.BASIC
+SubscriptionPlan.PREMIUM
+SubscriptionPlan.ENTERPRISE
+
+// Subscription Status
+SubscriptionStatus.ACTIVE
+SubscriptionStatus.PENDING
+SubscriptionStatus.CANCELLED
+SubscriptionStatus.EXPIRED
+SubscriptionStatus.PAST_DUE
+
+// Document Status
+DocumentStatus.DRAFT
+DocumentStatus.READY
+DocumentStatus.SIGNED
+DocumentStatus.VOID
+
+// Invitation Status
+InvitationStatus.PENDING
+InvitationStatus.ACCEPTED
+InvitationStatus.REVOKED
+InvitationStatus.EXPIRED
+```
+
+## Indexes
+
+All tables include appropriate indexes for:
+- **Lookup by ID** - Automatic Convex indexes
+- **Filtering** - Common query patterns
+- **Sorting** - Time-based queries
+- **Relationships** - Foreign key lookups
+
+## Best Practices
+
+1. **Use indexes** - Query by indexed fields for performance
+2. **Type safety** - Use TypeScript types from `_generated/dataModel`
+3. **Data isolation** - Always filter by `dealershipId` for multi-tenant
+4. **Timestamps** - Use `createdAt` and `updatedAt` for audit trails
+5. **Soft deletes** - Use `isDeleted` flag instead of hard deletes
+
+## Next Steps
+
+- [API Reference](/docs/api) - Query and mutate data
+- [Workflows](/docs/workflows) - Common business processes
+- [Security](/docs/security) - Security features and best practices

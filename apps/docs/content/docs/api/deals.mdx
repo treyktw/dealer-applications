@@ -1,0 +1,423 @@
+---
+title: Deals API
+description: Sales transaction and deal processing functions
+---
+
+# Deals API
+
+Manage sales transactions, deal processing, and deal lifecycle management with comprehensive deal tracking.
+
+## Overview
+
+The Deals API provides complete functionality for managing sales transactions from initial lead to finalization. Deals are linked to clients and vehicles, and support status transitions, document generation, and comprehensive tracking.
+
+## Prerequisites
+
+- **Premium Subscription Required** - Deal management requires an active Premium or Enterprise subscription
+- **Authentication** - All endpoints require authentication (Clerk for web, token for desktop)
+- **Permissions** - Users must have appropriate role-based permissions
+
+## Queries
+
+### getDeals
+
+Retrieve deals for a dealership with optional filtering.
+
+```typescript
+api.deals.getDeals
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealershipId` | `string` | ✅ | Dealership ID |
+| `status` | `string` | ❌ | Filter by deal status |
+| `search` | `string` | ❌ | Search deals by client name or deal ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  deals: Deal[];
+  subscriptionRequired?: boolean;
+  subscriptionError?: string;
+  hasActiveSubscription: boolean;
+  hasDealsManagement: boolean;
+}
+```
+
+**Deal Status Values:**
+
+- `DRAFT` - Deal is being created
+- `PENDING` - Awaiting approval or processing
+- `IN_PROGRESS` - Deal is active
+- `PENDING_SIGNATURE` - Awaiting signatures
+- `SIGNED` - All parties have signed
+- `COMPLETED` - Deal is finalized
+- `CANCELLED` - Deal was cancelled
+- `VOID` - Deal is voided
+
+**Example:**
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function DealsList() {
+  const { deals, hasActiveSubscription } = useQuery(api.deals.getDeals, {
+    dealershipId: "dealership123",
+    status: "IN_PROGRESS",
+    search: "John Doe",
+  });
+
+  if (!hasActiveSubscription) {
+    return <SubscriptionRequired />;
+  }
+
+  return (
+    <div>
+      {deals.map(deal => (
+        <DealCard key={deal._id} deal={deal} />
+      ))}
+    </div>
+  );
+}
+```
+
+### getDealById
+
+Get a single deal by ID with full details.
+
+```typescript
+api.deals.getDealById
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealId` | `Id<"deals">` | ✅ | Deal ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+Doc<"deals"> | null
+```
+
+**Example:**
+
+```typescript
+const deal = useQuery(api.deals.getDealById, {
+  dealId: dealId,
+});
+```
+
+### getDealsByClient
+
+Get all deals associated with a specific client.
+
+```typescript
+api.deals.getDealsByClient
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `clientId` | `Id<"clients">` | ✅ | Client ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+Doc<"deals">[]
+```
+
+### getDealsByVehicle
+
+Get all deals associated with a specific vehicle.
+
+```typescript
+api.deals.getDealsByVehicle
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `vehicleId` | `Id<"vehicles">` | ✅ | Vehicle ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+Doc<"deals">[]
+```
+
+## Mutations
+
+### createDeal
+
+Create a new deal linking a client and vehicle.
+
+```typescript
+api.deals.createDeal
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealershipId` | `Id<"dealerships">` | ✅ | Dealership ID |
+| `clientId` | `Id<"clients">` | ✅ | Client ID |
+| `vehicleId` | `Id<"vehicles">` | ✅ | Vehicle ID |
+| `status` | `DealStatusType` | ❌ | Initial status (default: "DRAFT") |
+| `salePrice` | `number` | ❌ | Sale price |
+| `downPayment` | `number` | ❌ | Down payment amount |
+| `financingTerms` | `object` | ❌ | Financing details |
+| `notes` | `string` | ❌ | Internal notes |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  dealId: Id<"deals">;
+}
+```
+
+**Example:**
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function CreateDealForm() {
+  const createDeal = useMutation(api.deals.createDeal);
+
+  const handleSubmit = async (data: DealFormData) => {
+    const result = await createDeal({
+      dealershipId: "dealership123",
+      clientId: data.clientId,
+      vehicleId: data.vehicleId,
+      salePrice: data.salePrice,
+      downPayment: data.downPayment,
+      financingTerms: {
+        termMonths: 60,
+        interestRate: 4.5,
+        monthlyPayment: data.monthlyPayment,
+      },
+      status: "DRAFT",
+    });
+
+    console.log("Deal created:", result.dealId);
+  };
+
+  return <form onSubmit={handleSubmit}>...</form>;
+}
+```
+
+### updateDeal
+
+Update an existing deal.
+
+```typescript
+api.deals.updateDeal
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealId` | `Id<"deals">` | ✅ | Deal ID |
+| `salePrice` | `number` | ❌ | Updated sale price |
+| `downPayment` | `number` | ❌ | Updated down payment |
+| `financingTerms` | `object` | ❌ | Updated financing terms |
+| `notes` | `string` | ❌ | Updated notes |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  success: boolean;
+}
+```
+
+### updateDealStatus
+
+Update the status of a deal with validation.
+
+```typescript
+api.deals.updateDealStatus
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealId` | `Id<"deals">` | ✅ | Deal ID |
+| `newStatus` | `DealStatusType` | ✅ | New status |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Status Transitions:**
+
+Valid status transitions are enforced:
+- `DRAFT` → `PENDING`, `CANCELLED`
+- `PENDING` → `IN_PROGRESS`, `CANCELLED`
+- `IN_PROGRESS` → `PENDING_SIGNATURE`, `CANCELLED`
+- `PENDING_SIGNATURE` → `SIGNED`, `CANCELLED`
+- `SIGNED` → `COMPLETED`, `VOID`
+- `COMPLETED` → `VOID` (rare)
+
+**Returns:**
+
+```typescript
+{
+  success: boolean;
+  previousStatus: DealStatusType;
+  newStatus: DealStatusType;
+}
+```
+
+**Example:**
+
+```typescript
+const updateStatus = useMutation(api.deals.updateDealStatus);
+
+await updateStatus({
+  dealId: deal._id,
+  newStatus: "PENDING_SIGNATURE",
+});
+```
+
+### deleteDeal
+
+Delete a deal (only allowed for DRAFT or CANCELLED deals).
+
+```typescript
+api.deals.deleteDeal
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealId` | `Id<"deals">` | ✅ | Deal ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  success: boolean;
+}
+```
+
+## Deal Lifecycle
+
+### Typical Flow
+
+1. **Create Deal** (`createDeal`) - Link client and vehicle
+2. **Update Details** (`updateDeal`) - Add pricing and terms
+3. **Move to Progress** (`updateDealStatus` → `IN_PROGRESS`)
+4. **Generate Documents** - Use Documents API
+5. **Await Signatures** (`updateDealStatus` → `PENDING_SIGNATURE`)
+6. **Complete** (`updateDealStatus` → `SIGNED` → `COMPLETED`)
+
+### Status Management
+
+Deal statuses are managed with state machine validation:
+
+```typescript
+import { canTransitionDealStatus } from "@/convex/lib/statuses";
+
+// Check if transition is valid
+const isValid = canTransitionDealStatus("DRAFT", "IN_PROGRESS"); // false
+const isValid2 = canTransitionDealStatus("DRAFT", "PENDING"); // true
+```
+
+## Integration with Other APIs
+
+### Documents
+
+Deals automatically generate document records:
+
+```typescript
+// After creating a deal, generate documents
+const deal = await createDeal({...});
+const documents = await generateDocuments({
+  dealId: deal.dealId,
+  templateIds: ["template1", "template2"],
+});
+```
+
+### Vehicles
+
+When a deal is completed, the vehicle status updates:
+
+```typescript
+// Vehicle status automatically transitions
+// AVAILABLE → SOLD when deal is COMPLETED
+```
+
+### Clients
+
+Client status updates based on deal completion:
+
+```typescript
+// Client status transitions
+// LEAD → CUSTOMER when first deal is COMPLETED
+```
+
+## Subscription Limits
+
+Deal management is subject to subscription limits:
+
+- **Basic Plan** - No deal management
+- **Premium Plan** - Up to 500 active deals
+- **Enterprise Plan** - Unlimited deals
+
+Check limits before creating deals:
+
+```typescript
+const subscriptionStatus = await checkSubscriptionStatus();
+if (!subscriptionStatus.hasDealsManagement) {
+  throw new Error("Deal management requires Premium subscription");
+}
+```
+
+## Error Handling
+
+Common errors:
+
+```typescript
+try {
+  await createDeal({...});
+} catch (error) {
+  if (error.message.includes("subscription")) {
+    // Handle subscription error
+  } else if (error.message.includes("status")) {
+    // Handle invalid status transition
+  } else {
+    // Handle other errors
+  }
+}
+```
+
+## Best Practices
+
+1. **Always check subscription status** before creating deals
+2. **Validate status transitions** before updating deal status
+3. **Link documents** to deals for complete audit trail
+4. **Update vehicle status** when deals are completed
+5. **Track deal history** for reporting and analytics
+
+## Next Steps
+
+- [Documents API](/docs/api/documents) - Generate deal documents
+- [Clients API](/docs/api/clients) - Manage customer relationships
+- [Inventory API](/docs/api/inventory) - Manage vehicle inventory

@@ -1,0 +1,452 @@
+---
+title: Dealerships API
+description: Dealership management and configuration functions
+---
+
+# Dealerships API
+
+Manage dealership settings, configuration, branding, and multi-dealership operations.
+
+## Overview
+
+The Dealerships API provides comprehensive management of dealership entities, including settings, branding, IP restrictions, and subscription management. Each dealership operates as an isolated entity with its own users, inventory, and deals.
+
+## Queries
+
+### getDealership
+
+Get dealership details by ID.
+
+```typescript
+api.dealerships.getDealership
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealershipId` | `Id<"dealerships">` | ✅ | Dealership ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+Doc<"dealerships"> | null
+```
+
+**Example:**
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function DealershipInfo() {
+  const dealership = useQuery(api.dealerships.getDealership, {
+    dealershipId: "dealership123",
+  });
+
+  if (!dealership) return <LoadingSpinner />;
+
+  return (
+    <div>
+      <h1>{dealership.name}</h1>
+      <p>{dealership.address}</p>
+    </div>
+  );
+}
+```
+
+### getDealerships
+
+Get all dealerships (admin only).
+
+```typescript
+api.dealerships.getDealerships
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+Doc<"dealerships">[]
+```
+
+### getDealershipSettings
+
+Get dealership settings and configuration.
+
+```typescript
+api.dealerships.getDealershipSettings
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealershipId` | `Id<"dealerships">` | ✅ | Dealership ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  dealership: Doc<"dealerships">;
+  subscription: Doc<"subscriptions"> | null;
+  settings: DealershipSettings;
+}
+```
+
+## Mutations
+
+### createDealership
+
+Create a new dealership.
+
+```typescript
+api.dealerships.createDealership
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | `string` | ✅ | Dealership name |
+| `description` | `string` | ❌ | Description |
+| `address` | `string` | ❌ | Street address |
+| `city` | `string` | ❌ | City |
+| `state` | `string` | ❌ | State/Province |
+| `zipCode` | `string` | ❌ | ZIP/Postal code |
+| `phone` | `string` | ❌ | Phone number |
+| `email` | `string` | ❌ | Email address |
+| `website` | `string` | ❌ | Website URL |
+| `logo` | `string` | ❌ | Logo URL |
+| `primaryColor` | `string` | ❌ | Primary brand color |
+| `secondaryColor` | `string` | ❌ | Secondary brand color |
+| `s3BucketName` | `string` | ❌ | S3 bucket for file storage |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  dealershipId: Id<"dealerships">;
+}
+```
+
+**Example:**
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function CreateDealershipForm() {
+  const createDealership = useMutation(api.dealerships.createDealership);
+
+  const handleSubmit = async (data: DealershipFormData) => {
+    const result = await createDealership({
+      name: data.name,
+      address: data.address,
+      city: data.city,
+      state: data.state,
+      zipCode: data.zipCode,
+      phone: data.phone,
+      email: data.email,
+      website: data.website,
+      primaryColor: "#0066CC",
+      secondaryColor: "#FF6600",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    console.log("Dealership created:", result.dealershipId);
+  };
+
+  return <form onSubmit={handleSubmit}>...</form>;
+}
+```
+
+### updateDealership
+
+Update dealership information.
+
+```typescript
+api.dealerships.updateDealership
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealershipId` | `Id<"dealerships">` | ✅ | Dealership ID |
+| `name` | `string` | ❌ | Updated name |
+| `description` | `string` | ❌ | Updated description |
+| `address` | `string` | ❌ | Updated address |
+| `city` | `string` | ❌ | Updated city |
+| `state` | `string` | ❌ | Updated state |
+| `zipCode` | `string` | ❌ | Updated ZIP code |
+| `phone` | `string` | ❌ | Updated phone |
+| `email` | `string` | ❌ | Updated email |
+| `website` | `string` | ❌ | Updated website |
+| `logo` | `string` | ❌ | Updated logo URL |
+| `primaryColor` | `string` | ❌ | Updated primary color |
+| `secondaryColor` | `string` | ❌ | Updated secondary color |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Returns:**
+
+```typescript
+{
+  success: boolean;
+}
+```
+
+### updateDealershipSettings
+
+Update dealership settings and configuration.
+
+```typescript
+api.dealerships.updateDealershipSettings
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealershipId` | `Id<"dealerships">` | ✅ | Dealership ID |
+| `settings` | `object` | ✅ | Settings object |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+**Settings Object:**
+
+```typescript
+{
+  ipRestrictions?: {
+    enabled: boolean;
+    allowedIPs: string[];
+  };
+  features?: {
+    [key: string]: boolean;
+  };
+  notifications?: {
+    email: boolean;
+    sms: boolean;
+  };
+}
+```
+
+**Example:**
+
+```typescript
+await updateDealershipSettings({
+  dealershipId: "dealership123",
+  settings: {
+    ipRestrictions: {
+      enabled: true,
+      allowedIPs: ["192.168.1.1", "10.0.0.1"],
+    },
+    notifications: {
+      email: true,
+      sms: false,
+    },
+  },
+});
+```
+
+## IP Restrictions
+
+### Enable IP Restrictions
+
+Restrict API access to specific IP addresses:
+
+```typescript
+await updateDealershipSettings({
+  dealershipId: "dealership123",
+  settings: {
+    ipRestrictions: {
+      enabled: true,
+      allowedIPs: [
+        "192.168.1.100",  // Office IP
+        "203.0.113.45",    // VPN IP
+      ],
+    },
+  },
+});
+```
+
+### Check IP Access
+
+IP restrictions are automatically enforced for:
+- Public API endpoints
+- Admin endpoints
+- Sensitive operations
+
+## Branding
+
+### Custom Colors
+
+Set custom brand colors:
+
+```typescript
+await updateDealership({
+  dealershipId: "dealership123",
+  primaryColor: "#0066CC",    // Primary brand color
+  secondaryColor: "#FF6600",   // Accent color
+});
+```
+
+### Logo Management
+
+Upload and set dealership logo:
+
+```typescript
+// Upload logo to S3 first
+const logoUrl = await uploadToS3(logoFile);
+
+// Then update dealership
+await updateDealership({
+  dealershipId: "dealership123",
+  logo: logoUrl,
+});
+```
+
+## Multi-Dealership Support
+
+### User Association
+
+Users are associated with specific dealerships:
+
+```typescript
+// User belongs to one dealership
+const user = {
+  dealershipId: "dealership123",
+  // ... other fields
+};
+```
+
+### Data Isolation
+
+All data is isolated by dealership:
+- Inventory
+- Clients
+- Deals
+- Documents
+- Employees
+
+### Cross-Dealership Access
+
+Admin users can access multiple dealerships (if configured):
+
+```typescript
+// Check if user has access to dealership
+const hasAccess = await checkDealershipAccess(
+  userId,
+  dealershipId
+);
+```
+
+## Subscription Management
+
+### Link Subscription
+
+Link a subscription to a dealership:
+
+```typescript
+api.dealerships.linkSubscription
+```
+
+**Arguments:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dealershipId` | `Id<"dealerships">` | ✅ | Dealership ID |
+| `subscriptionId` | `Id<"subscriptions">` | ✅ | Subscription ID |
+| `token` | `string` | ❌ | Desktop app authentication token |
+
+### Get Subscription Status
+
+```typescript
+const settings = await getDealershipSettings({
+  dealershipId: "dealership123",
+});
+
+if (settings.subscription) {
+  console.log("Plan:", settings.subscription.plan);
+  console.log("Status:", settings.subscription.status);
+}
+```
+
+## S3 Configuration
+
+### Set S3 Bucket
+
+Configure S3 bucket for file storage:
+
+```typescript
+await updateDealership({
+  dealershipId: "dealership123",
+  s3BucketName: "my-dealership-files",
+});
+```
+
+### File Storage
+
+All dealership files are stored in S3:
+- Documents
+- Vehicle images
+- Client files
+- Logos and branding assets
+
+## Permissions
+
+### Required Roles
+
+- **ADMIN** - Full dealership management
+- **MANAGER** - Can update settings (limited)
+- **EMPLOYEE** - Read-only access
+- **READONLY** - View only
+
+### Permission Checks
+
+```typescript
+// Check if user can manage dealership
+if (user.role !== "ADMIN") {
+  throw new Error("Admin access required");
+}
+```
+
+## Error Handling
+
+Common errors:
+
+```typescript
+try {
+  await createDealership({...});
+} catch (error) {
+  if (error.message.includes("permission")) {
+    // Handle permission error
+  } else if (error.message.includes("validation")) {
+    // Handle validation error
+  } else {
+    // Handle other errors
+  }
+}
+```
+
+## Best Practices
+
+1. **Set IP restrictions** for enhanced security
+2. **Configure branding** for consistent appearance
+3. **Link subscriptions** properly for feature access
+4. **Isolate data** by dealership for multi-tenant support
+5. **Update settings** carefully to avoid breaking changes
+
+## Next Steps
+
+- [Subscriptions API](/docs/api/subscriptions) - Manage subscriptions
+- [Employees API](/docs/api/employees) - Manage team members
+- [Authentication](/docs/authentication) - User authentication
