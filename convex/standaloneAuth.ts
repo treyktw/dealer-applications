@@ -7,6 +7,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import bcrypt from "bcryptjs";
+import { sendVerificationEmail, sendPasswordResetEmail, sendWelcomeEmail } from "./lib/auth/emailHelpers";
 
 /**
  * Hash password using bcrypt with 12 rounds (industry standard for security)
@@ -92,8 +93,18 @@ export const register = mutation({
       updatedAt: now,
     });
 
-    // TODO: Send verification email
-    console.log(`Verification token for ${args.email}: ${verificationToken}`);
+    // Send verification email
+    try {
+      await sendVerificationEmail({
+        email: args.email.toLowerCase(),
+        name: args.name,
+        verificationToken,
+      });
+      console.log(`✅ Verification email sent to ${args.email}`);
+    } catch (error) {
+      console.error(`❌ Failed to send verification email to ${args.email}:`, error);
+      // Don't fail registration if email fails - user can request another verification email
+    }
 
     return {
       success: true,
@@ -272,6 +283,19 @@ export const verifyEmail = mutation({
       updatedAt: Date.now(),
     });
 
+    // Send welcome email after successful verification
+    try {
+      await sendWelcomeEmail({
+        email: user.email,
+        name: user.name,
+        businessName: user.businessName,
+      });
+      console.log(`✅ Welcome email sent to ${user.email}`);
+    } catch (error) {
+      console.error(`❌ Failed to send welcome email to ${user.email}:`, error);
+      // Don't fail verification if welcome email fails
+    }
+
     return { success: true, message: "Email verified successfully" };
   },
 });
@@ -304,8 +328,18 @@ export const requestPasswordReset = mutation({
       updatedAt: Date.now(),
     });
 
-    // TODO: Send reset email
-    console.log(`Reset token for ${args.email}: ${resetToken}`);
+    // Send password reset email
+    try {
+      await sendPasswordResetEmail({
+        email: user.email,
+        name: user.name,
+        resetToken,
+      });
+      console.log(`✅ Password reset email sent to ${user.email}`);
+    } catch (error) {
+      console.error(`❌ Failed to send password reset email to ${user.email}:`, error);
+      // Don't fail the request if email fails - user can try again
+    }
 
     return { success: true, message: "If the email exists, a reset link has been sent." };
   },
