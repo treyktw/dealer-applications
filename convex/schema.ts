@@ -2024,4 +2024,20 @@ export default defineSchema({
     .index("by_user_updated", ["userId", "updatedAt"])
     .index("by_local_id", ["userId", "localId"])
     .index("by_deal", ["userId", "dealLocalId"]),
+
+  /**
+   * VIN Decode Cache
+   * Caches VIN decode results from NHTSA vPIC API
+   * Reduces API calls and improves performance
+   */
+  vin_cache: defineTable({
+    vin: v.string(), // 17-character VIN (uppercase)
+    data: v.string(), // JSON string of DecodedVIN
+    createdAt: v.number(),
+    lastAccessedAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.number(), // Cache expiration timestamp (90 days)
+  })
+    .index("by_vin", ["vin"])
+    .index("by_expires", ["expiresAt"]),
 });
