@@ -2060,4 +2060,58 @@ export default defineSchema({
     .index("by_identifier_endpoint", ["identifier", "endpoint"])
     .index("by_endpoint", ["endpoint"])
     .index("by_blocked", ["blockedUntil"]),
+
+  /**
+   * PII Vault
+   * Secure storage for Personally Identifiable Information
+   * All data is encrypted at rest using AES-256-GCM
+   */
+  pii_vault: defineTable({
+    vaultId: v.string(), // Unique vault record ID
+    type: v.string(), // "ssn", "drivers_license", "credit_card", etc.
+    encryptedData: v.string(), // Base64-encoded encrypted data
+    iv: v.string(), // Base64-encoded initialization vector
+    authTag: v.string(), // Base64-encoded authentication tag
+    algorithm: v.string(), // "AES-256-GCM"
+    version: v.number(), // Encryption version
+    ownerId: v.string(), // User/client/deal ID who owns this PII
+    ownerType: v.string(), // "user", "client", "deal"
+    dealershipId: v.string(), // Dealership this PII belongs to
+    description: v.optional(v.string()), // Optional description (e.g., "Driver's License - Front")
+    expiresAt: v.optional(v.number()), // Optional expiration timestamp
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    lastAccessedAt: v.optional(v.number()),
+    lastAccessedBy: v.optional(v.string()), // User ID who last accessed
+    accessCount: v.number(),
+  })
+    .index("by_vault_id", ["vaultId"])
+    .index("by_owner", ["ownerId", "ownerType"])
+    .index("by_dealership", ["dealershipId"])
+    .index("by_type", ["type"])
+    .index("by_expires", ["expiresAt"]),
+
+  /**
+   * PII Vault Access Log
+   * Audit trail for all PII access
+   * Required for HIPAA, GDPR, and other compliance regulations
+   */
+  pii_access_log: defineTable({
+    vaultId: v.string(), // Reference to pii_vault record
+    action: v.string(), // "create", "read", "update", "delete"
+    userId: v.string(), // User who performed the action
+    userEmail: v.optional(v.string()),
+    dealershipId: v.string(),
+    ipAddress: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
+    reason: v.optional(v.string()), // Optional justification for access
+    success: v.boolean(),
+    errorMessage: v.optional(v.string()),
+    timestamp: v.number(),
+  })
+    .index("by_vault_id", ["vaultId"])
+    .index("by_user", ["userId"])
+    .index("by_dealership", ["dealershipId"])
+    .index("by_timestamp", ["timestamp"])
+    .index("by_action", ["action"]),
 });
