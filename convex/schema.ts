@@ -2114,4 +2114,84 @@ export default defineSchema({
     .index("by_dealership", ["dealershipId"])
     .index("by_timestamp", ["timestamp"])
     .index("by_action", ["action"]),
+
+  /**
+   * Two-Factor Authentication (2FA) Configuration
+   * TOTP-based 2FA for user accounts
+   * Compatible with Google Authenticator, Authy, 1Password, etc.
+   */
+  user_2fa: defineTable({
+    userId: v.id("users"), // User this 2FA belongs to
+    secret: v.string(), // Encrypted TOTP secret (base32-encoded)
+    enabled: v.boolean(), // Whether 2FA is enabled
+    verified: v.boolean(), // Whether 2FA setup was completed (user scanned QR and verified code)
+    backupCodesRemaining: v.number(), // Number of unused backup codes
+    // Settings
+    algorithm: v.string(), // "SHA1" (standard for TOTP)
+    digits: v.number(), // 6 (standard)
+    period: v.number(), // 30 seconds (standard)
+    // Setup tracking
+    setupInitiatedAt: v.optional(v.number()), // When user started 2FA setup
+    enabledAt: v.optional(v.number()), // When 2FA was first enabled
+    lastUsedAt: v.optional(v.number()), // Last successful 2FA verification
+    // Recovery
+    lastBackupCodeUsedAt: v.optional(v.number()),
+    // Metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_enabled", ["enabled"])
+    .index("by_verified", ["verified"]),
+
+  /**
+   * Two-Factor Authentication Backup Codes
+   * Each code can only be used once
+   * Stored as SHA-256 hashes for security
+   */
+  user_2fa_backup_codes: defineTable({
+    userId: v.id("users"),
+    codeHash: v.string(), // SHA-256 hash of the backup code
+    used: v.boolean(), // Whether this code has been used
+    usedAt: v.optional(v.number()), // When the code was used
+    usedFrom: v.optional(v.string()), // IP address where code was used
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_unused", ["userId", "used"])
+    .index("by_code_hash", ["codeHash"]),
+
+  /**
+   * Two-Factor Authentication Usage Log
+   * Audit trail for 2FA attempts and usage
+   * Helps detect suspicious activity
+   */
+  user_2fa_log: defineTable({
+    userId: v.id("users"),
+    action: v.union(
+      v.literal("setup_initiated"), // User started 2FA setup
+      v.literal("setup_completed"), // User completed 2FA setup
+      v.literal("enabled"), // 2FA was enabled
+      v.literal("disabled"), // 2FA was disabled
+      v.literal("verify_success"), // Successful 2FA verification
+      v.literal("verify_failed"), // Failed 2FA verification
+      v.literal("backup_code_used"), // Backup code was used
+      v.literal("backup_codes_regenerated") // Backup codes were regenerated
+    ),
+    method: v.optional(
+      v.union(
+        v.literal("totp"), // TOTP code from authenticator app
+        v.literal("backup_code") // Backup code
+      )
+    ),
+    success: v.boolean(),
+    ipAddress: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
+    details: v.optional(v.string()), // Additional context
+    timestamp: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_timestamp", ["userId", "timestamp"])
+    .index("by_action", ["action"])
+    .index("by_timestamp", ["timestamp"]),
 });
