@@ -155,9 +155,24 @@ export const findByStripeId = internalQuery({
 });
 
 /**
- * Get user's subscription
+ * Get user's subscription (public query)
  */
 export const getUserSubscription = query({
+  args: {
+    userId: v.id("standalone_users"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("standalone_subscriptions")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+  },
+});
+
+/**
+ * Get user's subscription (internal query for use in actions)
+ */
+export const getUserSubscriptionInternal = internalQuery({
   args: {
     userId: v.id("standalone_users"),
   },
@@ -214,7 +229,7 @@ export const cancel = action({
   },
   handler: async (ctx, args) => {
     // Get subscription from database
-    const subscription = await ctx.runQuery(internal.standaloneSubscriptions.getUserSubscription, {
+    const subscription = await ctx.runQuery(internal.standaloneSubscriptions.getUserSubscriptionInternal, {
       userId: args.userId,
     });
 
@@ -278,7 +293,7 @@ export const reactivate = action({
   },
   handler: async (ctx, args) => {
     // Get subscription from database
-    const subscription = await ctx.runQuery(internal.standaloneSubscriptions.getUserSubscription, {
+    const subscription = await ctx.runQuery(internal.standaloneSubscriptions.getUserSubscriptionInternal, {
       userId: args.userId,
     });
 
