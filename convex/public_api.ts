@@ -2,6 +2,7 @@
 import { query, action } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import { getVehicleImageWithFallback, getDefaultVehicleImages } from "./lib/images/defaultVehicleImages";
 
 // Get vehicles by dealership with filtering and pagination
 export const getVehiclesByDealership = query({
@@ -83,34 +84,47 @@ export const getVehiclesByDealership = query({
     const paginatedVehicles = vehicles.slice(offset, offset + args.limit);
     
     // Transform to public schema (exclude sensitive fields)
-    const publicVehicles = paginatedVehicles.map(v => ({
-      id: v.id,
-      vin: v.vin,
-      stock: v.stock,
-      make: v.make,
-      model: v.model,
-      year: v.year,
-      trim: v.trim,
-      bodyType: v.bodyType,
-      condition: v.condition,
-      price: v.price,
-      featured: v.featured,
-      mileage: v.mileage,
-      exteriorColor: v.exteriorColor,
-      interiorColor: v.interiorColor,
-      engine: v.engine,
-      transmission: v.transmission,
-      drivetrain: v.drivetrain,
-      fuelType: v.fuelType,
-      features: v.features?.split(',').map(f => f.trim()),
-      images: v.images || [],
-      seoTitle: v.seoTitle,
-      seoDescription: v.seoDescription,
-      description: v.description,
-      createdAt: v.createdAt,
-      updatedAt: v.updatedAt,
-      // EXPLICITLY EXCLUDE: costPrice, profit, clientId, dealershipId (internal)
-    }));
+    const publicVehicles = paginatedVehicles.map(v => {
+      // Get images with fallback to default placeholder
+      const images = v.images && v.images.length > 0
+        ? v.images
+        : getDefaultVehicleImages(3, {
+            make: v.make,
+            model: v.model,
+            year: v.year,
+            bodyType: v.bodyType,
+            color: v.exteriorColor,
+          });
+
+      return {
+        id: v.id,
+        vin: v.vin,
+        stock: v.stock,
+        make: v.make,
+        model: v.model,
+        year: v.year,
+        trim: v.trim,
+        bodyType: v.bodyType,
+        condition: v.condition,
+        price: v.price,
+        featured: v.featured,
+        mileage: v.mileage,
+        exteriorColor: v.exteriorColor,
+        interiorColor: v.interiorColor,
+        engine: v.engine,
+        transmission: v.transmission,
+        drivetrain: v.drivetrain,
+        fuelType: v.fuelType,
+        features: v.features?.split(',').map(f => f.trim()),
+        images,
+        seoTitle: v.seoTitle,
+        seoDescription: v.seoDescription,
+        description: v.description,
+        createdAt: v.createdAt,
+        updatedAt: v.updatedAt,
+        // EXPLICITLY EXCLUDE: costPrice, profit, clientId, dealershipId (internal)
+      };
+    });
     
     return {
       vehicles: publicVehicles,
@@ -149,6 +163,17 @@ export const getVehicleById = query({
       return null;
     }
 
+    // Get images with fallback to default placeholder
+    const images = vehicle.images && vehicle.images.length > 0
+      ? vehicle.images
+      : getDefaultVehicleImages(5, {
+          make: vehicle.make,
+          model: vehicle.model,
+          year: vehicle.year,
+          bodyType: vehicle.bodyType,
+          color: vehicle.exteriorColor,
+        });
+
     // Return public vehicle data (remove sensitive fields)
     return {
       id: vehicle.id,
@@ -167,7 +192,7 @@ export const getVehicleById = query({
       description: vehicle.description,
       featured: vehicle.featured,
       features: vehicle.features,
-      images: vehicle.images || [],
+      images,
       seoTitle: vehicle.seoTitle,
       seoDescription: vehicle.seoDescription,
       updatedAt: vehicle.updatedAt,
@@ -261,28 +286,41 @@ export const searchVehicles = query({
     const limitedResults = matchedVehicles.slice(0, limit);
 
     // Format for public consumption
-    const publicVehicles = limitedResults.map(vehicle => ({
-      id: vehicle.id,
-      stock: vehicle.stock,
-      make: vehicle.make,
-      model: vehicle.model,
-      year: vehicle.year,
-      trim: vehicle.trim,
-      mileage: vehicle.mileage,
-      price: vehicle.price,
-      exteriorColor: vehicle.exteriorColor,
-      interiorColor: vehicle.interiorColor,
-      fuelType: vehicle.fuelType,
-      transmission: vehicle.transmission,
-      engine: vehicle.engine,
-      condition: vehicle.condition,
-      description: vehicle.description,
-      featured: vehicle.featured,
-      features: vehicle.features,
-      images: vehicle.images || [],
-      seoTitle: vehicle.seoTitle,
-      seoDescription: vehicle.seoDescription,
-    }));
+    const publicVehicles = limitedResults.map(vehicle => {
+      // Get images with fallback to default placeholder
+      const images = vehicle.images && vehicle.images.length > 0
+        ? vehicle.images
+        : getDefaultVehicleImages(3, {
+            make: vehicle.make,
+            model: vehicle.model,
+            year: vehicle.year,
+            bodyType: vehicle.bodyType,
+            color: vehicle.exteriorColor,
+          });
+
+      return {
+        id: vehicle.id,
+        stock: vehicle.stock,
+        make: vehicle.make,
+        model: vehicle.model,
+        year: vehicle.year,
+        trim: vehicle.trim,
+        mileage: vehicle.mileage,
+        price: vehicle.price,
+        exteriorColor: vehicle.exteriorColor,
+        interiorColor: vehicle.interiorColor,
+        fuelType: vehicle.fuelType,
+        transmission: vehicle.transmission,
+        engine: vehicle.engine,
+        condition: vehicle.condition,
+        description: vehicle.description,
+        featured: vehicle.featured,
+        features: vehicle.features,
+        images,
+        seoTitle: vehicle.seoTitle,
+        seoDescription: vehicle.seoDescription,
+      };
+    });
 
     return {
       vehicles: publicVehicles,
@@ -390,28 +428,41 @@ export const getFeaturedVehicles = query({
     const featuredVehicles = vehicles.slice(0, limit);
 
     // Format for public consumption
-    const publicVehicles = featuredVehicles.map(vehicle => ({
-      id: vehicle.id,
-      stock: vehicle.stock,
-      make: vehicle.make,
-      model: vehicle.model,
-      year: vehicle.year,
-      trim: vehicle.trim,
-      mileage: vehicle.mileage,
-      price: vehicle.price,
-      exteriorColor: vehicle.exteriorColor,
-      interiorColor: vehicle.interiorColor,
-      fuelType: vehicle.fuelType,
-      transmission: vehicle.transmission,
-      engine: vehicle.engine,
-      condition: vehicle.condition,
-      description: vehicle.description,
-      featured: vehicle.featured,
-      features: vehicle.features,
-      images: vehicle.images || [],
-      seoTitle: vehicle.seoTitle,
-      seoDescription: vehicle.seoDescription,
-    }));
+    const publicVehicles = featuredVehicles.map(vehicle => {
+      // Get images with fallback to default placeholder
+      const images = vehicle.images && vehicle.images.length > 0
+        ? vehicle.images
+        : getDefaultVehicleImages(3, {
+            make: vehicle.make,
+            model: vehicle.model,
+            year: vehicle.year,
+            bodyType: vehicle.bodyType,
+            color: vehicle.exteriorColor,
+          });
+
+      return {
+        id: vehicle.id,
+        stock: vehicle.stock,
+        make: vehicle.make,
+        model: vehicle.model,
+        year: vehicle.year,
+        trim: vehicle.trim,
+        mileage: vehicle.mileage,
+        price: vehicle.price,
+        exteriorColor: vehicle.exteriorColor,
+        interiorColor: vehicle.interiorColor,
+        fuelType: vehicle.fuelType,
+        transmission: vehicle.transmission,
+        engine: vehicle.engine,
+        condition: vehicle.condition,
+        description: vehicle.description,
+        featured: vehicle.featured,
+        features: vehicle.features,
+        images,
+        seoTitle: vehicle.seoTitle,
+        seoDescription: vehicle.seoDescription,
+      };
+    });
 
     return {
       vehicles: publicVehicles,
