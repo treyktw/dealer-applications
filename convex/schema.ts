@@ -1003,16 +1003,44 @@ export default defineSchema({
 
   auth_sessions: defineTable({
     userId: v.id("users"),
-    token: v.string(), // Session token stored in Tauri keyring
-    expiresAt: v.number(), // When session expires
+    sessionId: v.string(), // Unique session identifier
+    // Token hashes (actual tokens never stored)
+    accessTokenHash: v.string(), // SHA-256 hash of access token
+    refreshTokenHash: v.string(), // SHA-256 hash of refresh token
+    // Expiration
+    accessTokenExpiresAt: v.number(),
+    refreshTokenExpiresAt: v.number(),
+    // Session lifecycle
     createdAt: v.number(),
-    lastAccessedAt: v.number(), // Track activity
-    userAgent: v.optional(v.string()), // Device info
-    ipAddress: v.optional(v.string()), // For security logging
+    lastAccessedAt: v.number(), // Track activity for idle timeout
+    expiresAt: v.number(), // Absolute session expiration
+    // Device & Location Info
+    userAgent: v.optional(v.string()),
+    browser: v.optional(v.string()),
+    os: v.optional(v.string()),
+    device: v.optional(v.string()), // "Desktop", "Mobile", "Tablet"
+    ipAddress: v.optional(v.string()),
+    location: v.optional(
+      v.object({
+        city: v.optional(v.string()),
+        country: v.optional(v.string()),
+      })
+    ),
+    // Security
+    fingerprint: v.optional(v.string()), // Session fingerprint for hijacking detection
+    isRevoked: v.boolean(),
+    revokedAt: v.optional(v.number()),
+    revokedReason: v.optional(v.string()),
+    // Metadata
+    lastActivityType: v.optional(v.string()), // Last action performed
   })
-    .index("by_token", ["token"])
+    .index("by_session_id", ["sessionId"])
+    .index("by_access_token_hash", ["accessTokenHash"])
+    .index("by_refresh_token_hash", ["refreshTokenHash"])
     .index("by_user", ["userId"])
-    .index("by_expiry", ["expiresAt"]),
+    .index("by_user_active", ["userId", "isRevoked"])
+    .index("by_expiry", ["expiresAt"])
+    .index("by_last_accessed", ["lastAccessedAt"]),
 
   /**
    * Standalone user sessions (for desktop app)
