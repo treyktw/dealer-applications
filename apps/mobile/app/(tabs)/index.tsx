@@ -1,138 +1,180 @@
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
+import { useState } from "react";
+import { useQuery } from "convex/react";
+import { api } from "../../convex-api";
+import { AppHeader } from "../../components/AppHeader";
+import { DealershipSummaryWidget } from "../../components/DealershipSummaryWidget";
+import { useRouter } from "expo-router";
 
 export default function DashboardScreen() {
-  return (
-    <ScrollView className="flex-1 bg-background">
-      <View className="p-6">
-        {/* Welcome header */}
-        <View className="mb-8">
-          <Text className="text-4xl font-bold text-foreground">
-            Welcome back!
-          </Text>
-          <Text className="mt-3 text-lg text-muted-foreground">
-            Here's what's happening with your dealership
-          </Text>
-        </View>
+  const [showSearch, setShowSearch] = useState(false);
+  const [activeTab, setActiveTab] = useState("Overview");
+  const router = useRouter();
 
-        {/* Stats grid */}
-        <View className="gap-4">
-          {/* Total Vehicles */}
-          <View className="rounded-2xl bg-card p-6 shadow-sm">
-            <View className="flex-row items-center justify-between">
-              <View>
-                <Text className="text-sm font-medium text-muted-foreground">
-                  Total Vehicles
-                </Text>
-                <Text className="mt-2 text-4xl font-bold text-foreground">
-                  245
-                </Text>
-                <Text className="mt-1 text-sm text-muted-foreground">
-                  +12% from last month
-                </Text>
-              </View>
-              <View className="h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
-                <Text className="text-3xl">🚗</Text>
-              </View>
-            </View>
-          </View>
+  // Get current user
+  const currentUser = useQuery(api.users.getCurrentUser);
 
-          {/* Available Vehicles */}
-          <View className="rounded-2xl bg-card p-6 shadow-sm">
-            <View className="flex-row items-center justify-between">
-              <View>
-                <Text className="text-sm font-medium text-muted-foreground">
-                  Available
-                </Text>
-                <Text className="mt-2 text-4xl font-bold text-primary">
-                  189
-                </Text>
-                <Text className="mt-1 text-sm text-muted-foreground">
-                  Ready for sale
-                </Text>
-              </View>
-              <View className="h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
-                <Text className="text-3xl">✅</Text>
-              </View>
-            </View>
-          </View>
+  // Get vehicle stats
+  const vehicleStats = useQuery(api.inventory.getStats);
 
-          {/* Pending Sales */}
-          <View className="rounded-2xl bg-card p-6 shadow-sm">
-            <View className="flex-row items-center justify-between">
-              <View>
-                <Text className="text-sm font-medium text-muted-foreground">
-                  Pending Sales
-                </Text>
-                <Text className="mt-2 text-4xl font-bold text-secondary">
-                  23
-                </Text>
-                <Text className="mt-1 text-sm text-muted-foreground">
-                  In progress
-                </Text>
-              </View>
-              <View className="h-16 w-16 items-center justify-center rounded-2xl bg-secondary/10">
-                <Text className="text-3xl">⏳</Text>
-              </View>
-            </View>
-          </View>
+  // Get client stats (will need dealershipId - for now using placeholder)
+  const clientStats = useQuery(api.clients.getStats);
 
-          {/* Sales This Month */}
-          <View className="rounded-2xl bg-card p-6 shadow-sm">
-            <View className="flex-row items-center justify-between">
-              <View>
-                <Text className="text-sm font-medium text-muted-foreground">
-                  Sales This Month
-                </Text>
-                <Text className="mt-2 text-4xl font-bold text-foreground">
-                  56
-                </Text>
-                <Text className="mt-1 text-sm text-muted-foreground">
-                  +8% from last month
-                </Text>
-              </View>
-              <View className="h-16 w-16 items-center justify-center rounded-2xl bg-accent">
-                <Text className="text-3xl">📈</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Quick Actions */}
-        <View className="mt-10">
-          <Text className="mb-4 text-xl font-bold text-foreground">
-            Quick Actions
-          </Text>
-          <View className="gap-3">
-            <TouchableOpacity className="flex-row items-center rounded-2xl bg-card p-5">
-              <View className="mr-4 h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
-                <Text className="text-2xl">➕</Text>
-              </View>
-              <View>
-                <Text className="text-lg font-semibold text-foreground">
-                  Add New Vehicle
-                </Text>
-                <Text className="mt-1 text-sm text-muted-foreground">
-                  Scan VIN or enter manually
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity className="flex-row items-center rounded-2xl bg-card p-5">
-              <View className="mr-4 h-14 w-14 items-center justify-center rounded-xl bg-secondary/10">
-                <Text className="text-2xl">👤</Text>
-              </View>
-              <View>
-                <Text className="text-lg font-semibold text-foreground">
-                  Add New Customer
-                </Text>
-                <Text className="mt-1 text-sm text-muted-foreground">
-                  Create a new lead or customer
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
+  // Loading state
+  if (
+    currentUser === undefined ||
+    vehicleStats === undefined ||
+    clientStats === undefined
+  ) {
+    return (
+      <View className="flex-1 bg-background">
+        <AppHeader />
+        <View className="flex-1 justify-center items-center">
+          <ActivityIndicator size="large" color="#f97316" />
         </View>
       </View>
-    </ScrollView>
+    );
+  }
+
+  // Prepare data for summary
+  const vehicles = vehicleStats?.totalVehicles ?? 0;
+  const clients = clientStats?.activeClients ?? 0;
+  const deals = vehicleStats?.recentSales ?? 0;
+  const income = Math.round((vehicleStats?.totalValue ?? 0));
+  const availableVehicles = vehicleStats?.availableVehicles ?? 0;
+  const pendingVehicles = vehicleStats?.pendingVehicles ?? 0;
+
+  // Navigation tabs
+  const tabs = ["Overview", "Vehicles", "Customers", "Deals", "Analytics"];
+
+  return (
+    <View className="flex-1 bg-[#1d1e1f]">
+      <AppHeader
+        onSearchPress={() => setShowSearch(true)}
+      />
+
+      <ScrollView className="flex-1 bg-[#28282a] rounded-t-[32px]" showsVerticalScrollIndicator={false}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className=""
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingVertical: 12,
+            gap: 4,
+          }}
+        >
+          {tabs.map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              onPress={() => {
+                setActiveTab(tab);
+                if (tab === "Vehicles") router.push("/(tabs)/vehicles");
+                else if (tab === "Customers") router.push("/(tabs)/customers");
+              }}
+              className={`px-6 py-4 h-16 rounded-full flex-1 justify-center items-center border ${
+                activeTab === tab
+                  ? "bg-card border-primary"
+                  : "bg-transparent border-border/50"
+              }`}
+            >
+              <Text
+                className={`text-md font-medium ${
+                  activeTab === tab ? "text-primary" : "text-muted-foreground"
+                }`}
+              >
+                {tab}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        <View className="p-6">
+          {/* Dealership Summary Widget */}
+          <DealershipSummaryWidget
+            vehicles={vehicles}
+            clients={clients}
+            deals={deals}
+          />
+
+          {/* Income Widget */}
+          <View className="p-6 mb-6 rounded-2xl bg-[#2d2d2e] border-[#3f3f46] border-dashed border-2">
+            <Text className="mb-6 text-xl font-bold text-foreground">
+              Total Inventory Value
+            </Text>
+            <Text className="mb-1 text-4xl font-bold text-primary">
+              ${income > 0 ? income.toLocaleString() : "0"}
+            </Text>
+            <Text className="mb-6 text-sm text-muted-foreground">
+              Total inventory value
+            </Text>
+
+            <View className="flex-row gap-3">
+              <TouchableOpacity className="flex-1 items-center py-3 rounded-xl border border-border/50 bg-[#1d1e1f] active:opacity-80">
+                <Text className="text-sm font-medium text-foreground">
+                  View Details
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity className="flex-1 items-center py-3 rounded-xl border border-border/50 bg-[#1d1e1f] active:opacity-80">
+                <Text className="text-sm font-medium text-foreground">
+                  History
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Quick Stats Cards */}
+          <View className="gap-4">
+            {/* Available Vehicles */}
+            <TouchableOpacity
+              className="p-6 rounded-2xl bg-[#2d2d2e] border-[#3f3f46] border-dashed border-2 active:opacity-80"
+              onPress={() => router.push("/(tabs)/vehicles")}
+            >
+              <View className="flex-row justify-between items-center">
+                <View className="flex-1">
+                  <Text className="text-sm font-medium text-muted-foreground">
+                    Available Vehicles
+                  </Text>
+                  <Text className="mt-2 text-3xl font-bold text-primary">
+                    {availableVehicles}
+                  </Text>
+                  <Text className="mt-1 text-xs text-muted-foreground">
+                    Ready for sale
+                  </Text>
+                </View>
+                <View className="justify-center items-center w-16 h-16 rounded-2xl bg-primary/10">
+                  <Text className="text-2xl">🚗</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            {/* Pending Sales */}
+            <TouchableOpacity className="p-6 rounded-2xl bg-[#2d2d2e] border-[#3f3f46] border-dashed border-2 active:opacity-80">
+              <View className="flex-row justify-between items-center">
+                <View className="flex-1">
+                  <Text className="text-sm font-medium text-muted-foreground">
+                    Pending Sales
+                  </Text>
+                  <Text className="mt-2 text-3xl font-bold text-secondary">
+                    {pendingVehicles}
+                  </Text>
+                  <Text className="mt-1 text-xs text-muted-foreground">
+                    In progress
+                  </Text>
+                </View>
+                <View className="justify-center items-center w-16 h-16 rounded-2xl bg-secondary/10">
+                  <Text className="text-2xl">⏳</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+    </View>
   );
 }

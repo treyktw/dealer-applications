@@ -1,12 +1,17 @@
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { AppHeader } from '../../components/AppHeader';
 
 export default function SettingsScreen() {
   return (
-    <ScrollView className="flex-1 bg-background">
-      <View className="p-6">
+    <View className="flex-1 bg-background">
+      <AppHeader 
+        onSearchPress={() => {}}
+      />
+      <ScrollView className="flex-1 bg-background">
+        <View className="p-6">
         {/* User profile */}
-        <View className="mb-8 items-center">
-          <View className="h-28 w-28 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary">
+        <View className="items-center mb-8">
+          <View className="justify-center items-center w-28 h-28 bg-gradient-to-br rounded-full from-primary to-secondary">
             <Text className="text-5xl font-bold text-primary-foreground">
               JD
             </Text>
@@ -21,11 +26,11 @@ export default function SettingsScreen() {
 
         {/* Account section */}
         <View className="mb-6">
-          <Text className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <Text className="mb-3 text-xs font-bold tracking-wider uppercase text-muted-foreground">
             Account
           </Text>
-          <View className="rounded-2xl bg-card overflow-hidden">
-            <TouchableOpacity className="flex-row items-center justify-between border-b border-border p-5">
+          <View className="overflow-hidden rounded-2xl bg-card">
+            <TouchableOpacity className="flex-row justify-between items-center p-5 border-b border-border">
               <View className="flex-row items-center">
                 <Text className="mr-3 text-xl">👤</Text>
                 <Text className="text-base font-medium text-foreground">
@@ -34,7 +39,7 @@ export default function SettingsScreen() {
               </View>
               <Text className="text-xl text-muted-foreground">›</Text>
             </TouchableOpacity>
-            <TouchableOpacity className="flex-row items-center justify-between p-5">
+            <TouchableOpacity className="flex-row justify-between items-center p-5">
               <View className="flex-row items-center">
                 <Text className="mr-3 text-xl">🔒</Text>
                 <Text className="text-base font-medium text-foreground">
@@ -48,11 +53,11 @@ export default function SettingsScreen() {
 
         {/* Dealership section */}
         <View className="mb-6">
-          <Text className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <Text className="mb-3 text-xs font-bold tracking-wider uppercase text-muted-foreground">
             Dealership
           </Text>
-          <View className="rounded-2xl bg-card overflow-hidden">
-            <TouchableOpacity className="flex-row items-center justify-between border-b border-border p-5">
+          <View className="overflow-hidden rounded-2xl bg-card">
+            <TouchableOpacity className="flex-row justify-between items-center p-5 border-b border-border">
               <View className="flex-row items-center">
                 <Text className="mr-3 text-xl">🏢</Text>
                 <Text className="text-base font-medium text-foreground">
@@ -61,7 +66,7 @@ export default function SettingsScreen() {
               </View>
               <Text className="text-xl text-muted-foreground">›</Text>
             </TouchableOpacity>
-            <TouchableOpacity className="flex-row items-center justify-between border-b border-border p-5">
+            <TouchableOpacity className="flex-row justify-between items-center p-5 border-b border-border">
               <View className="flex-row items-center">
                 <Text className="mr-3 text-xl">👥</Text>
                 <Text className="text-base font-medium text-foreground">
@@ -70,7 +75,7 @@ export default function SettingsScreen() {
               </View>
               <Text className="text-xl text-muted-foreground">›</Text>
             </TouchableOpacity>
-            <TouchableOpacity className="flex-row items-center justify-between p-5">
+            <TouchableOpacity className="flex-row justify-between items-center p-5">
               <View className="flex-row items-center">
                 <Text className="mr-3 text-xl">💳</Text>
                 <Text className="text-base font-medium text-foreground">
@@ -84,11 +89,11 @@ export default function SettingsScreen() {
 
         {/* App section */}
         <View className="mb-6">
-          <Text className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <Text className="mb-3 text-xs font-bold tracking-wider uppercase text-muted-foreground">
             App
           </Text>
-          <View className="rounded-2xl bg-card overflow-hidden">
-            <TouchableOpacity className="flex-row items-center justify-between border-b border-border p-5">
+          <View className="overflow-hidden rounded-2xl bg-card">
+            <TouchableOpacity className="flex-row justify-between items-center p-5 border-b border-border">
               <View className="flex-row items-center">
                 <Text className="mr-3 text-xl">🔔</Text>
                 <Text className="text-base font-medium text-foreground">
@@ -97,7 +102,7 @@ export default function SettingsScreen() {
               </View>
               <Text className="text-xl text-muted-foreground">›</Text>
             </TouchableOpacity>
-            <TouchableOpacity className="flex-row items-center justify-between border-b border-border p-5">
+            <TouchableOpacity className="flex-row justify-between items-center p-5 border-b border-border">
               <View className="flex-row items-center">
                 <Text className="mr-3 text-xl">🌙</Text>
                 <Text className="text-base font-medium text-foreground">
@@ -106,7 +111,7 @@ export default function SettingsScreen() {
               </View>
               <Text className="text-xl text-muted-foreground">›</Text>
             </TouchableOpacity>
-            <TouchableOpacity className="flex-row items-center justify-between p-5">
+            <TouchableOpacity className="flex-row justify-between items-center p-5">
               <View className="flex-row items-center">
                 <Text className="mr-3 text-xl">❓</Text>
                 <Text className="text-base font-medium text-foreground">
@@ -119,8 +124,8 @@ export default function SettingsScreen() {
         </View>
 
         {/* Sign out button */}
-        <TouchableOpacity className="mb-6 rounded-2xl bg-destructive/10 p-5 active:opacity-80">
-          <View className="flex-row items-center justify-center">
+        <TouchableOpacity className="p-5 mb-6 rounded-2xl bg-destructive/10 active:opacity-80">
+          <View className="flex-row justify-center items-center">
             <Text className="mr-2 text-xl">🚪</Text>
             <Text className="text-base font-bold text-destructive">
               Sign Out
@@ -129,10 +134,11 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         {/* Version info */}
-        <Text className="text-center text-sm text-muted-foreground">
+        <Text className="text-sm text-center text-muted-foreground">
           Version 1.0.0
         </Text>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }

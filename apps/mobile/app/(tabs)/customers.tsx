@@ -1,5 +1,6 @@
 import { View, Text, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { useState } from 'react';
+import { AppHeader } from '../../components/AppHeader';
 
 export default function CustomersScreen() {
   const [search, setSearch] = useState('');
@@ -14,9 +15,12 @@ export default function CustomersScreen() {
 
   return (
     <View className="flex-1 bg-background">
+      <AppHeader 
+        onSearchPress={() => {}}
+      />
       {/* Search bar */}
-      <View className="border-b border-border bg-card p-4">
-        <View className="flex-row items-center rounded-xl border border-input bg-background px-4">
+      <View className="p-4 border-b border-border bg-card">
+        <View className="flex-row items-center px-4 rounded-xl border border-input bg-background">
           <Text className="text-lg text-muted-foreground">🔍</Text>
           <TextInput
             className="flex-1 py-3 pl-3 text-base text-foreground"
@@ -34,9 +38,9 @@ export default function CustomersScreen() {
           {customers.map((customer) => (
             <TouchableOpacity
               key={customer.id}
-              className="rounded-2xl bg-card p-5 shadow-sm active:opacity-80"
+              className="p-5 rounded-2xl shadow-sm bg-card active:opacity-80"
             >
-              <View className="flex-row items-center justify-between">
+              <View className="flex-row justify-between items-center">
                 <View className="flex-1">
                   <Text className="text-lg font-bold text-foreground">
                     {customer.name}
@@ -44,7 +48,7 @@ export default function CustomersScreen() {
                   <Text className="mt-1 text-sm text-muted-foreground">
                     {customer.email}
                   </Text>
-                  <View className="mt-3 flex-row items-center">
+                  <View className="flex-row items-center mt-3">
                     <View
                       className={`rounded-full px-3 py-1 ${
                         customer.status === 'CUSTOMER'
@@ -72,7 +76,7 @@ export default function CustomersScreen() {
       </ScrollView>
 
       {/* Floating action button */}
-      <TouchableOpacity className="absolute bottom-6 right-6 h-16 w-16 items-center justify-center rounded-full bg-primary shadow-lg active:opacity-80">
+      <TouchableOpacity className="absolute right-6 bottom-6 justify-center items-center w-16 h-16 rounded-full shadow-lg bg-primary active:opacity-80">
         <Text className="text-3xl text-primary-foreground">+</Text>
       </TouchableOpacity>
     </View>

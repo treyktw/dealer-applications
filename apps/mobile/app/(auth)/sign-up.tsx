@@ -1,146 +1,85 @@
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
+  ImageBackground,
+  StyleSheet,
 } from 'react-native';
-import { useState } from 'react';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
+import { Linking } from 'react-native';
+import { AuthButton } from '../../components/auth-buttons';
 
 export default function SignUpScreen() {
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
-  const handleSignUp = async () => {
-    setLoading(true);
-    // TODO: Implement sign-up logic with Clerk
-    setTimeout(() => setLoading(false), 1000);
+  const handleSignUp = () => {
+    Linking.openURL('https://universalautobrokers.net');
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-background"
+    <ImageBackground
+      source={require('../../assets/appbg2.jpg')}
+      style={styles.background}
+      resizeMode="cover"
     >
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View className="flex-1 justify-center px-6 py-8">
-          {/* Logo */}
-          <View className="mb-8 items-center">
-            <View className="h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-primary to-secondary">
-              <Text className="text-4xl font-bold text-primary-foreground">
-                DA
-              </Text>
-            </View>
-            <Text className="mt-5 text-3xl font-bold text-foreground">
-              Create Account
-            </Text>
-            <Text className="mt-2 text-center text-base text-muted-foreground">
-              Join Dealer Applications today
+      <View className="flex-1 justify-center px-6">
+        {/* Back Button */}
+        <TouchableOpacity
+          className="absolute left-6 top-12 z-10"
+          onPress={() => router.back()}
+        >
+          <Text className="text-2xl text-foreground">←</Text>
+        </TouchableOpacity>
+
+        {/* Logo */}
+        <View className="items-center mb-12">
+          <View className="justify-center items-center w-24 h-24 bg-gradient-to-br rounded-3xl from-primary to-secondary">
+            <Text className="text-5xl font-bold text-primary-foreground">
+              DA
             </Text>
           </View>
-
-          {/* First Name */}
-          <View className="mb-4">
-            <Text className="mb-2 text-sm font-semibold text-foreground">
-              First Name
-            </Text>
-            <TextInput
-              className="rounded-xl border border-input bg-card px-5 py-4 text-base text-foreground"
-              placeholder="Enter your first name"
-              placeholderTextColor="hsl(240, 5%, 64.9%)"
-              value={firstName}
-              onChangeText={setFirstName}
-              autoComplete="given-name"
-              editable={!loading}
-            />
-          </View>
-
-          {/* Last Name */}
-          <View className="mb-4">
-            <Text className="mb-2 text-sm font-semibold text-foreground">
-              Last Name
-            </Text>
-            <TextInput
-              className="rounded-xl border border-input bg-card px-5 py-4 text-base text-foreground"
-              placeholder="Enter your last name"
-              placeholderTextColor="hsl(240, 5%, 64.9%)"
-              value={lastName}
-              onChangeText={setLastName}
-              autoComplete="family-name"
-              editable={!loading}
-            />
-          </View>
-
-          {/* Email */}
-          <View className="mb-4">
-            <Text className="mb-2 text-sm font-semibold text-foreground">
-              Email
-            </Text>
-            <TextInput
-              className="rounded-xl border border-input bg-card px-5 py-4 text-base text-foreground"
-              placeholder="Enter your email"
-              placeholderTextColor="hsl(240, 5%, 64.9%)"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-              editable={!loading}
-            />
-          </View>
-
-          {/* Password */}
-          <View className="mb-6">
-            <Text className="mb-2 text-sm font-semibold text-foreground">
-              Password
-            </Text>
-            <TextInput
-              className="rounded-xl border border-input bg-card px-5 py-4 text-base text-foreground"
-              placeholder="Create a password"
-              placeholderTextColor="hsl(240, 5%, 64.9%)"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoComplete="password-new"
-              editable={!loading}
-            />
-          </View>
-
-          {/* Sign up button */}
-          <TouchableOpacity
-            className="mb-6 rounded-xl bg-primary py-5 active:opacity-80"
-            onPress={handleSignUp}
-            disabled={loading || !firstName || !lastName || !email || !password}
-          >
-            <Text className="text-center text-base font-bold text-primary-foreground">
-              {loading ? 'Creating account...' : 'Sign Up'}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Sign in link */}
-          <View className="flex-row justify-center">
-            <Text className="text-base text-muted-foreground">
-              Already have an account?{' '}
-            </Text>
-            <Link href="/(auth)/sign-in" asChild>
-              <TouchableOpacity>
-                <Text className="text-base font-bold text-primary">
-                  Sign In
-                </Text>
-              </TouchableOpacity>
-            </Link>
-          </View>
+          <Text className="mt-6 text-3xl font-bold text-foreground">
+            Sign up
+          </Text>
+          <Text className="mt-3 text-lg text-center text-muted-foreground">
+            Create your account on our web platform
+          </Text>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+        {/* Sign Up Button */}
+        <View className="mb-6">
+          <AuthButton
+            variant="primary"
+            size="md"
+            onPress={handleSignUp}
+            className="w-full"
+          >
+            Sign up on Web
+          </AuthButton>
+        </View>
+
+        {/* Sign in link */}
+        <View className="flex-row justify-center">
+          <Text className="text-base text-muted-foreground">
+            Already have an account?{' '}
+          </Text>
+          <Link href="/(auth)/sign-in" asChild>
+            <TouchableOpacity>
+              <Text className="text-base font-bold text-primary">
+                Sign In
+              </Text>
+            </TouchableOpacity>
+          </Link>
+        </View>
+      </View>
+    </ImageBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+});
