@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { invoke } from "@tauri-apps/api/core";
 import {
   Dialog,
   DialogContent,
@@ -133,15 +134,15 @@ export function UpdateManager() {
     <Dialog open={updateAvailable} onOpenChange={setUpdateAvailable}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex gap-2 items-center">
             {isSecurityUpdate ? (
               <>
-                <Shield className="h-5 w-5 text-red-500" />
+                <Shield className="w-5 h-5 text-red-500" />
                 Security Update Available
               </>
             ) : (
               <>
-                <Sparkles className="h-5 w-5 text-blue-500" />
+                <Sparkles className="w-5 h-5 text-blue-500" />
                 New Update Available
               </>
             )}
@@ -152,11 +153,11 @@ export function UpdateManager() {
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">Current version:</span>
             <span className="font-medium">{updateInfo.currentVersion}</span>
           </div>
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">New version:</span>
             <span className="font-medium text-primary">
               {updateInfo.version}
@@ -166,7 +167,7 @@ export function UpdateManager() {
           {updateInfo.body && (
             <div className="space-y-2">
               <h4 className="text-sm font-semibold">What's new:</h4>
-              <div className="text-sm text-muted-foreground bg-muted p-3 rounded-lg max-h-32 overflow-y-auto">
+              <div className="overflow-y-auto p-3 max-h-32 text-sm rounded-lg text-muted-foreground bg-muted">
                 {updateInfo.body.split("\n").map((line: string) => (
                   <p key={line}>{line}</p>
                 ))}
@@ -176,9 +177,9 @@ export function UpdateManager() {
 
           {downloading && (
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2">
-                  <Download className="h-4 w-4 animate-bounce" />
+              <div className="flex justify-between items-center text-sm">
+                <span className="flex gap-2 items-center">
+                  <Download className="w-4 h-4 animate-bounce" />
                   Downloading update...
                 </span>
                 <span className="font-medium">{downloadProgress}%</span>
@@ -188,8 +189,8 @@ export function UpdateManager() {
           )}
 
           {error && (
-            <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 p-3 rounded-lg">
-              <AlertCircle className="h-4 w-4" />
+            <div className="flex gap-2 items-center p-3 text-sm rounded-lg text-destructive bg-destructive/10">
+              <AlertCircle className="w-4 h-4" />
               {error}
             </div>
           )}
@@ -208,7 +209,7 @@ export function UpdateManager() {
           >
             {downloading ? (
               <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                <div className="mr-2 w-4 h-4 rounded-full border-2 border-white animate-spin border-t-transparent" />
                 Installing...
               </>
             ) : isSecurityUpdate ? (
@@ -226,31 +227,61 @@ export function UpdateManager() {
 // ✅ Export for getting current version
 export async function getCurrentVersion(): Promise<string> {
   try {
-    const update = await check();
-    return update?.currentVersion || "Unknown";
+    // Get version from Tauri app directly
+    const version = await invoke<string>("get_app_version");
+    return version || "Unknown";
   } catch (error) {
     console.error("Failed to get version:", error);
-    return "Unknown";
+    // Fallback: try to get from updater
+    try {
+      const update = await check();
+      return update?.currentVersion || "Unknown";
+    } catch {
+      return "Unknown";
+    }
   }
 }
+
+// Type for update object from Tauri updater
+export type Update = {
+  version: string;
+  currentVersion: string;
+  body?: string;
+  date?: string;
+  downloadAndInstall: (onEvent: (event: UpdateEvent) => void) => Promise<void>;
+};
+
+export type UpdateEvent = {
+  event: string; // Tauri uses string, not union type
+  data?: {
+    chunkLength: number;
+  };
+};
 
 // ✅ Export function for manual update checks with loading state
 export async function checkForUpdatesManually(): Promise<{
   available: boolean;
   version?: string;
   currentVersion?: string;
+  update?: Update; // Store the update object for installation
 }> {
   try {
+    // Get current version first
+    const currentVersion = await getCurrentVersion();
+    
+    // Check for updates
     const update = await check();
     if (update) {
       return {
         available: true,
         version: update.version,
-        currentVersion: update.currentVersion,
+        currentVersion: currentVersion,
+        update: update as Update, // Store update object for installation
       };
     }
     return { 
-      available: false
+      available: false,
+      currentVersion: currentVersion,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -260,5 +291,36 @@ export async function checkForUpdatesManually(): Promise<{
       throw new Error("Update server not configured. Releases must be published with a latest.json file.");
     }
     throw new Error(`Failed to check for updates: ${errorMessage}`);
+  }
+}
+
+// ✅ Export function to install update manually
+export async function installUpdateManually(update: Update): Promise<void> {
+  try {
+    await update.downloadAndInstall((event: UpdateEvent) => {
+      switch (event.event) {
+        case "Started":
+          console.log("Download started");
+          break;
+        case "Progress": {
+          const progress = event.data?.chunkLength ?? 0;
+          console.log(`Download progress: ${progress}%`);
+          break;
+        }
+        case "Finished":
+          console.log("Download finished");
+          break;
+      }
+    });
+
+    toast.success("Update installed! Restarting app...");
+    
+    setTimeout(async () => {
+      await relaunch();
+    }, 1500);
+  } catch (error) {
+    console.error("Failed to install update:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to install update: ${errorMessage}`);
   }
 }

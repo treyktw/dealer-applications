@@ -30,6 +30,7 @@ interface User {
   dealershipId?: string;
   image?: string;
   subscriptionStatus?: string;
+  subscriptionPlan?: string;
 }
 
 interface Session {
@@ -42,6 +43,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   user: User | null;
   session: Session | null;
+  token: string | null; // Expose the access token
 
   initiateLogin: () => Promise<{ authUrl: string; state: string }>;
   handleAuthCallback: (token: string, state: string) => Promise<void>;
@@ -61,6 +63,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Use ref to track if listeners are registered (prevents double registration)
   const listenersRegistered = useRef(false);
 
+  // Helper function to clear auth state immediately
+  const clearAuthState = useCallback(async () => {
+    // Clear token first
+    await removeToken();
+    // Clear Convex auth immediately
+    setConvexAuth(null);
+    // Cancel all running queries
+    queryClient.cancelQueries();
+    // Clear all query data
+    queryClient.clear();
+    // Reset specific query data
+    queryClient.setQueryData(["stored-token"], null);
+    queryClient.setQueryData(["auth-session"], null);
+  }, [queryClient]);
 
   // Load token from hybrid secure storage on mount
   const { data: storedToken, isLoading: tokenLoading } = useQuery({
@@ -78,6 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     gcTime: Infinity,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
+    notifyOnChangeProps: ["data", "isLoading"], // Ensure reactivity
   });
 
   // Validate session with Convex
@@ -95,16 +112,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (result) {
           setConvexAuth(storedToken);
-          console.log("🔍 Session data:", result);
-          console.log("🔍 Session Data object:", sessionData?.user);
+          console.log("🔍 Session validated:", {
+            email: result.user?.email,
+            userId: result.user?.id,
+            dealershipId: result.user?.dealershipId,
+            subscriptionStatus: result.user?.subscriptionStatus,
+            subscriptionPlan: result.user?.subscriptionPlan,
+            dealership: result.dealership,
+          });
+          
+          // Ensure dealershipId is a string
+          if (result.user?.dealershipId) {
+            result.user.dealershipId = String(result.user.dealershipId);
+          }
+          
+          // Ensure dealership id is a string
+          if (result.dealership?.id) {
+            result.dealership.id = String(result.dealership.id);
+          }
+          
           return result;
         } else {
-          await removeToken();
-          queryClient.setQueryData(["stored-token"], null);
-          setConvexAuth(null);
+          console.log("🔍 Session validation failed - clearing token");
+          await clearAuthState();
           return null;
         }
-      } catch (error) {
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error("🔍 Session validation error:", errorMessage);
+        
+        // Check if session is revoked or invalid
+        if (
+          errorMessage.includes("revoked") ||
+          errorMessage.includes("Invalid or expired session") ||
+          errorMessage.includes("Session not found")
+        ) {
+          console.log("🔍 Session revoked or invalid - clearing auth state");
+          await clearAuthState();
+          return null;
+        }
+        
+        // For other errors, still clear the token
         await removeToken();
         queryClient.setQueryData(["stored-token"], null);
         setConvexAuth(null);
@@ -112,8 +160,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     },
     enabled: !!storedToken && !tokenLoading,
-    staleTime: 5 * 60 * 1000000,
+    staleTime: 5 * 60 * 1000, // 5 minutes (was too long before)
     retry: false,
+    notifyOnChangeProps: ["data", "isLoading"], // Ensure reactivity
   });
 
   // Mutation to handle auth callback
@@ -140,14 +189,93 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     },
     onSuccess: async (data) => {
+      // The backend returns accessToken, not token
+      const accessToken = data.session.accessToken;
+      
+      if (!accessToken) {
+        console.error("❌ No accessToken in session response");
+        toast.error("Authentication failed", {
+          description: "Invalid session response",
+        });
+        return;
+      }
+
       try {
-        await storeToken(data.session.token);
+        await storeToken(accessToken);
       } catch (error) {
+        console.error("❌ Failed to store token:", error);
         throw error;
       }
 
-      queryClient.setQueryData(["stored-token"], data.session.token);
-      queryClient.invalidateQueries({ queryKey: ["auth-session"] });
+      // Set Convex auth immediately
+      setConvexAuth(accessToken);
+      
+      // Set the token in the query cache - this will trigger the session query to refetch automatically
+      // because the session query depends on storedToken in its query key
+      queryClient.setQueryData(["stored-token"], accessToken);
+      
+      // REQUIREMENT: Must have dealership and subscription - validateDesktopAuth already checks this
+      if (!data.user.dealershipId) {
+        console.error("❌ No dealershipId in auth response");
+        throw new Error("No dealership associated with account");
+      }
+      
+      if (!data.dealership) {
+        console.error("❌ No dealership data in auth response");
+        throw new Error("Dealership data missing");
+      }
+      
+      if (!data.user.subscriptionStatus || !data.user.subscriptionPlan) {
+        console.error("❌ No subscription data in auth response");
+        throw new Error("Subscription data missing");
+      }
+
+      // Set session data with the exact structure that validateSession returns
+      // This ensures immediate reactivity - components will see the auth state change instantly
+      const sessionData = {
+        user: {
+          id: data.user.id,
+          email: data.user.email,
+          name: data.user.name,
+          role: data.user.role,
+          dealershipId: String(data.user.dealershipId), // Convert to string, required
+          image: data.user.image,
+          subscriptionStatus: data.user.subscriptionStatus, // Required
+          subscriptionPlan: (data.user as { subscriptionPlan?: string }).subscriptionPlan, // Required
+        },
+        session: {
+          id: data.session.sessionId, // Using sessionId as id for compatibility
+          sessionId: data.session.sessionId,
+          expiresAt: data.session.expiresAt,
+          accessTokenExpiresAt: data.session.expiresAt,
+        },
+        dealership: {
+          id: String(data.dealership.id), // Required, not null
+          name: data.dealership.name,
+        },
+      };
+      
+      console.log("✅ Setting session data:", {
+        userId: sessionData.user.id,
+        email: sessionData.user.email,
+        dealershipId: sessionData.user.dealershipId,
+        subscriptionStatus: sessionData.user.subscriptionStatus,
+        subscriptionPlan: sessionData.user.subscriptionPlan,
+        dealership: sessionData.dealership,
+      });
+      
+      queryClient.setQueryData(["auth-session", accessToken], sessionData);
+      
+      // Force a refetch in the background to ensure we have the latest data
+      // This won't block the UI update since we've already set the data
+      queryClient.refetchQueries({ 
+        queryKey: ["auth-session", accessToken],
+        exact: true 
+      }).catch((err) => {
+        console.warn("Background refetch failed (non-critical):", err);
+      });
+
+      console.log("✅ Authentication successful, session activated");
 
       toast.success("Welcome back!", {
         description: `Signed in as ${data.user.email}`,
@@ -251,16 +379,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Logout mutation
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      if (!storedToken) return;
-      return await convexMutation(api.api.desktopAuth.logout, {
-        token: storedToken,
-      });
+      // Clear state immediately (don't wait for backend)
+      await clearAuthState();
+      
+      // Try to revoke session on backend (fire and forget)
+      if (storedToken) {
+        try {
+          await convexMutation(api.api.desktopAuth.logout, {
+            accessToken: storedToken,
+          });
+        } catch (error) {
+          // Ignore errors - we've already cleared local state
+          console.log("Logout backend call failed (ignored):", error);
+        }
+      }
     },
-    onSuccess: async () => {
-      await removeToken();
-      queryClient.setQueryData(["stored-token"], null);
-      setConvexAuth(null);
-      queryClient.clear();
+    onSuccess: () => {
       toast.success("Signed out successfully");
     },
   });
@@ -268,16 +402,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Logout all devices mutation
   const logoutAllDevicesMutation = useMutation({
     mutationFn: async () => {
-      if (!storedToken) return;
-      return await convexMutation(api.api.desktopAuth.logoutAllDevices, {
-        token: storedToken,
-      });
+      // Clear state immediately (don't wait for backend)
+      await clearAuthState();
+      
+      // Try to revoke all sessions on backend (fire and forget)
+      if (storedToken) {
+        try {
+          await convexMutation(api.api.desktopAuth.logoutAllDevices, {
+            accessToken: storedToken,
+          });
+        } catch (error) {
+          // Ignore errors - we've already cleared local state
+          console.log("Logout all devices backend call failed (ignored):", error);
+        }
+      }
     },
-    onSuccess: async () => {
-      await removeToken();
-      queryClient.setQueryData(["stored-token"], null);
-      setConvexAuth(null);
-      queryClient.clear();
+    onSuccess: () => {
       toast.success("Signed out from all devices");
     },
   });
@@ -317,6 +457,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated,
     user: sessionData?.user || null,
     session: sessionData?.session || null,
+    token: storedToken || null, // Expose the access token
 
     initiateLogin,
     handleAuthCallback: async (token: string, state: string) => {

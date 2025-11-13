@@ -130,15 +130,18 @@ function saveToStorage(data: DealFormData) {
 export function WizardProvider({ children, initialData }: WizardProviderProps) {
   const location = useLocation();
   
-  // Load from storage or use initialData
-  const storedData = loadFromStorage();
+  // If initialData is explicitly provided (even if empty), use it and ignore storage
+  // This allows starting fresh when creating a new deal
+  const shouldUseStorage = initialData === undefined;
+  const storedData = shouldUseStorage ? loadFromStorage() : null;
+  
   const initialFormData: DealFormData = {
-    type: initialData?.type || storedData?.type || "retail",
-    clientId: initialData?.clientId || storedData?.clientId || "",
-    vehicleId: initialData?.vehicleId || storedData?.vehicleId || "",
-    status: initialData?.status || storedData?.status || "draft",
-    totalAmount: initialData?.totalAmount || storedData?.totalAmount || 0,
-    documentIds: initialData?.documentIds || storedData?.documentIds || [],
+    type: initialData?.type ?? storedData?.type ?? "retail",
+    clientId: initialData?.clientId ?? storedData?.clientId ?? "",
+    vehicleId: initialData?.vehicleId ?? storedData?.vehicleId ?? "",
+    status: initialData?.status ?? storedData?.status ?? "draft",
+    totalAmount: initialData?.totalAmount ?? storedData?.totalAmount ?? 0,
+    documentIds: initialData?.documentIds ?? storedData?.documentIds ?? [],
     saleAmount: initialData?.saleAmount ?? storedData?.saleAmount,
     salesTax: initialData?.salesTax ?? storedData?.salesTax,
     docFee: initialData?.docFee ?? storedData?.docFee,
@@ -147,10 +150,10 @@ export function WizardProvider({ children, initialData }: WizardProviderProps) {
     financedAmount: initialData?.financedAmount ?? storedData?.financedAmount,
     selectedClient: initialData?.selectedClient,
     selectedVehicle: initialData?.selectedVehicle,
-    selectedDocuments: initialData?.selectedDocuments || storedData?.selectedDocuments,
-    clientData: initialData?.clientData || storedData?.clientData,
-    vehicleData: initialData?.vehicleData || storedData?.vehicleData,
-    cobuyerData: initialData?.cobuyerData || storedData?.cobuyerData,
+    selectedDocuments: initialData?.selectedDocuments ?? storedData?.selectedDocuments,
+    clientData: initialData?.clientData ?? storedData?.clientData,
+    vehicleData: initialData?.vehicleData ?? storedData?.vehicleData,
+    cobuyerData: initialData?.cobuyerData ?? storedData?.cobuyerData,
   };
 
   const [formData, setFormData] = useState<DealFormData>(initialFormData);

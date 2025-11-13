@@ -21,8 +21,8 @@ export const Route = createFileRoute("/standalone/deals/new")({
       <Layout>
         <div className="p-6">
           <h1 className="text-2xl font-bold text-destructive">Error loading wizard</h1>
-          <p className="text-muted-foreground mt-2">{error.message}</p>
-          <pre className="mt-4 p-4 bg-muted rounded text-sm overflow-auto">{error.stack}</pre>
+          <p className="mt-2 text-muted-foreground">{error.message}</p>
+          <pre className="overflow-auto p-4 mt-4 text-sm rounded bg-muted">{error.stack}</pre>
         </div>
       </Layout>
     );
@@ -39,17 +39,17 @@ function WizardContent() {
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex items-center gap-4">
+        <div className="flex gap-4 items-center">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => navigate({ to: "/standalone/deals" })}
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="w-4 h-4" />
           </Button>
           <div className="flex-1">
             <h1 className="text-3xl font-bold">Create New Deal</h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="mt-1 text-muted-foreground">
               Step {currentStep} of {steps.length}
             </p>
           </div>
@@ -66,7 +66,7 @@ function WizardContent() {
                 </p>
               </div>
             </div>
-            <div className="flex justify-center gap-6 text-xs text-muted-foreground">
+            <div className="flex gap-6 justify-center text-xs text-muted-foreground">
               {steps.map((step) => (
                 <span
                   key={step.id}
@@ -94,8 +94,10 @@ function WizardContent() {
 function NewDealWizardLayout() {
   console.log("🎯 [WIZARD-LAYOUT] Rendering layout");
 
+  // Clear any existing form data when starting a new deal
+  // This ensures we start fresh and don't load old draft data
   return (
-    <WizardProvider>
+    <WizardProvider initialData={{}}>
       <WizardContent />
     </WizardProvider>
   );

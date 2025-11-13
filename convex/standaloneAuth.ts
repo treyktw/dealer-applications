@@ -5,9 +5,10 @@
  */
 
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, action, internalAction, internalMutation, internalQuery } from "./_generated/server";
 import bcrypt from "bcryptjs";
-import { sendVerificationEmail, sendPasswordResetEmail, sendWelcomeEmail } from "./lib/auth/emailHelpers";
+import { sendVerificationEmail, sendPasswordResetEmail, sendWelcomeEmail, sendLoginCodeEmail } from "./lib/auth/emailHelpers";
+import { internal } from "./_generated/api";
 
 /**
  * Hash password using bcrypt with 12 rounds (industry standard for security)
@@ -156,7 +157,293 @@ export const checkIsDealershipUser = query({
 });
 
 /**
- * Login with email and password
+ * Internal mutation to store login code in database
+ */
+export const storeLoginCode = internalMutation({
+  args: {
+    userId: v.id("standalone_users"),
+    code: v.string(),
+    codeExpiresAt: v.number(),
+  },
+  handler: async (ctx, args) => {
+    console.log("💾 [STORE] Storing login code:", {
+      userId: args.userId,
+      code: args.code,
+      codeLength: args.code.length,
+      codeExpiresAt: args.codeExpiresAt,
+      expiresIn: args.codeExpiresAt - Date.now(),
+    });
+
+    await ctx.db.patch(args.userId, {
+      loginCode: args.code,
+      loginCodeExpiresAt: args.codeExpiresAt,
+      updatedAt: Date.now(),
+    });
+
+    // Verify it was stored
+    const updated = await ctx.db.get(args.userId);
+    console.log("✅ [STORE] Code stored successfully:", {
+      hasLoginCode: !!updated?.loginCode,
+      storedCode: updated?.loginCode,
+      storedCodeLength: updated?.loginCode?.length,
+      codeExpiresAt: updated?.loginCodeExpiresAt,
+    });
+  },
+});
+
+/**
+ * Internal mutation to clear login code from database
+ */
+export const clearLoginCode = internalMutation({
+  args: {
+    userId: v.id("standalone_users"),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userId, {
+      loginCode: undefined,
+      loginCodeExpiresAt: undefined,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+/**
+ * Internal action to send login code email
+ * Must be an action because it uses fetch() to call Resend API
+ */
+export const sendLoginCodeEmailAction = internalAction({
+  args: {
+    email: v.string(),
+    name: v.string(),
+    code: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    try {
+      await sendLoginCodeEmail({
+        email: args.email,
+        name: args.name,
+        code: args.code,
+      });
+      console.log(`✅ Login code sent to ${args.email}`);
+      return { success: true };
+    } catch (error) {
+      console.error(`❌ Failed to send login code to ${args.email}:`, error);
+      throw error;
+    }
+  },
+});
+
+/**
+ * Send login verification code via email
+ * Must be an action because it needs to call sendLoginCodeEmailAction which uses fetch()
+ */
+export const sendLoginCode = action({
+  args: {
+    email: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Find user using internal query
+    const user = await ctx.runQuery(internal.standaloneAuth.getUserByEmail, {
+      email: args.email.toLowerCase(),
+    });
+
+    if (!user) {
+      // Don't reveal if email exists for security
+      return { success: true, message: "If the email exists, a verification code has been sent." };
+    }
+
+    // Check subscription status
+    if (user.subscriptionStatus !== "active") {
+      throw new Error("Active subscription required. Please subscribe to continue.");
+    }
+
+    // Generate 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const codeExpiresAt = now + 10 * 60 * 1000; // 10 minutes
+
+    console.log("🔑 [SEND] Generated login code:", {
+      email: user.email,
+      code,
+      codeLength: code.length,
+      codeExpiresAt,
+      expiresIn: codeExpiresAt - now,
+    });
+
+    // Store code in user record using internal mutation
+    try {
+      await ctx.runMutation(internal.standaloneAuth.storeLoginCode, {
+        userId: user._id,
+        code,
+        codeExpiresAt,
+      });
+
+      // Send email with code directly (actions can use fetch)
+      await sendLoginCodeEmail({
+        email: user.email,
+        name: user.name,
+        code,
+      });
+
+      console.log(`✅ Login code sent to ${user.email}`);
+    } catch (error) {
+      console.error(`❌ Failed to send login code to ${user.email}:`, error);
+      // Clear code if email fails
+      try {
+        await ctx.runMutation(internal.standaloneAuth.clearLoginCode, {
+          userId: user._id,
+        });
+      } catch (clearError) {
+        console.error("Failed to clear login code:", clearError);
+      }
+      throw new Error("Failed to send verification code. Please try again.");
+    }
+
+    return { success: true, message: "If the email exists, a verification code has been sent." };
+  },
+});
+
+/**
+ * Internal query to get user by email
+ */
+export const getUserByEmail = internalQuery({
+  args: {
+    email: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("standalone_users")
+      .withIndex("by_email", (q) => q.eq("email", args.email.toLowerCase()))
+      .first();
+  },
+});
+
+/**
+ * Verify login code and create session
+ */
+export const verifyLoginCode = mutation({
+  args: {
+    email: v.string(),
+    code: v.string(),
+    machineId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Trim and normalize code input
+    const providedCode = args.code.trim();
+
+    console.log("🔐 [VERIFY] Verifying login code:", {
+      email: args.email,
+      providedCodeLength: providedCode.length,
+      providedCode: providedCode,
+    });
+
+    // Find user
+    const user = await ctx.db
+      .query("standalone_users")
+      .withIndex("by_email", (q) => q.eq("email", args.email.toLowerCase()))
+      .first();
+
+    if (!user) {
+      console.error("❌ [VERIFY] User not found for email:", args.email);
+      throw new Error("Invalid email or code");
+    }
+
+    console.log("🔐 [VERIFY] User found:", {
+      userId: user._id,
+      hasLoginCode: !!user.loginCode,
+      storedCodeLength: user.loginCode?.length,
+      storedCode: user.loginCode,
+      codeExpiresAt: user.loginCodeExpiresAt,
+      now,
+      isExpired: user.loginCodeExpiresAt ? now > user.loginCodeExpiresAt : null,
+    });
+
+    // Check if code exists
+    if (!user.loginCode) {
+      console.error("❌ [VERIFY] No login code found for user");
+      throw new Error("Invalid or expired code");
+    }
+
+    // Check if code matches (trim both for comparison)
+    const storedCode = user.loginCode.trim();
+    if (storedCode !== providedCode) {
+      console.error("❌ [VERIFY] Code mismatch:", {
+        providedCode,
+        storedCode,
+        providedLength: providedCode.length,
+        storedLength: storedCode.length,
+        codesMatch: storedCode === providedCode,
+      });
+      throw new Error("Invalid or expired code");
+    }
+
+    // Check if code expired
+    if (!user.loginCodeExpiresAt || now > user.loginCodeExpiresAt) {
+      // Clear expired code
+      await ctx.db.patch(user._id, {
+        loginCode: undefined,
+        loginCodeExpiresAt: undefined,
+        updatedAt: now,
+      });
+      throw new Error("Code has expired. Please request a new one.");
+    }
+
+    // Check subscription status
+    if (user.subscriptionStatus !== "active") {
+      throw new Error("Active subscription required. Please subscribe to continue.");
+    }
+
+    // Clear the code (one-time use)
+    await ctx.db.patch(user._id, {
+      loginCode: undefined,
+      loginCodeExpiresAt: undefined,
+      lastLoginAt: now,
+      updatedAt: now,
+    });
+
+    // Generate session token
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let sessionToken = '';
+    for (let i = 0; i < 64; i++) {
+      sessionToken += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    // Create session record
+    const SESSION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+    const expiresAt = now + SESSION_EXPIRY_MS;
+
+    await ctx.db.insert("standalone_sessions", {
+      userId: user._id,
+      token: sessionToken,
+      licenseKey: user.licenseKey || "",
+      machineId: args.machineId,
+      expiresAt,
+      createdAt: now,
+      lastAccessedAt: now,
+      userAgent: undefined,
+      ipAddress: undefined,
+    });
+
+    return {
+      success: true,
+      sessionToken,
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        businessName: user.businessName,
+        subscriptionStatus: user.subscriptionStatus,
+        licenseKey: user.licenseKey,
+      },
+    };
+  },
+});
+
+/**
+ * Login with email and password (legacy - kept for backward compatibility)
  */
 export const login = mutation({
   args: {

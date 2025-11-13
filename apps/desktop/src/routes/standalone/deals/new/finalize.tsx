@@ -10,7 +10,7 @@ import { useWizard } from "@/lib/providers/WizardProvider";
 import { useUnifiedAuth } from "@/components/auth/useUnifiedAuth";
 import { getClient } from "@/lib/sqlite/local-clients-service";
 import { getVehicle } from "@/lib/sqlite/local-vehicles-service";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { generateDocumentsForDeal } from "@/lib/document-generation";
 
 export const Route = createFileRoute("/standalone/deals/new/finalize")({
@@ -22,6 +22,7 @@ function FinalizeStep() {
   const queryClient = useQueryClient();
   const auth = useUnifiedAuth();
   const { formData, setCurrentStep, updateFormData, clearFormData } = useWizard();
+  const dealCreatedRef = useRef(false); // Track if deal was successfully created
 
   console.log("🔍 [FINALIZE] FormData:", {
     clientId: formData.clientId,
@@ -149,13 +150,21 @@ function FinalizeStep() {
       queryClient.invalidateQueries({ queryKey: ["standalone-deals"] });
       queryClient.invalidateQueries({ queryKey: ["standalone-deals-stats"] });
       queryClient.invalidateQueries({ queryKey: ["standalone-recent-deals"] });
-      clearFormData(); // Clear wizard data after successful creation
+      
+      // Mark deal as created before navigation
+      dealCreatedRef.current = true;
       
       if (documentsToGenerate.length === 0) {
         toast.success("Deal created successfully!");
       }
       
+      // Navigate first, then clear form data after navigation
       navigate({ to: `/standalone/deals/${newDeal.id}` });
+      
+      // Clear form data after a short delay to ensure navigation completes
+      setTimeout(() => {
+        clearFormData();
+      }, 100);
     },
     onError: (error: Error) => {
       console.error("❌ [FINALIZE] Deal creation failed:", error);
@@ -220,15 +229,16 @@ function FinalizeStep() {
   // Show loading state while fetching
   if (isLoadingClient || isLoadingVehicle) {
     return (
-      <div className="text-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-muted-foreground" />
+      <div className="py-12 text-center">
+        <Loader2 className="mx-auto mb-4 w-8 h-8 animate-spin text-muted-foreground" />
         <p className="text-muted-foreground">Loading deal information...</p>
       </div>
     );
   }
 
-  // Show error if we still don't have the required data
-  if (!selectedClient || !selectedVehicle) {
+  // If deal was created, don't show error (we're navigating away)
+  // Show error only if we still don't have the required data AND deal wasn't created
+  if (!dealCreatedRef.current && (!selectedClient || !selectedVehicle)) {
     console.error("❌ [FINALIZE] Missing data:", {
       hasClient: !!selectedClient,
       hasVehicle: !!selectedVehicle,
@@ -238,11 +248,11 @@ function FinalizeStep() {
       fetchedVehicle: !!fetchedVehicle,
     });
     return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground mb-4">
+      <div className="py-12 text-center">
+        <p className="mb-4 text-muted-foreground">
           Missing required information. Please go back and complete all steps.
         </p>
-        <p className="text-xs text-muted-foreground mb-4">
+        <p className="mb-4 text-xs text-muted-foreground">
           Client ID: {formData.clientId || "missing"} | Vehicle ID: {formData.vehicleId || "missing"}
         </p>
         <Button variant="outline" onClick={handleBack}>
@@ -252,10 +262,25 @@ function FinalizeStep() {
     );
   }
 
+  // If deal was created, show loading state while navigating
+  if (dealCreatedRef.current) {
+    return (
+      <div className="py-12 text-center">
+        <Loader2 className="mx-auto mb-4 w-8 h-8 animate-spin text-muted-foreground" />
+        <p className="text-muted-foreground">Redirecting to deal details...</p>
+      </div>
+    );
+  }
+
+  // TypeScript guard: at this point, selectedClient and selectedVehicle must be defined
+  if (!selectedClient || !selectedVehicle) {
+    return null; // Should never reach here due to earlier check, but TypeScript needs this
+  }
+
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold mb-2">Review & Create Deal</h2>
+        <h2 className="mb-2 text-2xl font-semibold">Review & Create Deal</h2>
         <p className="text-muted-foreground">
           Review all details before creating the deal
         </p>
@@ -263,9 +288,9 @@ function FinalizeStep() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="p-6">
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex gap-3 items-center mb-4">
             <div className="p-2 bg-blue-100 rounded-lg">
-              <User className="h-5 w-5 text-blue-600" />
+              <User className="w-5 h-5 text-blue-600" />
             </div>
             <h3 className="font-semibold">Client Information</h3>
           </div>
@@ -300,9 +325,9 @@ function FinalizeStep() {
         </Card>
 
         <Card className="p-6">
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex gap-3 items-center mb-4">
             <div className="p-2 bg-purple-100 rounded-lg">
-              <Car className="h-5 w-5 text-purple-600" />
+              <Car className="w-5 h-5 text-purple-600" />
             </div>
             <h3 className="font-semibold">Vehicle Information</h3>
           </div>
@@ -321,7 +346,7 @@ function FinalizeStep() {
             )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">VIN:</span>
-              <span className="font-medium font-mono text-xs">
+              <span className="font-mono text-xs font-medium">
                 {selectedVehicle.vin.slice(-8)}
               </span>
             </div>
@@ -342,9 +367,9 @@ function FinalizeStep() {
       </div>
 
       <Card className="p-6">
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex gap-3 items-center mb-4">
           <div className="p-2 bg-green-100 rounded-lg">
-            <DollarSign className="h-5 w-5 text-green-600" />
+            <DollarSign className="w-5 h-5 text-green-600" />
           </div>
           <h3 className="font-semibold">Financial Details</h3>
         </div>
@@ -409,23 +434,23 @@ function FinalizeStep() {
       </Card>
 
       <Card className="p-6">
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex gap-3 items-center mb-4">
           <div className="p-2 bg-orange-100 rounded-lg">
-            <FileText className="h-5 w-5 text-orange-600" />
+            <FileText className="w-5 h-5 text-orange-600" />
           </div>
           <h3 className="font-semibold">Documents to Generate</h3>
         </div>
         <div className="grid gap-2 md:grid-cols-2">
           {selectedDocuments?.map((docId) => (
-            <div key={docId} className="flex items-center gap-2 text-sm">
-              <Check className="h-4 w-4 text-green-600" />
+            <div key={docId} className="flex gap-2 items-center text-sm">
+              <Check className="w-4 h-4 text-green-600" />
               <span className="capitalize">
                 {docId.replace(/_/g, " ")}
               </span>
             </div>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground mt-4">
+        <p className="mt-4 text-xs text-muted-foreground">
           Documents will be available after the deal is created
         </p>
       </Card>
@@ -434,7 +459,7 @@ function FinalizeStep() {
         <div className="flex gap-3">
           <Check className="h-5 w-5 text-green-600 mt-0.5" />
           <div>
-            <h4 className="font-semibold text-green-900 mb-1">
+            <h4 className="mb-1 font-semibold text-green-900">
               Ready to Create
             </h4>
             <p className="text-sm text-green-700">
@@ -445,7 +470,7 @@ function FinalizeStep() {
         </div>
       </Card>
 
-      <div className="flex justify-between gap-2 pt-4">
+      <div className="flex gap-2 justify-between pt-4">
         <Button
           variant="outline"
           onClick={handleBack}
@@ -460,12 +485,12 @@ function FinalizeStep() {
         >
           {createDealMutation.isPending ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin" />
               Creating...
             </>
           ) : (
             <>
-              <Check className="h-4 w-4" />
+              <Check className="w-4 h-4" />
               Create Deal
             </>
           )}

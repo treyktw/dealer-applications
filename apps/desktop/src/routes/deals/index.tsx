@@ -49,7 +49,7 @@ const statusLabels = {
 };
 
 function DealsPage() {
-  const { user, session } = useAuth();
+  const { user, token } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
@@ -63,7 +63,6 @@ function DealsPage() {
         throw new Error("User not associated with a dealership");
       }
 
-      const token = session?.token;
       if (!token) {
         throw new Error("No authentication token found");
       }
@@ -75,13 +74,12 @@ function DealsPage() {
         token: token,
       });
     },
-    enabled: !!user?.dealershipId && !!session?.token,
+    enabled: !!user?.dealershipId && !!token,
   });
 
   // Delete deal mutation
   const deleteDealMutation = useMutation({
     mutationFn: async (dealId: Id<"deals">) => {
-      const token = session?.token;
       if (!token) {
         throw new Error("No authentication token found");
       }

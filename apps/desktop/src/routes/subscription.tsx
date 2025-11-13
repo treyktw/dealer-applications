@@ -22,7 +22,7 @@ export const Route = createFileRoute("/subscription")({
 });
 
 function SubscriptionPage() {
-  const { user, session } = useAuth();
+  const { user, token } = useAuth();
   
   const { data: subscription, isLoading: subscriptionLoading } = useQuery({
     queryKey: ["subscription", user?.dealershipId],
@@ -31,7 +31,6 @@ function SubscriptionPage() {
         throw new Error("User not associated with a dealership");
       }
       
-      const token = session?.token;
       if (!token) {
         throw new Error("No authentication token found");
       }
@@ -41,7 +40,7 @@ function SubscriptionPage() {
         token: token
       });
     },
-    enabled: !!user?.dealershipId && !!session?.token,
+    enabled: !!user?.dealershipId && !!token,
   });
 
   if (subscriptionLoading) {

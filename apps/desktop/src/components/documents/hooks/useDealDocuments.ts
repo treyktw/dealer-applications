@@ -12,11 +12,11 @@ interface UseDealDocumentsProps {
 }
 
 export function useDealDocuments({ dealsId, deepLinkToken }: UseDealDocumentsProps) {
-  const { session } = useAuth();
+  const { token } = useAuth();
 
   // Fetch deal data with deep link token (one-time exchange) OR session token
   const dealQuery = useQuery({
-    queryKey: ["deal", dealsId, deepLinkToken, session?.token],
+    queryKey: ["deal", dealsId, deepLinkToken, token],
     queryFn: async () => {
       if (deepLinkToken) {
         // Use deep link token for initial access
@@ -30,17 +30,17 @@ export function useDealDocuments({ dealsId, deepLinkToken }: UseDealDocumentsPro
         }
         
         return result.deal;
-      } else if (session?.token) {
+      } else if (token) {
         // Use session token for regular access
         return convexQuery(api.api.deals.getDeal, {
           dealId: dealsId as Id<"deals">,
-          token: session.token,
+          token: token,
         });
       } else {
         throw new Error("No authentication token provided");
       }
     },
-    enabled: !!deepLinkToken || !!session?.token,
+    enabled: !!deepLinkToken || !!token,
     retry: (failureCount, error: any) => {
       const message = String(error?.message || "");
       // Retry a couple of times on transient network/auth lapses
@@ -54,18 +54,18 @@ export function useDealDocuments({ dealsId, deepLinkToken }: UseDealDocumentsPro
 
   // Fetch deal details with SESSION token
   const dealDetailsQuery = useQuery({
-    queryKey: ["dealDetails", dealsId, session?.token],
+    queryKey: ["dealDetails", dealsId, token],
     queryFn: async () => {
-      if (!session?.token) {
+      if (!token) {
         throw new Error("No session token");
       }
       
       return convexQuery(api.api.deals.getDeal, {
         dealId: dealsId as Id<"deals">,
-        token: session.token,
+        token: token,
       });
     },
-    enabled: !!dealQuery.data && !!session?.token,
+    enabled: !!dealQuery.data && !!token,
     retry: (failureCount, error: any) => {
       const message = String(error?.message || "");
       if (failureCount < 2 && (message.includes("Invalid or expired session") || message.includes("Network"))) {
@@ -78,18 +78,18 @@ export function useDealDocuments({ dealsId, deepLinkToken }: UseDealDocumentsPro
 
   // Fetch generated documents
   const documentsQuery = useQuery({
-    queryKey: ["documents", dealsId, session?.token],
+    queryKey: ["documents", dealsId, token],
     queryFn: async () => {
-      if (!session?.token) {
+      if (!token) {
         throw new Error("No session token");
       }
       
       return convexQuery(api.api.documents.generator.getDocumentsByDeal, {
         dealId: dealsId as Id<"deals">,
-        token: session.token,
+        token: token,
       });
     },
-    enabled: !!dealQuery.data && !!session?.token,
+    enabled: !!dealQuery.data && !!token,
     retry: (failureCount, error: any) => {
       const message = String(error?.message || "");
       if (failureCount < 2 && (message.includes("Invalid or expired session") || message.includes("Network"))) {
@@ -102,15 +102,15 @@ export function useDealDocuments({ dealsId, deepLinkToken }: UseDealDocumentsPro
 
   // Fetch custom uploaded documents
   const customDocumentsQuery = useQuery({
-    queryKey: ["custom-documents", dealsId, session?.token],
+    queryKey: ["custom-documents", dealsId, token],
     queryFn: async () => {
-      if (!session?.token) {
+      if (!token) {
         throw new Error("No session token");
       }
       try {
         return await convexQuery(api.api.documents.getCustomDocumentsForDeal, {
           dealId: dealsId as Id<"deals">,
-          token: session.token,
+          token: token,
         });
       } catch (error) {
         // Gracefully handle subscription errors - return empty array if subscription required
@@ -122,7 +122,7 @@ export function useDealDocuments({ dealsId, deepLinkToken }: UseDealDocumentsPro
         throw error;
       }
     },
-    enabled: !!dealQuery.data && !!session?.token,
+    enabled: !!dealQuery.data && !!token,
     retry: (failureCount, error: any) => {
       const message = String(error?.message || "");
       if (message.includes("Premium subscription")) return false;
@@ -142,7 +142,7 @@ export function useDealDocuments({ dealsId, deepLinkToken }: UseDealDocumentsPro
     isLoading: dealQuery.isLoading || dealDetailsQuery.isLoading || documentsQuery.isLoading,
     error:
       dealQuery.error || dealDetailsQuery.error || documentsQuery.error || customDocumentsQuery.error,
-    sessionToken: session?.token,
+    sessionToken: token || undefined,
     refetchDocuments: documentsQuery.refetch,
     refetchAll: async () => {
       await Promise.all([

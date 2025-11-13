@@ -49,11 +49,19 @@ function DetailsStep() {
   const dealIdRef = useRef<string>("");
   const isInitializedRef = useRef(false);
 
+  // Only load draft deal if user is continuing an existing form (has formData)
+  // Don't load old drafts when starting a new deal
+  const shouldLoadDraft = formData.clientId || formData.vehicleId || formData.saleAmount || formData.salesTax || formData.docFee;
+
   // Load most recent draft deal on mount
   const { data: draftDeal, error: draftDealError } = useQuery({
-    queryKey: ["draft-deal", auth.user?.id],
+    queryKey: ["draft-deal", auth.user?.id, shouldLoadDraft],
     queryFn: async () => {
       if (!auth.user?.id) return null;
+      if (!shouldLoadDraft) {
+        // Don't load draft if starting fresh
+        return null;
+      }
       try {
         const drafts = await getDealsByStatus("draft", auth.user.id);
         if (!Array.isArray(drafts)) {
@@ -71,6 +79,7 @@ function DetailsStep() {
         return null; // Return null instead of undefined - React Query doesn't allow undefined
       }
     },
+    enabled: !!auth.user?.id && !!shouldLoadDraft, // Only load if user is continuing
     staleTime: Infinity,
     retry: false, // Don't retry on error
   });
@@ -81,11 +90,12 @@ function DetailsStep() {
   }
 
   // Compute initial deal details from draft deal or formData
+  // Only use loaded data if user is continuing (has formData), otherwise use defaults
   const initialDealDetails = useMemo(() => {
     try {
       if (!isInitializedRef.current && !draftDealError) {
-        // Prefer draft deal data (SQLite uses snake_case), then formData (camelCase), then defaults
-        if (draftDeal && typeof draftDeal === 'object') {
+        // Only load draft deal data if user is continuing
+        if (shouldLoadDraft && draftDeal && typeof draftDeal === 'object') {
           // Draft deal from SQLite uses snake_case
           return {
             type: draftDeal.type || "retail",
@@ -96,7 +106,7 @@ function DetailsStep() {
             downPayment: draftDeal.down_payment != null && draftDeal.down_payment !== undefined ? String(draftDeal.down_payment) : "",
           };
         } else if (formData && typeof formData === 'object' && (formData.saleAmount != null || formData.salesTax != null)) {
-          // FormData uses camelCase
+          // FormData uses camelCase - use this if user has already entered data
           return {
             type: formData.type || "retail",
             saleAmount: formData.saleAmount != null && formData.saleAmount !== undefined ? String(formData.saleAmount) : "",
@@ -107,7 +117,7 @@ function DetailsStep() {
           };
         }
       }
-      // Use defaults
+      // Use defaults when starting fresh
       return {
         type: "retail",
         saleAmount: "",
@@ -127,7 +137,7 @@ function DetailsStep() {
         downPayment: "",
       };
     }
-  }, [draftDeal, draftDealError, formData]);
+  }, [draftDeal, draftDealError, formData, shouldLoadDraft]);
 
   // Store number fields as strings to allow clearing/editing
   const [dealDetails, setDealDetails] = useState(() => initialDealDetails);
@@ -215,7 +225,7 @@ function DetailsStep() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold mb-2">Deal Details</h2>
+        <h2 className="mb-2 text-2xl font-semibold">Deal Details</h2>
         <p className="text-muted-foreground">
           Enter the financial details for this deal
         </p>
@@ -247,7 +257,7 @@ function DetailsStep() {
               <FieldLabel>Sale Amount *</FieldLabel>
               <FieldContent>
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                  <DollarSign className="absolute left-3 top-1/2 z-10 w-4 h-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     type="number"
                     step="0.01"
@@ -264,7 +274,7 @@ function DetailsStep() {
               <FieldLabel>Sales Tax</FieldLabel>
               <FieldContent>
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                  <DollarSign className="absolute left-3 top-1/2 z-10 w-4 h-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     type="number"
                     step="0.01"
@@ -280,7 +290,7 @@ function DetailsStep() {
               <FieldLabel>Documentation Fee</FieldLabel>
               <FieldContent>
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                  <DollarSign className="absolute left-3 top-1/2 z-10 w-4 h-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     type="number"
                     step="0.01"
@@ -298,7 +308,7 @@ function DetailsStep() {
               <FieldLabel>Trade-In Value</FieldLabel>
               <FieldContent>
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                  <DollarSign className="absolute left-3 top-1/2 z-10 w-4 h-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     type="number"
                     step="0.01"
@@ -314,7 +324,7 @@ function DetailsStep() {
               <FieldLabel>Down Payment</FieldLabel>
               <FieldContent>
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                  <DollarSign className="absolute left-3 top-1/2 z-10 w-4 h-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     type="number"
                     step="0.01"
@@ -330,7 +340,7 @@ function DetailsStep() {
               <FieldLabel>Financed Amount</FieldLabel>
               <FieldContent>
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                  <DollarSign className="absolute left-3 top-1/2 z-10 w-4 h-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     type="number"
                     step="0.01"
@@ -339,7 +349,7 @@ function DetailsStep() {
                     readOnly
                   />
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Calculated automatically
                 </p>
               </FieldContent>
@@ -349,7 +359,7 @@ function DetailsStep() {
       </FieldGroup>
 
       <Card className="p-6 bg-primary/5 border-primary/20">
-        <h3 className="font-semibold mb-4">Deal Summary</h3>
+        <h3 className="mb-4 font-semibold">Deal Summary</h3>
         <div className="space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Sale Amount:</span>
@@ -371,7 +381,7 @@ function DetailsStep() {
               </span>
             </div>
           )}
-          <div className="border-t pt-3 flex justify-between">
+          <div className="flex justify-between pt-3 border-t">
             <span className="font-semibold">Total Amount:</span>
             <span className="text-xl font-bold">${totalAmount.toLocaleString()}</span>
           </div>
@@ -394,7 +404,7 @@ function DetailsStep() {
         </div>
       </Card>
 
-      <div className="flex justify-between gap-2 pt-4">
+      <div className="flex gap-2 justify-between pt-4">
         <Button variant="outline" onClick={handleBack}>
           Back: Vehicle
         </Button>

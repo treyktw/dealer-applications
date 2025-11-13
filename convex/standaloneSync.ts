@@ -24,9 +24,14 @@ export const uploadDocumentToS3 = action({
   handler: async (_ctx, args) => {
     const { userId, dealId, documentId, filename, documentBase64 } = args;
 
-    // Convert base64 to buffer
+    // Convert base64 to Uint8Array (Buffer is not available in Convex runtime)
     const base64String = documentBase64.replace(/^data:application\/pdf;base64,/, "");
-    const buffer = Buffer.from(base64String, "base64");
+    // Convert base64 string to Uint8Array
+    const binaryString = atob(base64String);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
 
     // Generate S3 key: standalone/{userId}/deals/{dealId}/documents/{documentId}_{filename}
     const s3Key = `standalone/${userId}/deals/${dealId}/documents/${documentId}_${filename}`;
@@ -36,7 +41,7 @@ export const uploadDocumentToS3 = action({
       new PutObjectCommand({
         Bucket: BUCKET_NAME,
         Key: s3Key,
-        Body: buffer,
+        Body: bytes,
         ContentType: "application/pdf",
       })
     );
@@ -89,7 +94,7 @@ export const uploadClient = mutation({
       drivers_license: v.optional(v.string()),
       created_at: v.number(),
       updated_at: v.number(),
-      synced_at: v.optional(v.number()),
+      synced_at: v.optional(v.union(v.number(), v.null())),
     }),
   },
   handler: async (ctx, args) => {
@@ -163,7 +168,7 @@ export const uploadVehicle = mutation({
       description: v.optional(v.string()),
       created_at: v.number(),
       updated_at: v.number(),
-      synced_at: v.optional(v.number()),
+      synced_at: v.optional(v.union(v.number(), v.null())),
     }),
   },
   handler: async (ctx, args) => {
@@ -230,13 +235,13 @@ export const uploadDeal = mutation({
       vehicle_id: v.string(),
       status: v.string(),
       total_amount: v.number(),
-      sale_date: v.optional(v.number()),
-      sale_amount: v.optional(v.number()),
-      sales_tax: v.optional(v.number()),
-      doc_fee: v.optional(v.number()),
-      trade_in_value: v.optional(v.number()),
-      down_payment: v.optional(v.number()),
-      financed_amount: v.optional(v.number()),
+      sale_date: v.optional(v.union(v.number(), v.null())),
+      sale_amount: v.optional(v.union(v.number(), v.null())),
+      sales_tax: v.optional(v.union(v.number(), v.null())),
+      doc_fee: v.optional(v.union(v.number(), v.null())),
+      trade_in_value: v.optional(v.union(v.number(), v.null())),
+      down_payment: v.optional(v.union(v.number(), v.null())),
+      financed_amount: v.optional(v.union(v.number(), v.null())),
       document_ids: v.array(v.string()),
       cobuyer_data: v.optional(
         v.object({
@@ -254,7 +259,7 @@ export const uploadDeal = mutation({
       ),
       created_at: v.number(),
       updated_at: v.number(),
-      synced_at: v.optional(v.number()),
+      synced_at: v.optional(v.union(v.number(), v.null())),
     }),
   },
   handler: async (ctx, args) => {
@@ -266,6 +271,7 @@ export const uploadDeal = mutation({
       .withIndex("by_local_id", (q) => q.eq("userId", userId).eq("localId", deal.id))
       .first();
 
+    // Convert null values to undefined for optional fields
     const dealData = {
       userId,
       localId: deal.id,
@@ -274,18 +280,18 @@ export const uploadDeal = mutation({
       vehicleLocalId: deal.vehicle_id,
       status: deal.status,
       totalAmount: deal.total_amount,
-      saleDate: deal.sale_date,
-      saleAmount: deal.sale_amount,
-      salesTax: deal.sales_tax,
-      docFee: deal.doc_fee,
-      tradeInValue: deal.trade_in_value,
-      downPayment: deal.down_payment,
-      financedAmount: deal.financed_amount,
+      saleDate: deal.sale_date ?? undefined,
+      saleAmount: deal.sale_amount ?? undefined,
+      salesTax: deal.sales_tax ?? undefined,
+      docFee: deal.doc_fee ?? undefined,
+      tradeInValue: deal.trade_in_value ?? undefined,
+      downPayment: deal.down_payment ?? undefined,
+      financedAmount: deal.financed_amount ?? undefined,
       documentIds: deal.document_ids,
       cobuyerData: deal.cobuyer_data,
       createdAt: deal.created_at,
       updatedAt: deal.updated_at,
-      syncedAt: Date.now(),
+      syncedAt: Date.now(), // Always set to current timestamp on upload
     };
 
     let dealId: Id<"standalone_deals">;
@@ -317,11 +323,11 @@ export const uploadDocumentMetadata = mutation({
       type: v.string(),
       filename: v.string(),
       s3_key: v.string(), // S3 key where document is stored
-      file_size: v.optional(v.number()),
-      file_checksum: v.optional(v.string()),
+      file_size: v.optional(v.union(v.number(), v.null())),
+      file_checksum: v.optional(v.union(v.string(), v.null())),
       created_at: v.number(),
       updated_at: v.number(),
-      synced_at: v.optional(v.number()),
+      synced_at: v.optional(v.union(v.number(), v.null())),
     }),
   },
   handler: async (ctx, args) => {
@@ -340,8 +346,8 @@ export const uploadDocumentMetadata = mutation({
       type: document.type,
       filename: document.filename,
       s3Key: document.s3_key,
-      fileSize: document.file_size,
-      fileChecksum: document.file_checksum,
+      fileSize: document.file_size ?? undefined,
+      fileChecksum: document.file_checksum ?? undefined, // Convert null to undefined
       createdAt: document.created_at,
       updatedAt: document.updated_at,
       syncedAt: Date.now(),

@@ -22,14 +22,16 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { convexClient } from "@/lib/convex";
 import { api } from "@dealer/convex";
 import { useAuth } from "@/components/auth/AuthContext";
-import { checkForUpdatesManually, getCurrentVersion } from "@/components/update/UpdateManager";
+import { checkForUpdatesManually, getCurrentVersion, installUpdateManually } from "@/components/update/UpdateManager";
+
+import type { Update } from "@/components/update/UpdateManager"
 
 export const Route = createFileRoute("/profile")({
   component: ProfilePage,
 });
 
 function ProfilePage() {
-  const { user, session } = useAuth();
+  const { user, token } = useAuth();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
@@ -75,7 +77,6 @@ function ProfilePage() {
         throw new Error("User not found");
       }
 
-      const token = session?.token;
       if (!token) {
         throw new Error("No authentication token found");
       }
@@ -116,6 +117,19 @@ function ProfilePage() {
     setIsEditing(false);
   };
 
+  const [updateInfo, setUpdateInfo] = useState<{
+    version: string;
+    currentVersion: string;
+    update: {
+      version: string;
+      currentVersion: string;
+      body?: string;
+      date?: string;
+      downloadAndInstall: (onEvent: (event: { event: string; data?: { chunkLength: number } }) => void) => Promise<void>;
+    };
+  } | null>(null);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
+
   // ✅ Manual update check with proper loading state
   const handleCheckForUpdates = async () => {
     setCheckingUpdates(true);
@@ -123,13 +137,16 @@ function ProfilePage() {
     try {
       const result = await checkForUpdatesManually();
       
-      if (result.available) {
+      if (result.available && result.update && result.version) {
+        setUpdateInfo({
+          version: result.version,
+          currentVersion: result.currentVersion || currentVersion,
+          update: result.update,
+        });
         toast.success(`Update available: v${result.version}`, {
-          description: "A dialog will appear to install the update.",
+          description: "Click 'Update Now' to install.",
           duration: 5000,
         });
-        // The UpdateManager component will automatically show the dialog
-        window.location.reload(); // Trigger UpdateManager to check again
       } else {
         toast.success("You're on the latest version!", {
           description: result.currentVersion ? `Current version: v${result.currentVersion}` : undefined,
@@ -148,12 +165,31 @@ function ProfilePage() {
     }
   };
 
+  // ✅ Manual update installation
+  const handleInstallUpdate = async () => {
+    if (!updateInfo?.update) return;
+    
+    setInstallingUpdate(true);
+    try {
+      // Type assertion needed because Tauri's update object has a slightly different signature
+      await installUpdateManually(updateInfo.update as Update);
+    } catch (error) {
+      console.error("Update installation failed:", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error("Update installation failed", {
+        description: errorMessage,
+        duration: 5000,
+      });
+      setInstallingUpdate(false);
+    }
+  };
+
   if (!user) {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
-            <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <div className="mx-auto mb-4 w-16 h-16 rounded-full border-4 animate-spin border-primary border-t-transparent" />
             <p className="text-muted-foreground">Loading profile...</p>
           </div>
         </div>
@@ -166,11 +202,11 @@ function ProfilePage() {
 
   return (
     <Layout>
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="mx-auto space-y-8 max-w-4xl">
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold">Profile & Account</h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="mt-1 text-muted-foreground">
             Manage your personal information and account settings
           </p>
         </div>
@@ -178,32 +214,32 @@ function ProfilePage() {
         {/* Profile Overview */}
         <Card>
           <CardContent className="p-6">
-            <div className="flex items-start gap-6">
+            <div className="flex gap-6 items-start">
               <div className="relative group">
-                <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
+                <Avatar className="w-24 h-24 border-4 shadow-lg border-background">
                   <AvatarImage src={user.image} alt={user.name || ""} />
-                  <AvatarFallback className="text-2xl bg-gradient-to-br from-primary to-primary/60 text-primary-foreground">
+                  <AvatarFallback className="text-2xl bg-linear-to-br from-primary to-primary/60 text-primary-foreground">
                     {userInitials}
                   </AvatarFallback>
                 </Avatar>
                 <button 
                   type="button" 
-                  className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="flex absolute inset-0 justify-center items-center rounded-full opacity-0 transition-opacity bg-black/50 group-hover:opacity-100"
                   onClick={() => toast.info("Profile picture upload coming soon!")}
                 >
-                  <Camera className="h-6 w-6 text-white" />
+                  <Camera className="w-6 h-6 text-white" />
                 </button>
               </div>
               <div className="flex-1">
                 <h2 className="text-2xl font-bold">{user.name}</h2>
                 <p className="text-muted-foreground">{user.email}</p>
                 <div className="flex gap-2 mt-3">
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                    <Shield className="h-3 w-3" />
+                  <span className="inline-flex gap-1 items-center px-3 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary">
+                    <Shield className="w-3 h-3" />
                     {userRole.charAt(0).toUpperCase() + userRole.slice(1).toLowerCase()}
                   </span>
                   {user.subscriptionStatus && (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                    <span className="inline-flex gap-1 items-center px-3 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full dark:bg-green-900/30 dark:text-green-400">
                       {user.subscriptionStatus === 'active' ? 'Active' : user.subscriptionStatus}
                     </span>
                   )}
@@ -216,7 +252,7 @@ function ProfilePage() {
                       variant="outline"
                       onClick={handleCancel}
                     >
-                      <X className="mr-2 h-4 w-4" />
+                      <X className="mr-2 w-4 h-4" />
                       Cancel
                     </Button>
                     <Button 
@@ -225,12 +261,12 @@ function ProfilePage() {
                     >
                       {updateUserMutation.isPending ? (
                         <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                          <div className="mr-2 w-4 h-4 rounded-full border-2 border-white animate-spin border-t-transparent" />
                           Saving...
                         </>
                       ) : (
                         <>
-                          <Save className="mr-2 h-4 w-4" />
+                          <Save className="mr-2 w-4 h-4" />
                           Save Changes
                         </>
                       )}
@@ -252,8 +288,8 @@ function ProfilePage() {
         {/* Personal Information */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
+            <CardTitle className="flex gap-2 items-center">
+              <User className="w-5 h-5" />
               Personal Information
             </CardTitle>
             <CardDescription>
@@ -261,7 +297,7 @@ function ProfilePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor={firstNameId}>First Name</Label>
                 <Input
@@ -286,7 +322,7 @@ function ProfilePage() {
             <div className="space-y-2">
               <Label htmlFor={emailId}>Email Address</Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Mail className="absolute left-3 top-1/2 w-4 h-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id={emailId}
                   type="email"
@@ -305,9 +341,9 @@ function ProfilePage() {
         {/* ✅ App Updates Card */}
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-blue-500/10 rounded-xl">
-                <Download className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            <div className="flex gap-3 items-center">
+              <div className="p-3 rounded-xl bg-blue-500/10">
+                <Download className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
                 <CardTitle>App Updates</CardTitle>
@@ -318,30 +354,62 @@ function ProfilePage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
-              <div>
-                <p className="font-medium">Current Version</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  v{currentVersion}
-                </p>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center p-4 rounded-lg border bg-card">
+                <div>
+                  <p className="font-medium">Current Version</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    v{currentVersion}
+                  </p>
+                </div>
+                <Button 
+                  variant="outline" 
+                  onClick={handleCheckForUpdates}
+                  disabled={checkingUpdates}
+                >
+                  {checkingUpdates ? (
+                    <>
+                      <RefreshCw className="mr-2 w-4 h-4 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="mr-2 w-4 h-4" />
+                      Check for Updates
+                    </>
+                  )}
+                </Button>
               </div>
-              <Button 
-                variant="outline" 
-                onClick={handleCheckForUpdates}
-                disabled={checkingUpdates}
-              >
-                {checkingUpdates ? (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Checking...
-                  </>
-                ) : (
-                  <>
-                    <Download className="mr-2 h-4 w-4" />
-                    Check for Updates
-                  </>
-                )}
-              </Button>
+              
+              {updateInfo && (
+                <div className="p-4 rounded-lg border bg-primary/5 border-primary/20">
+                  <div className="flex justify-between items-center mb-3">
+                    <div>
+                      <p className="font-semibold text-primary">Update Available</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        v{updateInfo.currentVersion} → v{updateInfo.version}
+                      </p>
+                    </div>
+                    <Button 
+                      onClick={handleInstallUpdate}
+                      disabled={installingUpdate}
+                      className="gap-2"
+                    >
+                      {installingUpdate ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          Installing...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4" />
+                          Update Now
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

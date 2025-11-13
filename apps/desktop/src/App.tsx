@@ -51,8 +51,11 @@ declare module "@tanstack/react-router" {
 }
 
 function App() {
+  // Check if this is the first startup
+  const isFirstStartup = !localStorage.getItem("app_initialized");
+  
   const [appMode, setAppModeState] = useState<AppMode | null>(null);
-  const [isDetecting, setIsDetecting] = useState(true);
+  const [isDetecting, setIsDetecting] = useState(isFirstStartup); // Only show loader on first startup
   const [showDealershipPrompt, setShowDealershipPrompt] = useState(false);
   const modeSelectedRef = useRef(false); // Track if mode has been explicitly selected (using ref to avoid re-renders)
   const [loadingSteps, setLoadingSteps] = useState<LoadingStep[]>([
@@ -82,6 +85,34 @@ function App() {
       return;
     }
 
+    // Check if this is the first startup (inside effect to avoid stale closure)
+    const isFirstStartupCheck = !localStorage.getItem("app_initialized");
+
+    // If not first startup, skip loader and detect mode quickly
+    if (!isFirstStartupCheck) {
+      async function quickDetectMode() {
+        const storedMode = localStorage.getItem("app_mode");
+        if (storedMode === "standalone" || storedMode === "dealership") {
+          setAppModeState(storedMode);
+          modeSelectedRef.current = true;
+          setIsDetecting(false);
+        } else {
+          // If no mode stored, detect it
+          const mode = await detectAppMode();
+          if (mode) {
+            setAppModeState(mode);
+            modeSelectedRef.current = true;
+          } else {
+            setShowDealershipPrompt(true);
+          }
+          setIsDetecting(false);
+        }
+      }
+      quickDetectMode();
+      return;
+    }
+
+    // First startup - run full detection with loader
     async function detectMode() {
       try {
         // Step 1: Check Tauri environment
@@ -133,6 +164,9 @@ function App() {
           updateStepStatus("auth", "loading");
           await new Promise((resolve) => setTimeout(resolve, 100)); // Delay for UX
           updateStepStatus("auth", "complete");
+          
+          // Mark app as initialized on first startup
+          localStorage.setItem("app_initialized", "true");
           
           // Ensure loader is visible for at least 1.5 seconds total
           await new Promise((resolve) => setTimeout(resolve, 100));
@@ -214,6 +248,9 @@ function App() {
           updateStepStatus("auth", "loading");
           await new Promise((resolve) => setTimeout(resolve, 500));
           updateStepStatus("auth", "complete");
+          
+          // Mark app as initialized on first startup
+          localStorage.setItem("app_initialized", "true");
           
           // Ensure loader is visible for at least 1.5 seconds total
           await new Promise((resolve) => setTimeout(resolve, 200));

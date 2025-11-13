@@ -29,6 +29,7 @@ interface UnifiedAuth {
     machineId?: string;
     expiresAt?: number;
   } | null;
+  token: string | null; // Expose the access token directly
   logout?: () => Promise<void>;
 }
 
@@ -65,6 +66,7 @@ export function useUnifiedAuth(): UnifiedAuth {
         machineId: licenseAuth.session.machineId,
         expiresAt: licenseAuth.session.expiresAt,
       } : null,
+      token: licenseAuth.session?.licenseKey || null, // Use licenseKey as token for standalone
       logout: licenseAuth.logout,
     };
   }
@@ -86,6 +88,7 @@ export function useUnifiedAuth(): UnifiedAuth {
         token: dealershipAuth.session.token,
         expiresAt: dealershipAuth.session.expiresAt,
       } : null,
+      token: dealershipAuth.token || null, // Expose token directly
       logout: dealershipAuth.logout,
     };
   }
@@ -96,6 +99,7 @@ export function useUnifiedAuth(): UnifiedAuth {
     isAuthenticated: false,
     user: null,
     session: null,
+    token: null,
     logout: undefined,
   };
 }

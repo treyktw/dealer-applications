@@ -516,10 +516,31 @@ export const validateSession = query({
       return null;
     }
 
-    // Get dealership
-    const dealership = user.dealershipId 
-      ? await ctx.db.get(user.dealershipId as Id<"dealerships">)
-      : null;
+    // REQUIREMENT: User must have a dealership - block access if not
+    if (!user.dealershipId) {
+      console.log("validateSession: User has no dealership");
+      return null;
+    }
+
+    // Get dealership - REQUIRED
+    const dealership = await ctx.db.get(user.dealershipId as Id<"dealerships">);
+    
+    if (!dealership) {
+      console.log("validateSession: Dealership not found");
+      return null;
+    }
+
+    // REQUIREMENT: Dealership must have an active subscription - block access if not
+    const subscription = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_dealership", (q) => q.eq("dealershipId", user.dealershipId as Id<"dealerships">))
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .first();
+    
+    if (!subscription) {
+      console.log("validateSession: No active subscription found");
+      return null;
+    }
     
     return {
       session: {
@@ -535,12 +556,13 @@ export const validateSession = query({
         role: user.role,
         dealershipId: user.dealershipId,
         image: user.image,
-        subscriptionStatus: user.subscriptionStatus,
+        subscriptionStatus: subscription.status,
+        subscriptionPlan: subscription.plan,
       },
-      dealership: dealership ? {
+      dealership: {
         id: dealership._id,
         name: dealership.name,
-      } : null,
+      },
     };
   },
 });

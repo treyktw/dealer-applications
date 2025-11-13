@@ -1,11 +1,11 @@
 /**
  * Standalone Login Page
- * Email/password login for standalone users
+ * Email code verification login for standalone users
  */
 
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@dealer/convex";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,17 +37,19 @@ function StandaloneLoginPage() {
   const queryClient = useQueryClient();
   const { email: emailFromSearch } = Route.useSearch();
   const [email, setEmail] = useState(emailFromSearch || "");
-  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
-  const [checkingUserType, setCheckingUserType] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
   const [error, setError] = useState("");
+  const [showResendOption, setShowResendOption] = useState(false);
   const [machineId, setMachineId] = useState<string>("");
   const [redirectingToDealership, setRedirectingToDealership] = useState(false);
   const [showDealershipDialog, setShowDealershipDialog] = useState(false);
 
-  const login = useMutation(api.api.standaloneAuth.login);
+  const sendLoginCode = useAction(api.api.standaloneAuth.sendLoginCode);
+  const verifyLoginCode = useMutation(api.api.standaloneAuth.verifyLoginCode);
   const emailInputId = useId();
-  const passwordInputId = useId();
+  const codeInputId = useId();
   
   // Check user type when email changes (debounced)
   const [emailToCheck, setEmailToCheck] = useState<string>("");
@@ -116,11 +118,9 @@ function StandaloneLoginPage() {
     }
   }, [dealershipCheck, standaloneCheck, checkingDealership, checkingStandalone, redirectingToDealership, showDealershipDialog]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!email.trim() || !password.trim()) {
-      setError("Please enter both email and password");
+  const handleSendCode = async () => {
+    if (!email.trim()) {
+      setError("Please enter your email");
       return;
     }
 
@@ -129,15 +129,13 @@ function StandaloneLoginPage() {
       return;
     }
 
-    // Check user type before attempting login
-    setCheckingUserType(true);
+    setLoading(true);
     setError("");
 
     try {
       console.log("🔍 [STANDALONE-LOGIN] Checking user type for:", email);
       
       // Check if user is a dealership user
-      console.log("🔍 [STANDALONE-LOGIN] Checking if user is dealership user...");
       const { convexQuery } = await import("@/lib/convex");
       const dealershipUserCheck = await convexQuery(api.api.standaloneAuth.checkIsDealershipUser, {
         email: email.trim().toLowerCase(),
@@ -145,8 +143,7 @@ function StandaloneLoginPage() {
 
       if (dealershipUserCheck?.isDealershipUser) {
         console.log("⚠️ [STANDALONE-LOGIN] User is a dealership user, dialog should already be showing");
-        setCheckingUserType(false);
-        // Dialog should already be showing from the useEffect, but ensure it's open
+        setLoading(false);
         if (!showDealershipDialog) {
           setShowDealershipDialog(true);
         }
@@ -154,26 +151,75 @@ function StandaloneLoginPage() {
       }
 
       // Check if user is a standalone user
-      console.log("🔍 [STANDALONE-LOGIN] Checking if user is standalone user...");
       const standaloneUserCheck = await convexQuery(api.api.standaloneAuth.checkIsStandaloneUser, {
         email: email.trim().toLowerCase(),
       }) as { isStandaloneUser: boolean; exists: boolean } | null | undefined;
 
       if (!standaloneUserCheck || !standaloneUserCheck.isStandaloneUser) {
-        setCheckingUserType(false);
+        setLoading(false);
         setError("No account found with this email. Please subscribe to create an account.");
         return;
       }
 
-      console.log("✅ [STANDALONE-LOGIN] User is a standalone user, proceeding with login...");
-      setCheckingUserType(false);
-      setLoading(true);
-
-      console.log("🔐 [STANDALONE-LOGIN] Attempting login for:", email);
+      console.log("✅ [STANDALONE-LOGIN] User is a standalone user, sending login code...");
       
-      const result = await login({
+      // Send login code
+      await sendLoginCode({
         email: email.trim().toLowerCase(),
-        password,
+      });
+
+      setCodeSent(true);
+      toast.success("Verification code sent to your email");
+    } catch (err) {
+      console.error("❌ [STANDALONE-LOGIN] Send code error:", err);
+      
+      // Parse error message for user-friendly display
+      let errorMessage = "Failed to send verification code. Please try again.";
+      
+      if (err instanceof Error) {
+        const errMsg = err.message.toLowerCase();
+        
+        if (errMsg.includes("subscription") || errMsg.includes("active subscription")) {
+          errorMessage = "An active subscription is required. Please subscribe to continue.";
+        } else if (errMsg.includes("failed to send") || errMsg.includes("email")) {
+          errorMessage = "We couldn't send the verification code to your email. Please check your email address and try again.";
+        } else if (errMsg.includes("not found") || errMsg.includes("no account")) {
+          errorMessage = "No account found with this email. Please subscribe to create an account.";
+        } else {
+          // Use the original error message if it's user-friendly
+          errorMessage = err.message || errorMessage;
+        }
+      }
+      
+      setError(errorMessage);
+      toast.error(errorMessage, {
+        duration: 5000,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    if (!code.trim() || code.length !== 6) {
+      setError("Please enter the 6-digit code");
+      return;
+    }
+
+    if (!machineId) {
+      setError("Unable to identify machine. Please restart the app.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      console.log("🔐 [STANDALONE-LOGIN] Verifying code for:", email);
+      
+      const result = await verifyLoginCode({
+        email: email.trim().toLowerCase(),
+        code: code.trim(),
         machineId,
       });
 
@@ -198,7 +244,6 @@ function StandaloneLoginPage() {
             queryClient.invalidateQueries({ queryKey: ["license-validation"] });
           } catch (error) {
             console.error("❌ [LOGIN] Failed to store in secure storage:", error);
-            // Don't fallback to localStorage - force user to retry login
             throw new Error("Failed to store session securely. Please try again.");
           }
         } else {
@@ -218,7 +263,7 @@ function StandaloneLoginPage() {
         toast.success("Login successful!");
         
         // Check if user has a license key
-        // If not, redirect to subscription page
+        const { convexQuery } = await import("@/lib/convex");
         const userLicenseCheck = await convexQuery(api.api.standaloneAuth.checkUserHasLicense, {
           email: email.trim().toLowerCase(),
         }) as { hasLicense: boolean; licenseKey?: string } | null | undefined;
@@ -235,7 +280,6 @@ function StandaloneLoginPage() {
           const storedLicense = await invoke<string>("get_stored_license").catch(() => null);
           if (!storedLicense || storedLicense !== userLicenseCheck.licenseKey) {
             console.log("💾 [STANDALONE-LOGIN] Storing license key locally...");
-            // Store license key locally
             await invoke("store_license", { licenseKey: userLicenseCheck.licenseKey });
             console.log("✅ License key stored successfully");
           } else {
@@ -243,7 +287,6 @@ function StandaloneLoginPage() {
           }
         } catch (err) {
           console.error("❌ Failed to store license locally:", err);
-          // Continue anyway - license is in database, user can still use the app
         }
         
         // User has license - navigate to home
@@ -252,14 +295,49 @@ function StandaloneLoginPage() {
         setError("Login failed. Please try again.");
       }
     } catch (err) {
-      console.error("❌ [STANDALONE-LOGIN] Login error:", err);
-      const errorMessage = err instanceof Error ? err.message : "Login failed. Please try again.";
+      console.error("❌ [STANDALONE-LOGIN] Verify code error:", err);
+      
+      // Parse error message for user-friendly display
+      let errorMessage = "Invalid or expired code. Please try again.";
+      let shouldOfferResend = false;
+      
+      if (err instanceof Error) {
+        const errMsg = err.message.toLowerCase();
+        
+        if (errMsg.includes("invalid or expired code") || errMsg.includes("code mismatch")) {
+          errorMessage = "The code you entered is incorrect or has expired. Please check your email and try again.";
+          shouldOfferResend = true;
+        } else if (errMsg.includes("expired")) {
+          errorMessage = "This code has expired. Please request a new code.";
+          shouldOfferResend = true;
+        } else if (errMsg.includes("invalid email")) {
+          errorMessage = "The email address is not valid. Please check and try again.";
+        } else if (errMsg.includes("subscription")) {
+          errorMessage = "An active subscription is required. Please subscribe to continue.";
+        } else if (errMsg.includes("failed to send")) {
+          errorMessage = "We couldn't send the verification code. Please try again.";
+          shouldOfferResend = true;
+        } else {
+          // Use the original error message if it's user-friendly, otherwise use default
+          errorMessage = err.message || errorMessage;
+        }
+      }
+      
       setError(errorMessage);
+      setShowResendOption(shouldOfferResend);
       toast.error(errorMessage);
+      
+      // Clear the code input so user can try again
+      setCode("");
     } finally {
       setLoading(false);
-      setCheckingUserType(false);
     }
+  };
+
+  const handleResendCode = async () => {
+    setCode("");
+    setCodeSent(false);
+    await handleSendCode();
   };
 
   const handleDealershipConfirm = () => {
@@ -279,9 +357,6 @@ function StandaloneLoginPage() {
     // Clear React Query cache
     queryClient.clear();
     
-    // Clear any stored license (optional - user might want to keep it)
-    // We'll let the dealership mode handle its own auth
-    
     // Save dealership preference
     console.log("💾 [STANDALONE-LOGIN] Saving dealership preference...");
     setAppMode("dealership");
@@ -298,11 +373,8 @@ function StandaloneLoginPage() {
     });
 
     // Force a full page reload to ensure mode switch takes effect
-    // Redirect to /login first, then the app will reload with dealership mode
     setTimeout(() => {
       console.log("🔄 [STANDALONE-LOGIN] Redirecting to dealership login...");
-      // Redirect to login page - App.tsx will detect the mode and initialize correctly
-      // Use replace to avoid back button issues
       window.location.replace(window.location.origin + "/login");
     }, 500);
   };
@@ -315,11 +387,11 @@ function StandaloneLoginPage() {
 
   if (auth.isLoading || redirectingToDealership) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="flex justify-center items-center min-h-screen bg-background">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6">
-            <div className="flex flex-col items-center justify-center space-y-4 text-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="flex flex-col justify-center items-center space-y-4 text-center">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
               <p className="text-muted-foreground">
                 {redirectingToDealership 
                   ? "Redirecting to dealership login..." 
@@ -337,22 +409,22 @@ function StandaloneLoginPage() {
       <Dialog open={showDealershipDialog} onOpenChange={setShowDealershipDialog}>
         <DialogContent showCloseButton={false} className="max-w-md">
           <DialogHeader>
-            <div className="flex justify-center mb-4 items-center">
-              <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-full">
-                <Building2 className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+            <div className="flex justify-center items-center mb-4">
+              <div className="p-3 bg-blue-100 rounded-full dark:bg-blue-900/20">
+                <Building2 className="w-8 h-8 text-blue-600 dark:text-blue-400" />
               </div>
             </div>
-            <DialogTitle className="text-center text-lg">Dealership Account Detected</DialogTitle>
-            <DialogDescription className="text-center text-sm break-words">
+            <DialogTitle className="text-lg text-center">Dealership Account Detected</DialogTitle>
+            <DialogDescription className="text-sm text-center wrap-break-word">
               This email is associated with a dealership account. Dealership accounts use a different login system and don't require a password.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <p className="text-sm text-muted-foreground text-center break-words">
+            <p className="text-sm text-center wrap-break-word text-muted-foreground">
               Would you like to switch to dealership mode and use the standard login?
             </p>
           </div>
-          <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-end">
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
             <Button
               variant="outline"
               onClick={handleDealershipCancel}
@@ -364,82 +436,159 @@ function StandaloneLoginPage() {
               onClick={handleDealershipConfirm}
               className="w-full sm:w-auto"
             >
-              <Building2 className="mr-2 h-4 w-4" />
+              <Building2 className="mr-2 w-4 h-4" />
               Yes, Switch to Dealership
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+      <div className="flex justify-center items-center p-4 min-h-screen bg-background">
         <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="p-3 bg-primary/10 rounded-full">
-              <LogIn className="h-8 w-8 text-primary" />
+            <div className="p-3 rounded-full bg-primary/10">
+              <LogIn className="w-8 h-8 text-primary" />
             </div>
           </div>
           <CardTitle className="text-2xl">Sign In</CardTitle>
           <CardDescription>
-            Enter your email and password to access your account
+            {codeSent ? "Enter the code sent to your email" : "Enter your email to receive a verification code"}
           </CardDescription>
         </CardHeader>
 
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor={emailInputId}>Email</Label>
-              <Input
-                id={emailInputId}
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={loading || checkingUserType}
-                autoComplete="email"
-                required
-              />
-            </div>
+          <div className="space-y-4">
+            {!codeSent ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor={emailInputId}>Email</Label>
+                  <Input
+                    id={emailInputId}
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setError("");
+                    }}
+                    disabled={loading}
+                    autoComplete="email"
+                    required
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor={passwordInputId}>Password</Label>
-              <Input
-                id={passwordInputId}
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={loading || checkingUserType}
-                autoComplete="current-password"
-                required
-              />
-            </div>
+                {/* Dialog is shown when dealership user is detected (handled by useEffect) */}
 
-            {/* Dialog is shown when dealership user is detected (handled by useEffect) */}
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="w-4 h-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
 
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
+                <Button
+                  onClick={handleSendCode}
+                  disabled={loading || !email}
+                  className="w-full"
+                  size="lg"
+                >
+                  {loading && <Loader2 className="mr-2 w-4 h-4 animate-spin" />}
+                  {loading ? "Sending code..." : "Send Code"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor={codeInputId}>Verification Code</Label>
+                  <Input
+                    id={codeInputId}
+                    type="text"
+                    placeholder="000000"
+                    value={code}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
+                      setCode(value);
+                      setError("");
+                      setShowResendOption(false);
+                    }}
+                    disabled={loading}
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    className="font-mono text-2xl tracking-widest text-center"
+                    autoFocus
+                    required
+                  />
+                  <p className="text-xs text-center text-muted-foreground">
+                    Code sent to {email}
+                  </p>
+                </div>
+
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="w-4 h-4" />
+                    <AlertDescription className="space-y-2">
+                      <p>{error}</p>
+                      {showResendOption && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setCode("");
+                            setCodeSent(false);
+                            setError("");
+                            setShowResendOption(false);
+                            handleSendCode();
+                          }}
+                          className="mt-2 w-full"
+                        >
+                          Request New Code
+                        </Button>
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <Button
+                  onClick={handleVerifyCode}
+                  disabled={loading || code.length !== 6}
+                  className="w-full"
+                  size="lg"
+                >
+                  {loading && <Loader2 className="mr-2 w-4 h-4 animate-spin" />}
+                  {loading ? "Verifying..." : "Verify Code"}
+                </Button>
+
+                <div className="flex flex-col gap-2">
+                  <Button
+                    variant="ghost"
+                    onClick={handleResendCode}
+                    disabled={loading}
+                    className="w-full"
+                    size="sm"
+                  >
+                    Didn't receive code? Resend
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setCodeSent(false);
+                      setCode("");
+                      setError("");
+                    }}
+                    disabled={loading}
+                    className="w-full"
+                    size="sm"
+                  >
+                    Use a different email
+                  </Button>
+                </div>
+              </>
             )}
+          </div>
 
-            <Button
-              type="submit"
-              disabled={loading || checkingUserType || !email || !password}
-              className="w-full"
-              size="lg"
-            >
-              {(loading || checkingUserType) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {checkingUserType 
-                ? "Checking account..." 
-                : loading 
-                  ? "Signing in..." 
-                  : "Sign In"}
-            </Button>
-          </form>
-
-          <div className="mt-6 text-center space-y-2">
+          <div className="mt-6 space-y-2 text-center">
             <p className="text-sm text-muted-foreground">
               Don't have an account?
             </p>
@@ -458,4 +607,3 @@ function StandaloneLoginPage() {
     </>
   );
 }
-

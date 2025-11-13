@@ -8,10 +8,18 @@ import { Resend } from "resend";
 const resendApiKey = process.env.RESEND_API_KEY;
 
 if (!resendApiKey) {
-  console.warn("RESEND_API_KEY not set - email functionality will be disabled");
+  console.warn("⚠️ [RESEND] RESEND_API_KEY not set - email functionality will be disabled");
+} else {
+  // console.log("✅ [RESEND] Resend client initialized with API key (length:", resendApiKey.length, ")");
 }
 
 export const resend = resendApiKey ? new Resend(resendApiKey) : null;
+
+if (resend) {
+  // console.log("✅ [RESEND] Resend client created successfully");
+} else {
+  console.error("❌ [RESEND] Resend client is null - emails will fail");
+}
 
 // Email sending helper with error handling
 export async function sendEmail(params: {
@@ -23,13 +31,28 @@ export async function sendEmail(params: {
   replyTo?: string;
   tags?: { name: string; value: string }[];
 }) {
+  console.log("📧 [RESEND] sendEmail called:", {
+    to: params.to,
+    subject: params.subject,
+    hasHtml: !!params.html,
+    hasText: !!params.text,
+    from: params.from,
+  });
+
   if (!resend) {
+    console.error("❌ [RESEND] Resend client not initialized - RESEND_API_KEY missing");
+    throw new Error("Resend is not configured - RESEND_API_KEY missing");
+  }
+
+  if (!resendApiKey) {
+    console.error("❌ [RESEND] RESEND_API_KEY environment variable not set");
     throw new Error("Resend is not configured - RESEND_API_KEY missing");
   }
 
   try {
     // Resend requires either html or text
     if (!params.html && !params.text) {
+      console.error("❌ [RESEND] Email must have either html or text content");
       throw new Error("Email must have either html or text content");
     }
 
@@ -60,12 +83,79 @@ export async function sendEmail(params: {
       emailOptions.tags = params.tags;
     }
 
-    // Type assertion: We've validated that at least html or text exists
-    const result = await resend.emails.send(emailOptions as Parameters<typeof resend.emails.send>[0]);
+    console.log("📤 [RESEND] Sending email via Resend API...", {
+      from: emailOptions.from,
+      to: emailOptions.to,
+      subject: emailOptions.subject,
+      hasHtml: !!emailOptions.html,
+      hasText: !!emailOptions.text,
+    });
 
-    return result;
+    // Use fetch directly instead of SDK to ensure proper error handling
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(emailOptions),
+    });
+
+    console.log("📋 [RESEND] HTTP Response status:", response.status, response.statusText);
+
+    const responseText = await response.text();
+    console.log("📋 [RESEND] Raw response body:", responseText);
+
+    if (!response.ok) {
+      let errorMessage = `Resend API error: ${response.status} ${response.statusText}`;
+      try {
+        const errorData = JSON.parse(responseText);
+        errorMessage = errorData.message || errorData.error?.message || errorMessage;
+        console.error("❌ [RESEND] Resend API error details:", errorData);
+      } catch {
+        console.error("❌ [RESEND] Resend API error (non-JSON):", responseText);
+      }
+      throw new Error(errorMessage);
+    }
+
+    let result: { id?: string; [key: string]: unknown };
+    try {
+      result = JSON.parse(responseText) as { id?: string; [key: string]: unknown };
+    } catch {
+      console.error("❌ [RESEND] Failed to parse response as JSON:", responseText);
+      throw new Error("Invalid JSON response from Resend API");
+    }
+
+    console.log("📋 [RESEND] Parsed response:", {
+      hasId: !!result.id,
+      id: result.id,
+      keys: Object.keys(result),
+    });
+
+    // Check if we got a valid response
+    if (!result.id) {
+      console.error("❌ [RESEND] Invalid response from Resend API - no email ID returned:", result);
+      throw new Error("Resend API did not return a valid email ID. Check your API key and domain verification.");
+    }
+
+    console.log("✅ [RESEND] Email sent successfully:", {
+      id: result.id,
+      to: params.to,
+      subject: params.subject,
+    });
+
+    // Return in SDK-compatible format
+    return {
+      data: { id: result.id },
+      error: null,
+    };
   } catch (error) {
-    console.error("Failed to send email:", error);
+    console.error("❌ [RESEND] Failed to send email:", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      to: params.to,
+      subject: params.subject,
+    });
     throw error;
   }
 }

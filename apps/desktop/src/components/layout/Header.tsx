@@ -49,27 +49,21 @@ export function Header({ sidebarOpen }: HeaderProps) {
 
   const handleSignOut = async () => {
     console.log("🚪 [HEADER] Sign out button clicked");
-    console.log("🔍 [HEADER] Current state:", {
-      hasLogoutFunction: !!logout,
-      isStandalone,
-      userEmail: user?.email,
-      userId: user?.id,
-    });
+    
+    // Navigate immediately (don't wait for logout to complete)
+    console.log("🧭 [HEADER] Navigating to login page immediately...");
+    navigate({ to: isStandalone ? "/standalone-login" : "/login" });
 
+    // Call logout in background (it will clear state immediately)
     if (logout) {
-      console.log("🚪 [HEADER] Calling logout function...");
-      try {
-        await logout();
-        console.log("✅ [HEADER] Logout function completed successfully");
-      } catch (error) {
+      console.log("🚪 [HEADER] Calling logout function in background...");
+      logout().catch((error) => {
         console.error("❌ [HEADER] Logout function failed:", error);
-      }
+        // Error is already handled by logout function
+      });
     } else {
       console.warn("⚠️ [HEADER] No logout function available");
     }
-
-    console.log("🧭 [HEADER] Navigating to login page...");
-    navigate({ to: isStandalone ? "/standalone-login" : "/login" });
   };
 
   const handleSearch = (e: React.FormEvent) => {

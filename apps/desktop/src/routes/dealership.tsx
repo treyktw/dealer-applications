@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Building2, MapPin, Phone, Mail, Save } from "lucide-react";
+import { Building2, MapPin, Phone, Mail, Save, Car, Users, FileText, TrendingUp } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { convexClient } from "@/lib/convex";
 import { api, type Id } from "@dealer/convex";
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/dealership")({
 });
 
 function DealershipPage() {
-  const { user, session } = useAuth();
+  const { user, token } = useAuth();
   const queryClient = useQueryClient();
 
 
@@ -40,7 +40,6 @@ function DealershipPage() {
         throw new Error("User not associated with a dealership");
       }
 
-      const token = session?.token;
       if (!token) {
         throw new Error("No authentication token found");
       }
@@ -50,8 +49,45 @@ function DealershipPage() {
         token: token,
       });
     },
-    enabled: !!user?.dealershipId && !!session?.token,
+    enabled: !!user?.dealershipId && !!token,
   });
+
+  // Fetch dealership stats
+  const { data: vehicleStats } = useQuery({
+    queryKey: ["vehicle-stats", user?.dealershipId],
+    queryFn: async () => {
+      if (!user?.dealershipId || !token) return null;
+      return await convexClient.query(api.api.inventory.getVehicleStats, {
+        dealershipId: String(user.dealershipId),
+      });
+    },
+    enabled: !!user?.dealershipId && !!token,
+  });
+
+  const { data: clientStats } = useQuery({
+    queryKey: ["client-stats", user?.dealershipId],
+    queryFn: async () => {
+      if (!user?.dealershipId || !token) return null;
+      return await convexClient.query(api.api.clients.getClientStats, {
+        dealershipId: String(user.dealershipId),
+      });
+    },
+    enabled: !!user?.dealershipId && !!token,
+  });
+
+  const { data: dealsData } = useQuery({
+    queryKey: ["deals-stats", user?.dealershipId],
+    queryFn: async () => {
+      if (!user?.dealershipId || !token) return null;
+      return await convexClient.query(api.api.deals.getDeals, {
+        dealershipId: user.dealershipId,
+        token: token,
+      });
+    },
+    enabled: !!user?.dealershipId && !!token,
+  });
+
+  const dealsCount = Array.isArray(dealsData) ? dealsData.length : (dealsData?.deals?.length || 0);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -88,7 +124,6 @@ function DealershipPage() {
         throw new Error("User not associated with a dealership");
       }
 
-      const token = session?.token;
       if (!token) {
         throw new Error("No authentication token found");
       }
@@ -161,6 +196,63 @@ function DealershipPage() {
           <p className="text-muted-foreground mt-1">
             Manage your dealership information and settings
           </p>
+        </div>
+
+        {/* Stats Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="border-none shadow-lg bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-blue-500/10 rounded-xl">
+                  <Car className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <TrendingUp className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Total Vehicles</p>
+                <p className="text-3xl font-bold">{vehicleStats?.total || 0}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {vehicleStats?.available || 0} available
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-lg bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-green-500/10 rounded-xl">
+                  <Users className="h-6 w-6 text-green-600 dark:text-green-400" />
+                </div>
+                <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Total Clients</p>
+                <p className="text-3xl font-bold">{clientStats?.total || 0}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {clientStats?.customers || 0} customers
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-lg bg-gradient-to-br from-purple-500/10 via-purple-500/5 to-transparent">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-purple-500/10 rounded-xl">
+                  <FileText className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                </div>
+                <TrendingUp className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Total Deals</p>
+                <p className="text-3xl font-bold">{dealsCount}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Active deals
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">

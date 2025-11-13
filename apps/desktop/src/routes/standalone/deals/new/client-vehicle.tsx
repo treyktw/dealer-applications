@@ -15,7 +15,7 @@ import {
   FieldLabel,
   FieldGroup,
 } from "@/components/ui/field";
-import { User, Car } from "lucide-react";
+import { User, Car, Loader2, CheckCircle2, AlertCircle, Sparkles } from "lucide-react";
 import { useState, useCallback, useMemo, useRef } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -33,10 +33,48 @@ import {
 } from "@/lib/sqlite/local-deals-service";
 import { useWizard } from "@/lib/providers/WizardProvider";
 import { useUnifiedAuth } from "@/components/auth/useUnifiedAuth";
+import { api } from "@dealer/convex";
+import { convexAction } from "@/lib/convex";
 
 export const Route = createFileRoute("/standalone/deals/new/client-vehicle")({
   component: ClientVehicleStep,
 });
+
+// Validation helper functions
+const validateEmail = (email: string): { valid: boolean; error?: string } => {
+  if (!email || email.trim() === "") return { valid: true }; // Optional field
+  const trimmed = email.trim().toLowerCase();
+  if (trimmed.length < 3) return { valid: false, error: "Email must be at least 3 characters" };
+  if (trimmed.length > 254) return { valid: false, error: "Email must not exceed 254 characters" };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return { valid: false, error: "Invalid email format" };
+  if (/\.\./.test(trimmed)) return { valid: false, error: "Email contains invalid consecutive dots" };
+  const domain = trimmed.split("@")[1];
+  if (!domain || !domain.includes(".")) return { valid: false, error: "Email must have a valid domain" };
+  return { valid: true };
+};
+
+const validatePhone = (phone: string): { valid: boolean; error?: string; normalized?: string } => {
+  if (!phone || phone.trim() === "") return { valid: true }; // Optional field
+  const trimmed = phone.trim();
+  const digitsOnly = trimmed.replace(/[^0-9+]/g, "");
+  if (digitsOnly.length < 10) return { valid: false, error: "Phone number must be at least 10 digits" };
+  if (digitsOnly.length > 20) return { valid: false, error: "Phone number must not exceed 20 characters" };
+  if (!/^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}$/.test(trimmed)) {
+    return { valid: false, error: "Invalid phone number format" };
+  }
+  const normalized = digitsOnly;
+  return { valid: true, normalized };
+};
+
+const validateVIN = (vin: string): { valid: boolean; error?: string } => {
+  if (!vin || vin.trim() === "") return { valid: false, error: "VIN is required" };
+  const trimmed = vin.trim().toUpperCase();
+  if (trimmed.length !== 17) return { valid: false, error: "VIN must be exactly 17 characters" };
+  if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(trimmed)) {
+    return { valid: false, error: "VIN contains invalid characters (I, O, Q not allowed)" };
+  }
+  return { valid: true };
+};
 
 function ClientVehicleStep() {
   const navigate = useNavigate();
@@ -53,11 +91,19 @@ function ClientVehicleStep() {
   const dealIdRef = useRef<string>("");
   const isInitializedRef = useRef(false);
 
+  // Only load draft deal if user is continuing an existing form (has formData with clientId/vehicleId)
+  // Don't load old drafts when starting a new deal
+  const shouldLoadDraft = formData.clientId || formData.vehicleId || formData.clientData || formData.vehicleData;
+  
   // Load most recent draft deal on mount - with error handling
   const { data: draftDeal } = useQuery({
-    queryKey: ["draft-deal", auth.user?.id],
+    queryKey: ["draft-deal", auth.user?.id, shouldLoadDraft],
     queryFn: async () => {
       if (!auth.user?.id) return null;
+      if (!shouldLoadDraft) {
+        // Don't load draft if starting fresh
+        return null;
+      }
       try {
         const drafts = await getDealsByStatus("draft", auth.user.id);
         if (!Array.isArray(drafts)) {
@@ -72,6 +118,7 @@ function ClientVehicleStep() {
         return null; // Return null instead of undefined - React Query doesn't allow undefined
       }
     },
+    enabled: !!auth.user?.id && !!shouldLoadDraft, // Only load if user is continuing
     staleTime: Infinity, // Only fetch once
     retry: false, // Don't retry on error
     refetchOnWindowFocus: false,
@@ -164,8 +211,9 @@ function ClientVehicleStep() {
       };
     };
 
+    // Only use loaded data if user is continuing (has formData), otherwise use defaults
     // Prefer loaded data from database, then wizard context, then defaults
-    const initialClientData = normalizeClientData(loadedClient) ||
+    const initialClientData = (shouldLoadDraft && normalizeClientData(loadedClient)) ||
       formData.clientData || {
         firstName: "",
         lastName: "",
@@ -192,8 +240,9 @@ function ClientVehicleStep() {
       driversLicense: "",
     };
 
+    // Only use loaded data if user is continuing (has formData), otherwise use defaults
     // Prefer loaded data from database, then wizard context, then defaults
-    const initialVehicleData = normalizeVehicleData(loadedVehicle) ||
+    const initialVehicleData = (shouldLoadDraft && normalizeVehicleData(loadedVehicle)) ||
       formData.vehicleData || {
         vin: "",
         stockNumber: "",
@@ -237,7 +286,7 @@ function ClientVehicleStep() {
       console.error("❌ [INIT] Error in initializeFormData:", error);
       isInitializedRef.current = true; // Mark as initialized to prevent infinite loops
     }
-  }, [loadedClient, loadedVehicle, draftDeal, formData, updateFormData]);
+  }, [loadedClient, loadedVehicle, draftDeal, formData, updateFormData, shouldLoadDraft]);
 
   // Compute initial values using useMemo (no useEffect needed)
   const initialClientData = useMemo(() => {
@@ -361,6 +410,17 @@ function ClientVehicleStep() {
   const [cobuyerData, setCobuyerData] = useState(() => initialCobuyerData);
   const [vehicleData, setVehicleData] = useState(() => initialVehicleData);
 
+  // Validation state
+  const [validationErrors, setValidationErrors] = useState<{
+    client?: { email?: string; phone?: string };
+    cobuyer?: { email?: string; phone?: string };
+    vehicle?: { vin?: string };
+  }>({});
+
+  // VIN decoding state
+  const [vinDecoding, setVinDecoding] = useState(false);
+  const [vinDecoded, setVinDecoded] = useState(false);
+
   // Sync state when initial values change (only if not user-modified)
   const prevInitialClientDataRef = useRef(initialClientData);
   const prevInitialVehicleDataRef = useRef(initialVehicleData);
@@ -425,33 +485,143 @@ function ClientVehicleStep() {
     },
   });
 
+  // VIN decoding mutation
+  const decodeVINMutation = useMutation({
+    mutationFn: async (vin: string) => {
+      return await convexAction(api.api.vinDecode.decode, { vin });
+    },
+    onSuccess: (decoded) => {
+      // Auto-fill vehicle fields from decoded VIN
+      if (decoded.make) updateVehicleField("make", decoded.make);
+      if (decoded.model) updateVehicleField("model", decoded.model);
+      if (decoded.modelYear) updateVehicleField("year", decoded.modelYear.toString());
+      if (decoded.trim) updateVehicleField("trim", decoded.trim);
+      if (decoded.bodyClass) updateVehicleField("body", decoded.bodyClass.toLowerCase());
+      if (decoded.doors) updateVehicleField("doors", decoded.doors.toString());
+      if (decoded.transmissionStyle) updateVehicleField("transmission", decoded.transmissionStyle.toLowerCase());
+      if (decoded.engineDisplacement) updateVehicleField("engine", decoded.engineDisplacement);
+      if (decoded.engineCylinders) updateVehicleField("cylinders", decoded.engineCylinders.toString());
+      
+      setVinDecoded(true);
+      toast.success("VIN decoded successfully! Vehicle details auto-filled.");
+    },
+    onError: (error: Error) => {
+      toast.error("Failed to decode VIN", {
+        description: error.message || "Please check the VIN and try again.",
+      });
+    },
+  });
 
-  // Simple update handlers for client data
+  // Handle VIN decode button click
+  const handleDecodeVIN = useCallback(async () => {
+    const vin = vehicleData.vin.trim().toUpperCase();
+    const validation = validateVIN(vin);
+    
+    if (!validation.valid) {
+      toast.error("Invalid VIN", {
+        description: validation.error || "Please enter a valid 17-character VIN.",
+      });
+      setValidationErrors((prev) => ({
+        ...prev,
+        vehicle: { ...prev.vehicle, vin: validation.error },
+      }));
+      return;
+    }
+
+    setVinDecoding(true);
+    try {
+      await decodeVINMutation.mutateAsync(vin);
+    } finally {
+      setVinDecoding(false);
+    }
+  }, [vehicleData.vin, decodeVINMutation]);
+
+  // Simple update handlers for client data with validation
   const updateClientField = useCallback(
     (field: keyof typeof clientData, value: string) => {
       setClientData((prev) => ({ ...prev, [field]: value }));
       // Mark as initialized when user starts typing
       isInitializedRef.current = true;
+
+      // Validate email and phone fields
+      if (field === "email") {
+        const validation = validateEmail(value);
+        setValidationErrors((prev) => ({
+          ...prev,
+          client: { ...prev.client, email: validation.valid ? undefined : validation.error },
+        }));
+      } else if (field === "phone") {
+        const validation = validatePhone(value);
+        setValidationErrors((prev) => ({
+          ...prev,
+          client: { ...prev.client, phone: validation.valid ? undefined : validation.error },
+        }));
+        // Auto-normalize phone number
+        if (validation.valid && validation.normalized && value !== validation.normalized) {
+          // Update with normalized value (but don't trigger validation again)
+          const normalized = validation.normalized;
+          if (normalized) {
+            setTimeout(() => {
+              setClientData((prev) => ({ ...prev, phone: normalized }));
+            }, 0);
+          }
+        }
+      }
     },
     []
   );
 
-  // Simple update handlers for co-buyer data
+  // Simple update handlers for co-buyer data with validation
   const updateCobuyerField = useCallback(
     (field: keyof typeof cobuyerData, value: string) => {
       setCobuyerData((prev) => ({ ...prev, [field]: value }));
       // Mark as initialized when user starts typing
       isInitializedRef.current = true;
+
+      // Validate email and phone fields
+      if (field === "email") {
+        const validation = validateEmail(value);
+        setValidationErrors((prev) => ({
+          ...prev,
+          cobuyer: { ...prev.cobuyer, email: validation.valid ? undefined : validation.error },
+        }));
+      } else if (field === "phone") {
+        const validation = validatePhone(value);
+        setValidationErrors((prev) => ({
+          ...prev,
+          cobuyer: { ...prev.cobuyer, phone: validation.valid ? undefined : validation.error },
+        }));
+        // Auto-normalize phone number
+        if (validation.valid && validation.normalized && value !== validation.normalized) {
+          const normalized = validation.normalized;
+          if (normalized) {
+            setTimeout(() => {
+              setCobuyerData((prev) => ({ ...prev, phone: normalized }));
+            }, 0);
+          }
+        }
+      }
     },
     []
   );
 
-  // Simple update handlers for vehicle data
+  // Simple update handlers for vehicle data with VIN validation
   const updateVehicleField = useCallback(
     (field: keyof typeof vehicleData, value: string | number) => {
       setVehicleData((prev) => ({ ...prev, [field]: value }));
       // Mark as initialized when user starts typing
       isInitializedRef.current = true;
+
+      // Validate VIN when changed
+      if (field === "vin") {
+        const vinValue = String(value).trim().toUpperCase();
+        const validation = validateVIN(vinValue);
+        setValidationErrors((prev) => ({
+          ...prev,
+          vehicle: { ...prev.vehicle, vin: validation.valid ? undefined : validation.error },
+        }));
+        setVinDecoded(false); // Reset decoded flag when VIN changes
+      }
     },
     []
   );
@@ -643,7 +813,7 @@ function ClientVehicleStep() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold mb-2">
+        <h2 className="mb-2 text-2xl font-semibold">
           Client & Vehicle Information
         </h2>
         <p className="text-muted-foreground">
@@ -654,9 +824,9 @@ function ClientVehicleStep() {
       <div>
         <div className="grid gap-6 md:grid-cols-2">
           <Card className="p-6">
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex gap-3 items-center mb-6">
               <div className="p-2 bg-blue-100 rounded-lg">
-                <User className="h-5 w-5 text-blue-600" />
+                <User className="w-5 h-5 text-blue-600" />
               </div>
               <h3 className="font-semibold">Client Information</h3>
             </div>
@@ -690,21 +860,33 @@ function ClientVehicleStep() {
               <Field>
                 <FieldLabel>Email</FieldLabel>
                 <FieldContent>
-                  <Input
-                    type="email"
-                    value={clientData.email}
-                    onChange={(e) => updateClientField("email", e.target.value)}
-                  />
+                  <div className="space-y-1">
+                    <Input
+                      type="email"
+                      value={clientData.email}
+                      onChange={(e) => updateClientField("email", e.target.value)}
+                      className={validationErrors.client?.email ? "border-destructive" : ""}
+                    />
+                    {validationErrors.client?.email && (
+                      <p className="text-xs text-destructive">{validationErrors.client.email}</p>
+                    )}
+                  </div>
                 </FieldContent>
               </Field>
               <Field>
                 <FieldLabel>Phone</FieldLabel>
                 <FieldContent>
-                  <Input
-                    type="tel"
-                    value={clientData.phone}
-                    onChange={(e) => updateClientField("phone", e.target.value)}
-                  />
+                  <div className="space-y-1">
+                    <Input
+                      type="tel"
+                      value={clientData.phone}
+                      onChange={(e) => updateClientField("phone", e.target.value)}
+                      className={validationErrors.client?.phone ? "border-destructive" : ""}
+                    />
+                    {validationErrors.client?.phone && (
+                      <p className="text-xs text-destructive">{validationErrors.client.phone}</p>
+                    )}
+                  </div>
                 </FieldContent>
               </Field>
               <Field>
@@ -779,9 +961,9 @@ function ClientVehicleStep() {
           </Card>
 
           <Card className="p-6">
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex gap-3 items-center mb-6">
               <div className="p-2 bg-green-100 rounded-lg">
-                <User className="h-5 w-5 text-green-600" />
+                <User className="w-5 h-5 text-green-600" />
               </div>
               <h3 className="font-semibold">Co-Buyer Information (Optional)</h3>
             </div>
@@ -813,25 +995,37 @@ function ClientVehicleStep() {
               <Field>
                 <FieldLabel>Email</FieldLabel>
                 <FieldContent>
-                  <Input
-                    type="email"
-                    value={cobuyerData.email}
-                    onChange={(e) =>
-                      updateCobuyerField("email", e.target.value)
-                    }
-                  />
+                  <div className="space-y-1">
+                    <Input
+                      type="email"
+                      value={cobuyerData.email}
+                      onChange={(e) =>
+                        updateCobuyerField("email", e.target.value)
+                      }
+                      className={validationErrors.cobuyer?.email ? "border-destructive" : ""}
+                    />
+                    {validationErrors.cobuyer?.email && (
+                      <p className="text-xs text-destructive">{validationErrors.cobuyer.email}</p>
+                    )}
+                  </div>
                 </FieldContent>
               </Field>
               <Field>
                 <FieldLabel>Phone</FieldLabel>
                 <FieldContent>
-                  <Input
-                    type="tel"
-                    value={cobuyerData.phone}
-                    onChange={(e) =>
-                      updateCobuyerField("phone", e.target.value)
-                    }
-                  />
+                  <div className="space-y-1">
+                    <Input
+                      type="tel"
+                      value={cobuyerData.phone}
+                      onChange={(e) =>
+                        updateCobuyerField("phone", e.target.value)
+                      }
+                      className={validationErrors.cobuyer?.phone ? "border-destructive" : ""}
+                    />
+                    {validationErrors.cobuyer?.phone && (
+                      <p className="text-xs text-destructive">{validationErrors.cobuyer.phone}</p>
+                    )}
+                  </div>
                 </FieldContent>
               </Field>
               <Field>
@@ -907,9 +1101,9 @@ function ClientVehicleStep() {
         </div>
 
         <Card className="p-6">
-          <div className="flex items-center gap-3 mb-6">
+          <div className="flex gap-3 items-center mb-6">
             <div className="p-2 bg-purple-100 rounded-lg">
-              <Car className="h-5 w-5 text-purple-600" />
+              <Car className="w-5 h-5 text-purple-600" />
             </div>
             <h3 className="font-semibold">Vehicle Information</h3>
           </div>
@@ -918,11 +1112,46 @@ function ClientVehicleStep() {
               <Field>
                 <FieldLabel>VIN *</FieldLabel>
                 <FieldContent>
-                  <Input
-                    value={vehicleData.vin}
-                    onChange={(e) => updateVehicleField("vin", e.target.value)}
-                    required
-                  />
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Input
+                        value={vehicleData.vin}
+                        onChange={(e) => updateVehicleField("vin", e.target.value.toUpperCase())}
+                        className={validationErrors.vehicle?.vin ? "border-destructive" : vinDecoded ? "border-green-500" : ""}
+                        placeholder="17-character VIN"
+                        maxLength={17}
+                        required
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={handleDecodeVIN}
+                        disabled={vinDecoding || !vehicleData.vin || vehicleData.vin.length !== 17 || !!validationErrors.vehicle?.vin}
+                        title="Decode VIN to auto-fill vehicle details"
+                      >
+                        {vinDecoding ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : vinDecoded ? (
+                          <CheckCircle2 className="w-4 h-4 text-green-600" />
+                        ) : (
+                          <Sparkles className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </div>
+                    {validationErrors.vehicle?.vin && (
+                      <p className="flex gap-1 items-center text-xs text-destructive">
+                        <AlertCircle className="w-3 h-3" />
+                        {validationErrors.vehicle.vin}
+                      </p>
+                    )}
+                    {vinDecoded && !validationErrors.vehicle?.vin && (
+                      <p className="flex gap-1 items-center text-xs text-green-600">
+                        <CheckCircle2 className="w-3 h-3" />
+                        VIN decoded - vehicle details auto-filled
+                      </p>
+                    )}
+                  </div>
                 </FieldContent>
               </Field>
               <Field>
@@ -1162,7 +1391,7 @@ function ClientVehicleStep() {
         </Card>
       </div>
 
-      <div className="flex justify-end gap-2 pt-4">
+      <div className="flex gap-2 justify-end pt-4">
         <Button
           variant="outline"
           onClick={() => navigate({ to: "/standalone/deals" })}

@@ -39,7 +39,7 @@ export const Route = createFileRoute("/settings")({
 });
 
 function SettingsPage() {
-  const { user, session } = useAuth();
+  const { user, token } = useAuth();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
 
@@ -75,7 +75,6 @@ function SettingsPage() {
         throw new Error("User not found");
       }
 
-      const token = session?.token;
       if (!token) {
         throw new Error("No authentication token found");
       }
@@ -121,7 +120,7 @@ function SettingsPage() {
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
-            <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <div className="mx-auto mb-4 w-16 h-16 rounded-full border-4 animate-spin border-primary border-t-transparent" />
             <p className="text-muted-foreground">Loading settings...</p>
           </div>
         </div>
@@ -131,12 +130,12 @@ function SettingsPage() {
 
   return (
     <Layout>
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="mx-auto space-y-8 max-w-4xl">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold">Settings</h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="mt-1 text-muted-foreground">
               Manage your application preferences and settings
             </p>
           </div>
@@ -144,7 +143,7 @@ function SettingsPage() {
             {isEditing ? (
               <>
                 <Button variant="outline" onClick={handleCancel}>
-                  <X className="mr-2 h-4 w-4" />
+                  <X className="mr-2 w-4 h-4" />
                   Cancel
                 </Button>
                 <Button
@@ -153,12 +152,12 @@ function SettingsPage() {
                 >
                   {updateSettingsMutation.isPending ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      <div className="mr-2 w-4 h-4 rounded-full border-2 border-white animate-spin border-t-transparent" />
                       Saving...
                     </>
                   ) : (
                     <>
-                      <Save className="mr-2 h-4 w-4" />
+                      <Save className="mr-2 w-4 h-4" />
                       Save Changes
                     </>
                   )}
@@ -166,7 +165,7 @@ function SettingsPage() {
               </>
             ) : (
               <Button variant="outline" onClick={() => setIsEditing(true)}>
-                <SettingsIcon className="mr-2 h-4 w-4" />
+                <SettingsIcon className="mr-2 w-4 h-4" />
                 Edit Settings
               </Button>
             )}
@@ -176,9 +175,9 @@ function SettingsPage() {
         {/* Notifications */}
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-blue-500/10 rounded-xl">
-                <Bell className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            <div className="flex gap-3 items-center">
+              <div className="p-3 rounded-xl bg-blue-500/10">
+                <Bell className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
                 <CardTitle>Notifications</CardTitle>
@@ -189,7 +188,7 @@ function SettingsPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex justify-between items-center">
               <div className="space-y-0.5">
                 <Label htmlFor="email-notifications">Email Notifications</Label>
                 <p className="text-sm text-muted-foreground">
@@ -205,7 +204,7 @@ function SettingsPage() {
                 disabled={!isEditing}
               />
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex justify-between items-center">
               <div className="space-y-0.5">
                 <Label htmlFor="push-notifications">Push Notifications</Label>
                 <p className="text-sm text-muted-foreground">
@@ -221,7 +220,7 @@ function SettingsPage() {
                 disabled={!isEditing}
               />
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex justify-between items-center">
               <div className="space-y-0.5">
                 <Label htmlFor="deal-updates">Deal Updates</Label>
                 <p className="text-sm text-muted-foreground">
@@ -237,7 +236,7 @@ function SettingsPage() {
                 disabled={!isEditing}
               />
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex justify-between items-center">
               <div className="space-y-0.5">
                 <Label htmlFor="marketing-emails">Marketing Emails</Label>
                 <p className="text-sm text-muted-foreground">
@@ -259,9 +258,9 @@ function SettingsPage() {
         {/* Appearance */}
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-purple-500/10 rounded-xl">
-                <Moon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+            <div className="flex gap-3 items-center">
+              <div className="p-3 rounded-xl bg-purple-500/10">
+                <Moon className="w-6 h-6 text-purple-600 dark:text-purple-400" />
               </div>
               <div>
                 <CardTitle>Appearance</CardTitle>
@@ -322,9 +321,9 @@ function SettingsPage() {
         {/* Privacy & Security */}
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-orange-500/10 rounded-xl">
-                <Shield className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+            <div className="flex gap-3 items-center">
+              <div className="p-3 rounded-xl bg-orange-500/10">
+                <Shield className="w-6 h-6 text-orange-600 dark:text-orange-400" />
               </div>
               <div>
                 <CardTitle>Privacy & Security</CardTitle>
@@ -357,7 +356,7 @@ function SettingsPage() {
                 Control who can see your profile information
               </p>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex justify-between items-center">
               <div className="space-y-0.5">
                 <Label htmlFor="activity-tracking">Activity Tracking</Label>
                 <p className="text-sm text-muted-foreground">
@@ -379,9 +378,9 @@ function SettingsPage() {
         {/* Regional Settings */}
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-green-500/10 rounded-xl">
-                <Globe className="h-6 w-6 text-green-600 dark:text-green-400" />
+            <div className="flex gap-3 items-center">
+              <div className="p-3 rounded-xl bg-green-500/10">
+                <Globe className="w-6 h-6 text-green-600 dark:text-green-400" />
               </div>
               <div>
                 <CardTitle>Regional Settings</CardTitle>
@@ -392,7 +391,7 @@ function SettingsPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-4 rounded-lg border">
+            <div className="flex justify-between items-center p-4 rounded-lg border">
               <div>
                 <p className="font-medium">Timezone</p>
                 <p className="text-sm text-muted-foreground">
@@ -406,7 +405,7 @@ function SettingsPage() {
                 Change
               </Button>
             </div>
-            <div className="flex items-center justify-between p-4 rounded-lg border">
+            <div className="flex justify-between items-center p-4 rounded-lg border">
               <div>
                 <p className="font-medium">Date Format</p>
                 <p className="text-sm text-muted-foreground">MM/DD/YYYY</p>

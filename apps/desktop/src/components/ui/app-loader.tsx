@@ -15,9 +15,9 @@ interface AppLoaderProps {
 
 export function AppLoader({ steps, currentStep }: AppLoaderProps) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="w-full max-w-md px-6">
-        <div className="text-center space-y-8">
+    <div className="flex justify-center items-center min-h-screen bg-background">
+      <div className="px-6 w-full max-w-md">
+        <div className="space-y-8 text-center">
           {/* Logo/Brand */}
           <div className="space-y-2">
             <h1 className="text-2xl font-bold">Dealer Software</h1>
@@ -44,15 +44,15 @@ export function AppLoader({ steps, currentStep }: AppLoaderProps) {
                   )}
                 >
                   {/* Icon */}
-                  <div className="flex-shrink-0">
+                  <div className="shrink-0">
                     {isComplete ? (
-                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                      <CheckCircle2 className="w-5 h-5 text-green-500" />
                     ) : isError ? (
-                      <div className="h-5 w-5 rounded-full bg-destructive" />
+                      <div className="w-5 h-5 rounded-full bg-destructive" />
                     ) : isActive ? (
-                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      <Loader2 className="w-5 h-5 animate-spin text-primary" />
                     ) : (
-                      <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/30" />
+                      <div className="w-5 h-5 rounded-full border-2 border-muted-foreground/30" />
                     )}
                   </div>
 
@@ -77,9 +77,9 @@ export function AppLoader({ steps, currentStep }: AppLoaderProps) {
 
           {/* Progress indicator */}
           <div className="pt-4">
-            <div className="h-1 bg-muted rounded-full overflow-hidden">
+            <div className="overflow-hidden h-1 rounded-full bg-muted">
               <div
-                className="h-full bg-primary transition-all duration-300"
+                className="h-full transition-all duration-300 bg-primary"
                 style={{
                   width: `${
                     (steps.filter((s) => s.status === "complete").length /

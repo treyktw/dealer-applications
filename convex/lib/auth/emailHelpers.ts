@@ -212,6 +212,139 @@ Support: ${EMAIL_CONFIG.b2b.replyTo}
 }
 
 /**
+ * Send login verification code email
+ */
+export async function sendLoginCodeEmail(params: {
+  email: string;
+  name: string;
+  code: string;
+}): Promise<void> {
+  console.log("📧 [EMAIL] sendLoginCodeEmail called:", {
+    email: params.email,
+    name: params.name,
+    codeLength: params.code.length,
+  });
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Your Login Code</title>
+      </head>
+      <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
+        <div style="max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+
+          <!-- Header -->
+          <div style="background: linear-gradient(135deg, #0aadd1 0%, #9333ea 100%); padding: 40px 32px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold;">Your Login Code</h1>
+          </div>
+
+          <!-- Content -->
+          <div style="padding: 40px 32px;">
+            <p style="color: #111827; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
+              Hi <strong>${params.name}</strong>,
+            </p>
+
+            <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">
+              Use this code to sign in to your DealerApps account:
+            </p>
+
+            <!-- Code Display -->
+            <div style="text-align: center; margin: 32px 0;">
+              <div style="display: inline-block; background-color: #f3f4f6; border: 2px dashed #0aadd1; border-radius: 12px; padding: 24px 40px;">
+                <div style="font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #0aadd1; font-family: 'Courier New', monospace;">
+                  ${params.code}
+                </div>
+              </div>
+            </div>
+
+            <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 24px 0 0 0;">
+              This code will expire in 10 minutes. If you didn't request this code, please ignore this email or contact support if you have concerns about your account security.
+            </p>
+
+            <div style="margin-top: 32px; padding: 20px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px;">
+              <p style="color: #92400e; font-size: 14px; line-height: 1.6; margin: 0; font-weight: 600;">
+                🔒 Security Notice
+              </p>
+              <p style="color: #78350f; font-size: 13px; line-height: 1.6; margin: 8px 0 0 0;">
+                Never share this code with anyone. DealerApps staff will never ask for your verification code.
+              </p>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div style="background-color: #f9fafb; padding: 24px 32px; text-align: center; border-top: 1px solid #e5e7eb;">
+            <p style="color: #6b7280; font-size: 12px; margin: 0 0 8px 0;">
+              © ${new Date().getFullYear()} DealerApps. All rights reserved.
+            </p>
+            <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+              Universal Auto Brokers<br>
+              Support: ${EMAIL_CONFIG.b2b.replyTo}
+            </p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = `
+Hi ${params.name},
+
+Use this code to sign in to your DealerApps account:
+
+${params.code}
+
+This code will expire in 10 minutes. If you didn't request this code, please ignore this email or contact support if you have concerns about your account security.
+
+🔒 SECURITY NOTICE:
+Never share this code with anyone. DealerApps staff will never ask for your verification code.
+
+Best regards,
+The DealerApps Team
+
+© ${new Date().getFullYear()} DealerApps - Universal Auto Brokers
+Support: ${EMAIL_CONFIG.b2b.replyTo}
+  `.trim();
+
+  try {
+    console.log("📧 [EMAIL] Calling sendEmail with:", {
+      from: `${EMAIL_CONFIG.b2b.fromName} <${EMAIL_CONFIG.b2b.fromEmail}>`,
+      to: params.email,
+      subject: "Your DealerApps login code",
+      hasHtml: !!html,
+      hasText: !!text,
+      replyTo: EMAIL_CONFIG.b2b.replyTo,
+    });
+
+    const result = await sendEmail({
+      from: `${EMAIL_CONFIG.b2b.fromName} <${EMAIL_CONFIG.b2b.fromEmail}>`,
+      to: params.email,
+      subject: "Your DealerApps login code",
+      html,
+      text,
+      replyTo: EMAIL_CONFIG.b2b.replyTo,
+      tags: [
+        { name: "type", value: "auth_login_code" },
+        { name: "environment", value: process.env.NODE_ENV || "development" },
+      ],
+    });
+
+    console.log("✅ [EMAIL] sendLoginCodeEmail completed successfully:", {
+      email: params.email,
+      resultId: result.data?.id,
+    });
+  } catch (error) {
+    console.error("❌ [EMAIL] sendLoginCodeEmail failed:", {
+      email: params.email,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    throw error;
+  }
+}
+
+/**
  * Welcome email after successful registration
  */
 export async function sendWelcomeEmail(params: {

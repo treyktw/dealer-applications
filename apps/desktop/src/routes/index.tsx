@@ -62,7 +62,7 @@ function HomePage() {
   const isStandalone = appMode === "standalone";
   
   const user = auth.user;
-  const session = auth.session;
+  const token = auth.token;
 
   // Fetch deals - only for dealership mode
   // In standalone mode, deals are stored locally
@@ -80,7 +80,6 @@ function HomePage() {
         throw new Error("User not associated with a dealership");
       }
 
-      const token = session?.token;
       if (!token) {
         throw new Error("No authentication token found");
       }
@@ -90,7 +89,7 @@ function HomePage() {
         token: token,
       });
     },
-    enabled: !isStandalone && !!user?.dealershipId && !!session?.token,
+    enabled: !isStandalone && !!user?.dealershipId && !!token,
   });
 
   // Redirect standalone users to standalone dashboard
@@ -115,7 +114,7 @@ function HomePage() {
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
-            <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <div className="mx-auto mb-4 w-16 h-16 rounded-full border-4 animate-spin border-primary border-t-transparent" />
             <p className="text-muted-foreground">Loading...</p>
           </div>
         </div>
@@ -140,29 +139,59 @@ function HomePage() {
         : [];
 
   // Calculate stats
+  // Only count COMPLETED deals for revenue - draft/pending deals shouldn't count toward revenue
+  const completedDeals = deals.filter((d) => 
+    d.status === "COMPLETED" || 
+    d.status === "DELIVERED" || 
+    d.status === "FINALIZED" ||
+    d.status === "completed" // Legacy status
+  );
+  
   const stats = {
     total: deals.length,
-    pending: deals.filter((d) => d.status === "pending" || d.status === "draft").length,
-    ready: deals.filter((d) => d.status === "READY_TO_SIGN" || d.status === "PENDING_SIGNATURE").length,
-    completed: deals.filter((d) => d.status === "COMPLETED").length,
-    totalValue: deals.reduce((sum, d) => sum + (d.totalAmount || d.saleAmount || 0), 0),
+    pending: deals.filter((d) => d.status === "pending" || d.status === "draft" || d.status === "DRAFT" || d.status === "PENDING_APPROVAL").length,
+    ready: deals.filter((d) => d.status === "READY_TO_SIGN" || d.status === "PENDING_SIGNATURE" || d.status === "AWAITING_SIGNATURES").length,
+    completed: completedDeals.length,
+    // Only sum totalAmount from completed deals (totalAmount is required field, no need for fallback)
+    totalValue: completedDeals.reduce((sum, d) => sum + (d.totalAmount || 0), 0),
   };
 
   // Calculate trends (mock data for now - replace with actual monthly data)
   const monthlyGrowth = 12.5; // percentage
   const dealsGrowth = 8.3;
 
+  // Format currency with proper units (k for thousands, M for millions)
+  const formatCurrency = (value: number): string => {
+    if (value >= 1000000) {
+      // Millions
+      const millions = value / 1000000;
+      return millions >= 10 
+        ? `$${millions.toFixed(0)}M`
+        : `$${millions.toFixed(1)}M`;
+    } else if (value >= 1000) {
+      // Thousands
+      const thousands = value / 1000;
+      return thousands >= 10
+        ? `$${thousands.toFixed(0)}k`
+        : `$${thousands.toFixed(1)}k`;
+    } else {
+      // Less than 1000
+      return `$${value.toFixed(0)}`;
+    }
+  };
+
   // Get recent deals
   const recentDeals = deals
     .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
     .slice(0, 5);
+
 
   if (dealsLoading) {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
-            <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <div className="mx-auto mb-4 w-16 h-16 rounded-full border-4 animate-spin border-primary border-t-transparent" />
             <p className="text-muted-foreground">Loading your dashboard...</p>
           </div>
         </div>
@@ -172,91 +201,91 @@ function HomePage() {
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto space-y-8 pb-24">
+      <div className="pb-24 mx-auto space-y-8 max-w-7xl">
         {/* Welcome Section */}
-        <div className="flex items-center justify-between">
+        <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">
+            <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-foreground to-foreground/60">
               Welcome back, {firstName}
             </h1>
-            <p className="text-muted-foreground mt-2 text-lg">
+            <p className="mt-2 text-lg text-muted-foreground">
               Here's what's happening with your dealership today
             </p>
           </div>
           <Button size="lg" className="gap-2 shadow-lg" onClick={() => navigate({ to: "/deals/new" })}>
-            <Plus className="h-5 w-5" />
+            <Plus className="w-5 h-5" />
             New Deal
           </Button>
         </div>
 
         {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="border-none shadow-lg bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <Card className="to-transparent border-none shadow-lg bg-linear-to-br from-blue-500/10 via-blue-500/5">
             <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-blue-500/10 rounded-xl">
-                  <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              <div className="flex justify-between items-center mb-4">
+                <div className="p-3 rounded-xl bg-blue-500/10">
+                  <FileText className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                 </div>
-                <div className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
-                  <TrendingUp className="h-4 w-4" />
+                <div className="flex gap-1 items-center text-sm text-green-600 dark:text-green-400">
+                  <TrendingUp className="w-4 h-4" />
                   <span className="font-medium">{dealsGrowth}%</span>
                 </div>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Total Deals</p>
+                <p className="mb-1 text-sm text-muted-foreground">Total Deals</p>
                 <p className="text-3xl font-bold">{stats.total}</p>
-                <p className="text-xs text-muted-foreground mt-1">+{Math.floor(stats.total * (dealsGrowth / 100))} this month</p>
+                <p className="mt-1 text-xs text-muted-foreground">+{Math.floor(stats.total * (dealsGrowth / 100))} this month</p>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-lg bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent">
+          <Card className="to-transparent border-none shadow-lg bg-linear-to-br from-amber-500/10 via-amber-500/5">
             <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-amber-500/10 rounded-xl">
-                  <Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+              <div className="flex justify-between items-center mb-4">
+                <div className="p-3 rounded-xl bg-amber-500/10">
+                  <Clock className="w-6 h-6 text-amber-600 dark:text-amber-400" />
                 </div>
-                <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Pending</p>
+                <p className="mb-1 text-sm text-muted-foreground">Pending</p>
                 <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">{stats.pending}</p>
-                <p className="text-xs text-muted-foreground mt-1">Needs attention</p>
+                <p className="mt-1 text-xs text-muted-foreground">Needs attention</p>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-lg bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent">
+          <Card className="to-transparent border-none shadow-lg bg-linear-to-br from-blue-500/10 via-blue-500/5">
             <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-blue-500/10 rounded-xl">
-                  <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              <div className="flex justify-between items-center mb-4">
+                <div className="p-3 rounded-xl bg-blue-500/10">
+                  <FileText className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                 </div>
-                <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Ready to Sign</p>
+                <p className="mb-1 text-sm text-muted-foreground">Ready to Sign</p>
                 <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{stats.ready}</p>
-                <p className="text-xs text-muted-foreground mt-1">Action required</p>
+                <p className="mt-1 text-xs text-muted-foreground">Action required</p>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-lg bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent">
+          <Card className="to-transparent border-none shadow-lg bg-linear-to-br from-green-500/10 via-green-500/5">
             <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-green-500/10 rounded-xl">
-                  <DollarSign className="h-6 w-6 text-green-600 dark:text-green-400" />
+              <div className="flex justify-between items-center mb-4">
+                <div className="p-3 rounded-xl bg-green-500/10">
+                  <DollarSign className="w-6 h-6 text-green-600 dark:text-green-400" />
                 </div>
-                <div className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
-                  <TrendingUp className="h-4 w-4" />
+                <div className="flex gap-1 items-center text-sm text-green-600 dark:text-green-400">
+                  <TrendingUp className="w-4 h-4" />
                   <span className="font-medium">{monthlyGrowth}%</span>
                 </div>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Total Revenue</p>
-                <p className="text-3xl font-bold">${(stats.totalValue / 1000).toFixed(0)}k</p>
-                <p className="text-xs text-muted-foreground mt-1">+${((stats.totalValue * (monthlyGrowth / 100)) / 1000).toFixed(0)}k this month</p>
+                <p className="mb-1 text-sm text-muted-foreground">Total Revenue</p>
+                <p className="text-3xl font-bold">{formatCurrency(stats.totalValue)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">+{formatCurrency(stats.totalValue * (monthlyGrowth / 100))} this month</p>
               </div>
             </CardContent>
           </Card>
@@ -265,24 +294,24 @@ function HomePage() {
         {/* Recent Deals */}
         <Card className="border-none shadow-lg">
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex justify-between items-center">
               <div>
                 <CardTitle className="text-2xl">Recent Deals</CardTitle>
                 <CardDescription className="mt-1">Your latest customer transactions</CardDescription>
               </div>
               <Button variant="outline" onClick={() => navigate({ to: "/deals" })}>
                 View All
-                <ArrowRight className="ml-2 h-4 w-4" />
+                <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             {recentDeals.length === 0 ? (
-              <div className="text-center py-12">
-                <FileText className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
-                <p className="text-muted-foreground mb-4">No deals yet</p>
+              <div className="py-12 text-center">
+                <FileText className="mx-auto mb-4 w-12 h-12 text-muted-foreground/30" />
+                <p className="mb-4 text-muted-foreground">No deals yet</p>
                 <Button onClick={() => navigate({ to: "/deals/new" })}>
-                  <Plus className="mr-2 h-4 w-4" />
+                  <Plus className="mr-2 w-4 h-4" />
                   Create Your First Deal
                 </Button>
               </div>
@@ -292,35 +321,35 @@ function HomePage() {
                   <button
                     type="button"
                     key={deal.id}
-                    className="flex items-center justify-between p-4 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group w-full text-left"
+                    className="flex justify-between items-center p-4 w-full text-left rounded-lg transition-colors cursor-pointer hover:bg-accent/50 group"
                     onClick={() => navigate({ to: `/deals/${deal.id}` })}
                   >
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
-                        <User className="h-6 w-6 text-primary" />
+                    <div className="flex flex-1 gap-4 items-center">
+                      <div className="flex justify-center items-center w-12 h-12 rounded-full bg-linear-to-br from-primary/20 to-primary/10">
+                        <User className="w-6 h-6 text-primary" />
                       </div>
                       <div className="flex-1">
                         <p className="font-semibold">
                           {deal.client ? `${deal.client.firstName} ${deal.client.lastName}` : deal.clientName || "No Client"}
                         </p>
-                        <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Car className="h-3 w-3" />
+                        <div className="flex gap-4 items-center mt-1 text-sm text-muted-foreground">
+                          <span className="flex gap-1 items-center">
+                            <Car className="w-3 h-3" />
                             {deal.vehicle ? `${deal.vehicle.year} ${deal.vehicle.make}` : "No Vehicle"}
                           </span>
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
+                          <span className="flex gap-1 items-center">
+                            <Calendar className="w-3 h-3" />
                             {new Date(deal.createdAt).toLocaleDateString()}
                           </span>
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex gap-4 items-center">
                       <div className="text-right">
                         <p className="font-semibold">${(deal.totalAmount || deal.saleAmount || 0).toLocaleString()}</p>
                         <StatusBadge status={deal.status} />
                       </div>
-                      <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+                      <ArrowRight className="w-5 h-5 transition-transform text-muted-foreground group-hover:translate-x-1" />
                     </div>
                   </button>
                 ))}
@@ -365,8 +394,8 @@ function StatusBadge({ status }: { status: string }) {
   const { label, class: className, icon: Icon } = config[status] || config.pending;
 
   return (
-    <span className={cn("inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full", className)}>
-      <Icon className="h-3 w-3" />
+    <span className={cn("inline-flex gap-1 items-center px-2 py-1 text-xs font-medium rounded-full", className)}>
+      <Icon className="w-3 h-3" />
       {label}
     </span>
   );

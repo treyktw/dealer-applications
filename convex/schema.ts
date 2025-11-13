@@ -1852,6 +1852,8 @@ export default defineSchema({
     verificationToken: v.optional(v.string()),
     resetToken: v.optional(v.string()),
     resetTokenExpiresAt: v.optional(v.number()),
+    loginCode: v.optional(v.string()), // 6-digit login verification code
+    loginCodeExpiresAt: v.optional(v.number()), // When login code expires
 
     // Metadata
     lastLoginAt: v.optional(v.number()),
