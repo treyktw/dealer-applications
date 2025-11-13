@@ -20,7 +20,8 @@
     "env": "^0.0.2",
     "nanoid": "^5.1.5",
     "pdf-lib": "^1.17.1",
-    "stripe": "^18.5.0"
+    "stripe": "^18.5.0",
+    "zod": "^3.25.76"
   },
   "scripts": {
     "dev": "convex dev",
