@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       try {
         const result = await convexQuery(api.api.desktopAuth.validateSession, {
-          token: storedToken,
+          accessToken: storedToken,
         });
 
         if (result) {
@@ -222,10 +222,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const state = crypto.randomUUID();
     sessionStorage.setItem(STATE_KEY, state);
 
-    // Production web URL
-    const webUrl = "https://dealer.universalautobrokers.net";
-    // local web url
-    // const webUrl = "http://localhost:3000";
+    // Determine web URL based on environment
+    const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === "development";
+    const webUrl = isDevelopment
+      ? "http://localhost:3000"
+      : "https://dealer.universalautobrokers.net";
     const authUrl = `${webUrl}/desktop-sso?state=${state}`;
 
     // Open in system browser

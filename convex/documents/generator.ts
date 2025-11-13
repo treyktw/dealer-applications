@@ -43,7 +43,7 @@ async function requireAuth(
 
     // Validate session token
     const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, {
-      token,
+      accessToken: token,
     });
     if (!sessionData?.user) {
       throw new Error("Invalid or expired session");

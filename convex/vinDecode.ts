@@ -6,7 +6,7 @@
 import { v } from "convex/values";
 import { action, mutation, query, internalQuery } from "./_generated/server";
 import { decodeVIN, decodePartialVIN, type DecodedVIN } from "./lib/vin/decoder";
-import { internal } from "./_generated/api";
+import { internal, api } from "./_generated/api";
 
 /**
  * Decode a VIN and return vehicle information
@@ -21,10 +21,14 @@ export const decode = action({
 
     // Optionally cache the result
     try {
-      await ctx.runMutation(internal.vinDecode.cacheDecodedVIN, {
-        vin: decodedVIN.vin,
-        data: JSON.stringify(decodedVIN),
-      });
+      // Type assertion needed until Convex types are regenerated
+      await ctx.runMutation(
+        api.vinDecode.cacheDecodedVIN,
+        {
+          vin: decodedVIN.vin,
+          data: JSON.stringify(decodedVIN),
+        }
+      );
     } catch (error) {
       console.warn("Failed to cache VIN decode result:", error);
       // Don't fail the request if caching fails
@@ -42,7 +46,7 @@ export const decodePartial = action({
   args: {
     partialVIN: v.string(),
   },
-  handler: async (ctx, args): Promise<Partial<DecodedVIN>> => {
+  handler: async (_ctx, args): Promise<Partial<DecodedVIN>> => {
     return await decodePartialVIN(args.partialVIN);
   },
 });
@@ -55,7 +59,7 @@ export const autoFillFromVIN = action({
   args: {
     vin: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (_ctx, args) => {
     const decoded = await decodeVIN(args.vin);
 
     // Return only fields useful for vehicle form auto-fill
@@ -171,9 +175,13 @@ export const decodeWithCache = action({
 
     // Not in cache, decode from NHTSA API
     console.log(`🔍 VIN decode from NHTSA API: ${args.vin}`);
-    return await ctx.runAction(internal.vinDecode.decode, {
-      vin: args.vin,
-    });
+    // Type assertion needed until Convex types are regenerated
+    return await ctx.runAction(
+      api.vinDecode.decode,
+      {
+        vin: args.vin,
+      }
+    );
   },
 });
 

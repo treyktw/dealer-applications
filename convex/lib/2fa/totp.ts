@@ -89,9 +89,11 @@ async function generateHOTP(
   counterView.setBigUint64(0, BigInt(counter), false);
 
   // Import secret as HMAC key
+  // Create a new Uint8Array to ensure it has an ArrayBuffer backing buffer
+  const keyBuffer = new Uint8Array(secretBytes);
   const key = await crypto.subtle.importKey(
     "raw",
-    secretBytes,
+    keyBuffer,
     { name: "HMAC", hash: "SHA-1" },
     false,
     ["sign"]

@@ -2,7 +2,7 @@
 import { query, action } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { getVehicleImageWithFallback, getDefaultVehicleImages } from "./lib/images/defaultVehicleImages";
+import { getDefaultVehicleImages } from "./lib/images/defaultVehicleImages";
 
 // Get vehicles by dealership with filtering and pagination
 export const getVehiclesByDealership = query({
@@ -32,17 +32,28 @@ export const getVehiclesByDealership = query({
       .withIndex("by_dealership", (q) => q.eq("dealershipId", args.dealershipId))
       .filter((q) => q.eq(q.field("status"), "AVAILABLE"))
       .collect();
+
+    if(!args.make) {
+      throw new Error("Make is required");
+    }
+
+    if(!args.model) {
+      throw new Error("Model is required");
+    }
+
     
     // Apply filters
     if (args.make) {
+      const makeFilter = args.make.toLowerCase();
       vehicles = vehicles.filter(v => 
-        v.make.toLowerCase() === args.make!.toLowerCase()
+        v.make.toLowerCase() === makeFilter
       );
     }
     
     if (args.model) {
+      const modelFilter = args.model.toLowerCase();
       vehicles = vehicles.filter(v => 
-        v.model.toLowerCase() === args.model!.toLowerCase()
+        v.model.toLowerCase() === modelFilter
       );
     }
     
@@ -51,11 +62,13 @@ export const getVehiclesByDealership = query({
     }
     
     if (args.minPrice !== undefined) {
-      vehicles = vehicles.filter(v => v.price >= args.minPrice!);
+      const minPrice = args.minPrice;
+      vehicles = vehicles.filter(v => v.price >= minPrice);
     }
     
     if (args.maxPrice !== undefined) {
-      vehicles = vehicles.filter(v => v.price <= args.maxPrice!);
+      const maxPrice = args.maxPrice;
+      vehicles = vehicles.filter(v => v.price <= maxPrice);
     }
     
     if (args.featured !== undefined) {

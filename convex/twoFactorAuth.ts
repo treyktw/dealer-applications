@@ -4,11 +4,10 @@
  */
 
 import { v } from "convex/values";
-import { action, mutation, query, internalMutation, internalQuery } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { action, query, internalMutation, internalQuery } from "./_generated/server";
+import { internal, api } from "./_generated/api";
 import {
   generateTOTPSecret,
-  generateTOTPCode,
   validateTOTPCode,
   generateBackupCodes,
   hashBackupCode,
@@ -44,12 +43,17 @@ export const setupTwoFactor = action({
       userId: args.userId,
     });
 
-    if (existing2FA && existing2FA.enabled) {
+    if (existing2FA?.enabled) {
       throw new Error("2FA is already enabled. Please disable it first to set up a new device.");
     }
 
     // Generate new TOTP secret
     const secret = generateTOTPSecret();
+    
+    // Validate the generated secret format
+    if (!isValidTOTPSecret(secret)) {
+      throw new Error("Failed to generate valid TOTP secret");
+    }
 
     // Generate OTPAuth URI for QR code
     const otpAuthURI = generateOTPAuthURI(
@@ -198,13 +202,14 @@ export const disableTwoFactor = action({
     }
     // Try backup code
     else if (isValidBackupCode(args.code)) {
+      // Type assertion needed until Convex types are regenerated
       const backupCodeResult = await ctx.runAction(
-        internal.twoFactorAuth.verifyAndUseBackupCode,
+        api.twoFactorAuth.verifyAndUseBackupCode,
         {
           userId: args.userId,
           code: args.code,
         }
-      );
+      ) as { valid: boolean; used: boolean };
       verified = backupCodeResult.valid;
       method = "backup_code";
     }
@@ -252,7 +257,12 @@ export const verifyTwoFactorCode = action({
     ipAddress: v.optional(v.string()),
     userAgent: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    verified: boolean;
+    method: "totp" | "backup_code";
+    backupCodeUsed?: boolean;
+    backupCodesRemaining?: number;
+  }> => {
     // Get 2FA config
     const config = await ctx.runQuery(internal.twoFactorAuth.get2FAConfig, {
       userId: args.userId,
@@ -273,14 +283,15 @@ export const verifyTwoFactorCode = action({
     }
     // Try backup code
     else if (isValidBackupCode(args.code)) {
+      // Type assertion needed until Convex types are regenerated
       const backupCodeResult = await ctx.runAction(
-        internal.twoFactorAuth.verifyAndUseBackupCode,
+        api.twoFactorAuth.verifyAndUseBackupCode,
         {
           userId: args.userId,
           code: args.code,
           ipAddress: args.ipAddress,
         }
-      );
+      ) as { valid: boolean; used: boolean };
       verified = backupCodeResult.valid;
       method = "backup_code";
       backupCodeUsed = backupCodeResult.used;
@@ -378,13 +389,14 @@ export const regenerateBackupCodes = action({
   },
   handler: async (ctx, args) => {
     // Verify current code first
+    // Type assertion needed until Convex types are regenerated
     const verificationResult = await ctx.runAction(
-      internal.twoFactorAuth.verifyTwoFactorCode,
+      api.twoFactorAuth.verifyTwoFactorCode,
       {
         userId: args.userId,
         code: args.currentCode,
       }
-    );
+    ) as { verified: boolean; method: string; backupCodeUsed?: boolean };
 
     if (!verificationResult.verified) {
       throw new Error("Invalid verification code. Please try again.");

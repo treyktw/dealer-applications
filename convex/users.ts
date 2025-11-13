@@ -7,7 +7,7 @@ import { nanoid } from "nanoid";
 import { addDays } from "date-fns";
 import { internalQuery, internalMutation } from "./_generated/server";
 
-import { Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
 import { UserRole } from "./schema";
 import { internal } from "./_generated/api";
 import { api } from "./_generated/api";
@@ -691,7 +691,7 @@ export const updateUserSettings = mutation({
     if (args.token) {
       try {
         const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { 
-          token: args.token 
+          accessToken: args.token,
         });
         if (!sessionData) {
           throw new Error("Invalid or expired session");

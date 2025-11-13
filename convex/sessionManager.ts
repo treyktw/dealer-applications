@@ -4,8 +4,14 @@
  */
 
 import { v } from "convex/values";
-import { action, mutation, query, internalMutation, internalQuery } from "./_generated/server";
-import { internal } from "./_generated/api";
+import {
+  action,
+  mutation,
+  query,
+  internalMutation,
+  internalQuery,
+} from "./_generated/server";
+import { internal, api } from "./_generated/api";
 import {
   generateSessionId,
   generateTokenPair,
@@ -48,7 +54,7 @@ export const createSession = action({
 
     // Generate session ID and tokens
     const sessionId = generateSessionId();
-    const tokens = generateTokenPair(args.userId, sessionId);
+    const tokens = await generateTokenPair(args.userId, sessionId);
 
     // Hash tokens for storage (never store plaintext tokens)
     const accessTokenHash = await hashToken(tokens.accessToken);
@@ -114,27 +120,37 @@ export const refreshAccessToken = action({
     // Check if refresh token is expired
     if (isTokenExpired(session.refreshTokenExpiresAt)) {
       // Revoke the session
-      await ctx.runMutation(internal.sessionManager.revokeSession, {
-        sessionId: session.sessionId,
-        reason: "Refresh token expired",
-      });
+      await ctx.runMutation(
+        api.sessionManager
+          .revokeSession,
+        {
+          sessionId: session.sessionId,
+          reason: "Refresh token expired",
+        }
+      );
       throw new Error("Refresh token expired. Please log in again.");
     }
 
     // Check if session is idle
     if (isSessionIdle(session.lastAccessedAt)) {
       // Revoke the session
-      await ctx.runMutation(internal.sessionManager.revokeSession, {
-        sessionId: session.sessionId,
-        reason: "Session idle timeout",
-      });
-      throw new Error("Session expired due to inactivity. Please log in again.");
+      await ctx.runMutation(
+        api.sessionManager
+          .revokeSession,
+        {
+          sessionId: session.sessionId,
+          reason: "Session idle timeout",
+        }
+      );
+      throw new Error(
+        "Session expired due to inactivity. Please log in again."
+      );
     }
 
     // Check if session has exceeded absolute timeout
     if (isSessionExpired(session.createdAt)) {
       // Revoke the session
-      await ctx.runMutation(internal.sessionManager.revokeSession, {
+      await ctx.runMutation(api.sessionManager.revokeSession, {
         sessionId: session.sessionId,
         reason: "Session absolute timeout",
       });
@@ -168,7 +184,7 @@ export const refreshAccessToken = action({
     }
 
     // Generate new token pair (refresh token rotation)
-    const newTokens = generateTokenPair(session.userId, session.sessionId);
+    const newTokens = await generateTokenPair(session.userId, session.sessionId);
 
     // Hash new tokens
     const newAccessTokenHash = await hashToken(newTokens.accessToken);
@@ -462,11 +478,14 @@ export const getSessionStats = query({
     );
 
     // Device breakdown
-    const deviceBreakdown = activeSessions.reduce((acc, session) => {
-      const device = session.device || "Unknown";
-      acc[device] = (acc[device] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    const deviceBreakdown = activeSessions.reduce(
+      (acc, session) => {
+        const device = session.device || "Unknown";
+        acc[device] = (acc[device] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>
+    );
 
     return {
       total: allSessions.length,
@@ -474,12 +493,14 @@ export const getSessionStats = query({
       revoked: revokedSessions.length,
       expired: expiredSessions.length,
       deviceBreakdown,
-      oldestSession: allSessions.length > 0
-        ? Math.min(...allSessions.map((s) => s.createdAt))
-        : null,
-      newestSession: allSessions.length > 0
-        ? Math.max(...allSessions.map((s) => s.createdAt))
-        : null,
+      oldestSession:
+        allSessions.length > 0
+          ? Math.min(...allSessions.map((s) => s.createdAt))
+          : null,
+      newestSession:
+        allSessions.length > 0
+          ? Math.max(...allSessions.map((s) => s.createdAt))
+          : null,
     };
   },
 });
@@ -609,9 +630,7 @@ export const checkSessionRateLimit = internalQuery({
     }
 
     // Check max concurrent sessions per IP
-    const ipSessions = await ctx.db
-      .query("auth_sessions")
-      .collect();
+    const ipSessions = await ctx.db.query("auth_sessions").collect();
 
     const activeIPSessions = ipSessions.filter(
       (s) =>
@@ -631,8 +650,7 @@ export const checkSessionRateLimit = internalQuery({
 
     // Check session creation rate
     const recentSessions = userSessions.filter(
-      (s) =>
-        Date.now() - s.createdAt < SESSION_RATE_LIMIT.createWindowMs
+      (s) => Date.now() - s.createdAt < SESSION_RATE_LIMIT.createWindowMs
     );
 
     if (recentSessions.length >= SESSION_RATE_LIMIT.maxCreatesInWindow) {

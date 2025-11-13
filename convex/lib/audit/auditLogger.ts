@@ -148,11 +148,11 @@ export interface AuditLogEntry {
 
   // Context
   description: string;
-  details?: Record<string, any>; // Additional structured data
+  details?: Record<string, unknown>; // Additional structured data
 
   // Changes (for UPDATE actions)
-  changesBefore?: Record<string, any>;
-  changesAfter?: Record<string, any>;
+  changesBefore?: Record<string, unknown>;
+  changesAfter?: Record<string, unknown>;
 
   // Network & Device
   ipAddress?: string;
@@ -213,16 +213,17 @@ export const AUDIT_CONFIG = {
 export function getComplianceFlags(category: AuditCategoryType): string[] {
   const flags: string[] = [];
 
-  if (AUDIT_CONFIG.compliance.hipaa.includes(category)) {
+  // Type-safe checks using array includes with type assertion
+  if ((AUDIT_CONFIG.compliance.hipaa as readonly string[]).includes(category)) {
     flags.push("HIPAA");
   }
-  if (AUDIT_CONFIG.compliance.sox.includes(category)) {
+  if ((AUDIT_CONFIG.compliance.sox as readonly string[]).includes(category)) {
     flags.push("SOX");
   }
-  if (AUDIT_CONFIG.compliance.pci.includes(category)) {
+  if ((AUDIT_CONFIG.compliance.pci as readonly string[]).includes(category)) {
     flags.push("PCI");
   }
-  if (AUDIT_CONFIG.compliance.gdpr.includes(category)) {
+  if ((AUDIT_CONFIG.compliance.gdpr as readonly string[]).includes(category)) {
     flags.push("GDPR");
   }
 
@@ -252,9 +253,10 @@ export function getAutoSeverity(
   category: AuditCategoryType,
   status: AuditStatusType
 ): AuditSeverityType {
-  // Check predefined severity map
-  if (AUDIT_CONFIG.severityMap[category]) {
-    return AUDIT_CONFIG.severityMap[category];
+  // Check predefined severity map (with type-safe access)
+  const severityMap = AUDIT_CONFIG.severityMap as Record<string, AuditSeverityType>;
+  if (category in severityMap) {
+    return severityMap[category];
   }
 
   // Auto-determine based on status
@@ -323,7 +325,7 @@ export function createAuditLogEntry(
  * Sanitize sensitive data before logging
  * Remove or mask PII from log details
  */
-export function sanitizeLogData(data: Record<string, any>): Record<string, any> {
+export function sanitizeLogData(data: Record<string, unknown>): Record<string, unknown> {
   const sensitiveFields = [
     "password",
     "passwordHash",
@@ -353,15 +355,15 @@ export function sanitizeLogData(data: Record<string, any>): Record<string, any> 
  * Shows what changed in an UPDATE operation
  */
 export function formatChanges(
-  before: Record<string, any>,
-  after: Record<string, any>
+  before: Record<string, unknown>,
+  after: Record<string, unknown>
 ): {
-  changesBefore: Record<string, any>;
-  changesAfter: Record<string, any>;
+  changesBefore: Record<string, unknown>;
+  changesAfter: Record<string, unknown>;
   changedFields: string[];
 } {
-  const changesBefore: Record<string, any> = {};
-  const changesAfter: Record<string, any> = {};
+  const changesBefore: Record<string, unknown> = {};
+  const changesAfter: Record<string, unknown> = {};
   const changedFields: string[] = [];
 
   // Find changed fields

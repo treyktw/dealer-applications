@@ -60,11 +60,15 @@ export function generateSessionId(): string {
  * Note: In a real implementation, you'd use a proper JWT library
  * For Convex, we'll use simple token storage in the database
  */
-export function generateAccessToken(userId: string, sessionId: string): {
+export async function generateAccessToken(userId: string, sessionId: string): Promise<{
   token: string;
   expiresAt: number;
-} {
-  const token = generateSecureToken(48);
+}> {
+  // Incorporate userId and sessionId into token generation for uniqueness
+  const seed = `${userId}:${sessionId}:${Date.now()}`;
+  const seedHash = await hashToken(seed);
+  const randomPart = generateSecureToken(32);
+  const token = `${seedHash.substring(0, 16)}${randomPart}`;
   const expiresAt = Date.now() + SESSION_CONFIG.access.expiresIn;
 
   return {
@@ -76,11 +80,15 @@ export function generateAccessToken(userId: string, sessionId: string): {
 /**
  * Generate refresh token (long-lived)
  */
-export function generateRefreshToken(userId: string, sessionId: string): {
+export async function generateRefreshToken(userId: string, sessionId: string): Promise<{
   token: string;
   expiresAt: number;
-} {
-  const token = generateSecureToken(64);
+}> {
+  // Incorporate userId and sessionId into token generation for uniqueness
+  const seed = `${userId}:${sessionId}:${Date.now()}`;
+  const seedHash = await hashToken(seed);
+  const randomPart = generateSecureToken(48);
+  const token = `${seedHash.substring(0, 16)}${randomPart}`;
   const expiresAt = Date.now() + SESSION_CONFIG.refresh.expiresIn;
 
   return {
@@ -244,12 +252,12 @@ export interface TokenPair {
 /**
  * Generate token pair for a session
  */
-export function generateTokenPair(
+export async function generateTokenPair(
   userId: string,
   sessionId: string
-): TokenPair {
-  const access = generateAccessToken(userId, sessionId);
-  const refresh = generateRefreshToken(userId, sessionId);
+): Promise<TokenPair> {
+  const access = await generateAccessToken(userId, sessionId);
+  const refresh = await generateRefreshToken(userId, sessionId);
 
   return {
     accessToken: access.token,

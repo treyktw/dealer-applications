@@ -21,7 +21,9 @@ async function requireAuth(ctx: QueryCtx, token?: string): Promise<Doc<"users">>
   if (token) {
     type SessionUser = { id?: string; email?: string };
     
-    const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token });
+    const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { 
+      accessToken: token,
+    });
     if (!sessionData?.user) throw new Error("Invalid or expired session");
     
     const { id, email } = sessionData.user as SessionUser;

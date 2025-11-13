@@ -7,7 +7,8 @@
  */
 
 import { v } from "convex/values";
-import { mutation, query, action, internalMutation } from "./_generated/server";
+import { mutation, query, action, internalMutation, internalQuery } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
 import { getCurrentUser } from "./lib/helpers/auth_helpers";
 import {
   encryptPII,
@@ -20,7 +21,7 @@ import {
   type PIIType,
   type EncryptedPII,
 } from "./lib/pii/encryption";
-import { internal } from "./_generated/api";
+import { internal, api } from "./_generated/api";
 
 /**
  * Store PII data in the vault
@@ -48,7 +49,7 @@ export const storePII = action({
   },
   handler: async (ctx, args) => {
     // Get current user
-    const user = await ctx.runQuery(internal.piiVault.getCurrentUserForPII);
+    const user = await ctx.runQuery(api.piiVault.getCurrentUserForPII);
     if (!user) {
       throw new Error("Unauthorized: Must be logged in to store PII");
     }
@@ -101,15 +102,26 @@ export const retrievePII = action({
     vaultId: v.string(),
     reason: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    vaultId: string;
+    type: string;
+    plaintext: string;
+    masked: string;
+    ownerId: string;
+    ownerType: string;
+    description?: string;
+    expiresAt?: number;
+    accessCount: number;
+  }> => {
     // Get current user
-    const user = await ctx.runQuery(internal.piiVault.getCurrentUserForPII);
+    const user = await ctx.runQuery(api.piiVault.getCurrentUserForPII);
     if (!user) {
       throw new Error("Unauthorized: Must be logged in to retrieve PII");
     }
 
     // Get encrypted PII record
-    const record = await ctx.runQuery(internal.piiVault.getPIIRecord, {
+    // Use internal query to avoid circular reference in Convex types
+    const record = await ctx.runQuery(internal.piiVault.getPIIRecordInternal, {
       vaultId: args.vaultId,
     });
 
@@ -372,25 +384,32 @@ export const getPIIAccessLogs = query({
 
     const limit = Math.min(args.limit || 50, 100);
 
-    let logs;
+    const dealershipId = user.dealershipId;
+    if (!dealershipId) {
+      return [];
+    }
+
+    let logs: Doc<"pii_access_log">[];
     if (args.vaultId) {
+      const vaultId: string = args.vaultId;
       logs = await ctx.db
         .query("pii_access_log")
-        .withIndex("by_vault_id", (q) => q.eq("vaultId", args.vaultId))
-        .filter((q) => q.eq(q.field("dealershipId"), user.dealershipId || ""))
+        .withIndex("by_vault_id", (q) => q.eq("vaultId", vaultId))
+        .filter((q) => q.eq(q.field("dealershipId"), dealershipId))
         .order("desc")
         .take(limit);
     } else if (args.userId) {
+      const userId: string = args.userId;
       logs = await ctx.db
         .query("pii_access_log")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId))
-        .filter((q) => q.eq(q.field("dealershipId"), user.dealershipId || ""))
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .filter((q) => q.eq(q.field("dealershipId"), dealershipId))
         .order("desc")
         .take(limit);
     } else {
       logs = await ctx.db
         .query("pii_access_log")
-        .withIndex("by_dealership", (q) => q.eq("dealershipId", user.dealershipId || ""))
+        .withIndex("by_dealership", (q) => q.eq("dealershipId", dealershipId))
         .order("desc")
         .take(limit);
     }
@@ -503,6 +522,18 @@ export const createPIIRecord = internalMutation({
 });
 
 export const getPIIRecord = query({
+  args: {
+    vaultId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("pii_vault")
+      .withIndex("by_vault_id", (q) => q.eq("vaultId", args.vaultId))
+      .first();
+  },
+});
+
+export const getPIIRecordInternal = internalQuery({
   args: {
     vaultId: v.string(),
   },

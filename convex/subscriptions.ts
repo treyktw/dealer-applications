@@ -288,7 +288,9 @@ export const getDealershipSubscription = query({
     // For desktop auth, validate the token
     if (args.token) {
       try {
-        const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token: args.token });
+        const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { 
+          accessToken: args.token,
+        });
         if (!sessionData) {
           throw new Error("Invalid or expired session");
         }
@@ -332,7 +334,7 @@ export const checkSubscriptionStatus = query({
     if (args.token) {
       try {
         const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { 
-          token: args.token 
+          accessToken: args.token,
         });
         if (!sessionData) {
           return { hasActiveSubscription: false, subscriptionStatus: "none" };

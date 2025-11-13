@@ -98,7 +98,7 @@ export async function decodeVIN(vin: string): Promise<DecodedVIN> {
     const parseIntOrNull = (value: string | null): number | null => {
       if (!value || value === "" || value === "Not Applicable") return null;
       const parsed = parseInt(value, 10);
-      return isNaN(parsed) ? null : parsed;
+      return Number.isNaN(parsed) ? null : parsed;
     };
 
     // Helper function to get string value or null
@@ -237,10 +237,10 @@ export async function decodePartialVIN(partialVIN: string): Promise<Partial<Deco
 
 /**
  * Check if VIN has been recalled
- * Note: This is a placeholder - NHTSA has a separate API for recalls
+ * Uses NHTSA Safety Recalls API to check for active recalls
  *
- * @param vin - VIN to check
- * @returns Recall information (placeholder)
+ * @param vin - VIN to check (must be 17 characters)
+ * @returns Recall information including all active recalls
  */
 export async function checkRecalls(vin: string): Promise<{
   hasRecalls: boolean;
@@ -250,14 +250,85 @@ export async function checkRecalls(vin: string): Promise<{
     consequence: string;
     remedy: string;
     recallDate: string;
+    nhtsaCampaignNumber: string;
+    manufacturer: string;
+    reportReceivedDate: string;
   }>;
 }> {
-  // TODO: Implement NHTSA Safety Recalls API integration
-  // https://vpic.nhtsa.dot.gov/api/SafetyRatings/GetRecalls?vehicleId={VIN}
-  console.warn("⚠️ Recall check not yet implemented");
+  // Validate VIN format
+  if (!vin || vin.length !== 17) {
+    throw new Error("VIN must be exactly 17 characters");
+  }
 
-  return {
-    hasRecalls: false,
-    recalls: [],
-  };
+  // Clean VIN (uppercase, remove spaces)
+  const cleanVIN = vin.trim().toUpperCase();
+
+  // NHTSA Safety Recalls API endpoint
+  const apiUrl = `https://vpic.nhtsa.dot.gov/api/vehicles/GetRecallsForVehicle/${cleanVIN}?format=json`;
+
+  try {
+    // Fetch recall data from NHTSA API
+    const response = await fetch(apiUrl, {
+      method: "GET",
+      headers: {
+        "Accept": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`NHTSA Recall API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json() as {
+      Results: Array<{
+        NHTSACampaignNumber: string | null;
+        Component: string | null;
+        Summary: string | null;
+        Consequence: string | null;
+        Remedy: string | null;
+        ReportReceivedDate: string | null;
+        Manufacturer: string | null;
+        ModelYear: string | null;
+        Make: string | null;
+        Model: string | null;
+      }>;
+      Count: number;
+      Message: string;
+    };
+
+    // Check if there are any recalls
+    if (!data.Results || data.Results.length === 0) {
+      console.log(`✅ No recalls found for VIN: ${cleanVIN}`);
+      return {
+        hasRecalls: false,
+        recalls: [],
+      };
+    }
+
+    // Parse and structure the recall data
+    const recalls = data.Results
+      .filter((recall) => recall.NHTSACampaignNumber) // Filter out invalid entries
+      .map((recall) => ({
+        component: recall.Component || "Unknown Component",
+        summary: recall.Summary || "No summary available",
+        consequence: recall.Consequence || "No consequence information available",
+        remedy: recall.Remedy || "No remedy information available",
+        recallDate: recall.ReportReceivedDate || "Unknown date",
+        nhtsaCampaignNumber: recall.NHTSACampaignNumber || "Unknown",
+        manufacturer: recall.Manufacturer || "Unknown",
+        reportReceivedDate: recall.ReportReceivedDate || "Unknown",
+      }));
+
+    console.log(`⚠️ Found ${recalls.length} recall(s) for VIN: ${cleanVIN}`);
+
+    return {
+      hasRecalls: recalls.length > 0,
+      recalls,
+    };
+  } catch (error) {
+    console.error(`❌ Failed to check recalls for VIN ${cleanVIN}:`, error);
+    throw new Error(
+      `Failed to check recalls: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
+  }
 }

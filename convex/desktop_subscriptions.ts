@@ -3,28 +3,24 @@ import { query, type QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id, Doc } from "./_generated/dataModel";
 import { ConvexError } from "convex/values";
+import { api } from "./_generated/api";
 
 // ============================================================================
 // HELPER: Validate session token and get user
 // ============================================================================
 
 async function validateTokenAndGetUser(ctx: QueryCtx, token: string): Promise<Doc<"users">> {
-  const session = await ctx.db
-    .query("auth_sessions")
-    .withIndex("by_token", (q) => q.eq("token", token))
-    .first();
+  // Use the updated validateSession query which accepts accessToken
+  const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, {
+    accessToken: token,
+  });
 
-  if (!session) {
-    throw new ConvexError("Invalid session token");
+  if (!sessionData?.user) {
+    throw new ConvexError("Invalid or expired session");
   }
 
-  // Check if expired
-  if (Date.now() > session.expiresAt) {
-    throw new ConvexError("Session expired");
-  }
-
-  // Get user
-  const user = await ctx.db.get(session.userId);
+  // Get user from database using the user ID from session
+  const user = await ctx.db.get(sessionData.user.id as Id<"users">);
   if (!user || user.isActive === false) {
     throw new ConvexError("User not found or inactive");
   }

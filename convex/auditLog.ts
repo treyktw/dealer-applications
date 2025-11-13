@@ -6,17 +6,18 @@
 import { v } from "convex/values";
 import { action, mutation, query, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
+import type { Doc } from "./_generated/dataModel";
 import {
   createAuditLogEntry,
   formatChanges,
   AuditCategory,
   AuditAction,
   AuditStatus,
-  AuditSeverity,
   type AuditLogEntry,
-  type AuditLogFilters,
-  type AuditReportTypeType,
-  AuditReportType,
+  type AuditCategoryType,
+  type AuditActionType,
+  type AuditStatusType,
+  type AuditSeverityType,
 } from "./lib/audit/auditLogger";
 
 /**
@@ -50,12 +51,12 @@ export const logAuditEvent = action({
   handler: async (ctx, args) => {
     // Create audit log entry with auto-filled fields
     const entry = createAuditLogEntry({
-      category: args.category as any,
-      action: args.action as any,
+      category: args.category as AuditCategoryType,
+      action: args.action as AuditActionType,
       userId: args.userId,
       description: args.description,
-      status: args.status as any,
-      severity: args.severity as any,
+      status: (args.status as AuditStatusType | undefined) || AuditStatus.SUCCESS,
+      severity: args.severity as AuditSeverityType | undefined,
       userEmail: args.userEmail,
       userName: args.userName,
       dealershipId: args.dealershipId,
@@ -95,10 +96,11 @@ export const logUserActivity = action({
     dealershipId: v.optional(v.string()),
     ipAddress: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    return await ctx.runAction(internal.auditLog.logAuditEvent, {
+  handler: async (ctx, args): Promise<{ success: boolean }> => {
+    // Create audit log entry directly
+    const entry = createAuditLogEntry({
       category: AuditCategory.USER,
-      action: args.action,
+      action: args.action as AuditActionType,
       userId: args.userId,
       description: args.description,
       resourceType: args.resourceType,
@@ -106,6 +108,13 @@ export const logUserActivity = action({
       dealershipId: args.dealershipId,
       ipAddress: args.ipAddress,
     });
+
+    // Store in database
+    await ctx.runMutation(internal.auditLog.storeAuditLog, {
+      entry,
+    });
+
+    return { success: true };
   },
 });
 
@@ -122,17 +131,20 @@ export const logDataAccess = action({
     dealershipId: v.string(),
     ipAddress: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    return await ctx.runAction(internal.auditLog.logAuditEvent, {
-      category:
-        args.action === "read"
-          ? AuditCategory.DATA_PII_READ
-          : args.action === "create"
-          ? AuditCategory.DATA_PII_CREATE
-          : args.action === "update"
-          ? AuditCategory.DATA_PII_UPDATE
-          : AuditCategory.DATA_PII_DELETE,
-      action: args.action,
+  handler: async (ctx, args): Promise<{ success: boolean }> => {
+    // Create audit log entry directly
+    const category =
+      args.action === "read"
+        ? AuditCategory.DATA_PII_READ
+        : args.action === "create"
+        ? AuditCategory.DATA_PII_CREATE
+        : args.action === "update"
+        ? AuditCategory.DATA_PII_UPDATE
+        : AuditCategory.DATA_PII_DELETE;
+
+    const entry = createAuditLogEntry({
+      category,
+      action: args.action as AuditActionType,
       userId: args.userId,
       description: `Accessed ${args.dataType} data${
         args.reason ? `: ${args.reason}` : ""
@@ -145,6 +157,13 @@ export const logDataAccess = action({
         reason: args.reason,
       },
     });
+
+    // Store in database
+    await ctx.runMutation(internal.auditLog.storeAuditLog, {
+      entry,
+    });
+
+    return { success: true };
   },
 });
 
@@ -162,12 +181,13 @@ export const logResourceUpdate = action({
     dealershipId: v.optional(v.string()),
     ipAddress: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ success: boolean }> => {
     // Format changes
     const changes = formatChanges(args.before, args.after);
 
-    return await ctx.runAction(internal.auditLog.logAuditEvent, {
-      category: `${args.resourceType}.update`,
+    // Create audit log entry directly
+    const entry = createAuditLogEntry({
+      category: `${args.resourceType}.update` as AuditCategoryType,
       action: AuditAction.UPDATE,
       userId: args.userId,
       description: `Updated ${args.resourceType}${
@@ -184,6 +204,13 @@ export const logResourceUpdate = action({
       dealershipId: args.dealershipId,
       ipAddress: args.ipAddress,
     });
+
+    // Store in database
+    await ctx.runMutation(internal.auditLog.storeAuditLog, {
+      entry,
+    });
+
+    return { success: true };
   },
 });
 
@@ -208,30 +235,40 @@ export const queryAuditLogs = query({
     const limit = Math.min(args.limit || 100, 500);
 
     // Build query based on primary index
-    let query;
+    let logs: Doc<"audit_logs">[];
 
     if (args.userId) {
-      query = ctx.db
+      const userId: string = args.userId;
+      logs = await ctx.db
         .query("audit_logs")
-        .withIndex("by_user_timestamp", (q) => q.eq("userId", args.userId));
+        .withIndex("by_user_timestamp", (q) => q.eq("userId", userId))
+        .order("desc")
+        .take(limit * 2);
     } else if (args.dealershipId) {
-      query = ctx.db
+      const dealershipId: string = args.dealershipId;
+      logs = await ctx.db
         .query("audit_logs")
         .withIndex("by_dealership_timestamp", (q) =>
-          q.eq("dealershipId", args.dealershipId)
-        );
+          q.eq("dealershipId", dealershipId)
+        )
+        .order("desc")
+        .take(limit * 2);
     } else if (args.category) {
-      query = ctx.db
+      const category: string = args.category;
+      logs = await ctx.db
         .query("audit_logs")
         .withIndex("by_category_timestamp", (q) =>
-          q.eq("category", args.category)
-        );
+          q.eq("category", category)
+        )
+        .order("desc")
+        .take(limit * 2);
     } else {
-      query = ctx.db.query("audit_logs").withIndex("by_timestamp");
+      logs = await ctx.db
+        .query("audit_logs")
+        .withIndex("by_timestamp")
+        .order("desc")
+        .take(limit * 2);
     }
-
-    // Get logs
-    let logs = await query.order("desc").take(limit * 2); // Get extra for filtering
 
     // Apply additional filters
     if (args.action) {
@@ -250,10 +287,12 @@ export const queryAuditLogs = query({
       logs = logs.filter((log) => log.resourceId === args.resourceId);
     }
     if (args.startDate) {
-      logs = logs.filter((log) => log.timestamp >= args.startDate!);
+      const startDate = args.startDate;
+      logs = logs.filter((log) => log.timestamp >= startDate);
     }
     if (args.endDate) {
-      logs = logs.filter((log) => log.timestamp <= args.endDate!);
+      const endDate = args.endDate;
+      logs = logs.filter((log) => log.timestamp <= endDate);
     }
 
     // Limit results
@@ -577,16 +616,19 @@ export const storeAuditLog = internalMutation({
     const now = Date.now();
 
     // Calculate expiration date
-    const retentionMs = entry.retentionYears * 365 * 24 * 60 * 60 * 1000;
+    const retentionYears = entry.retentionYears || 7; // Default 7 years
+    const retentionMs = retentionYears * 365 * 24 * 60 * 60 * 1000;
     const expiresAt = now + retentionMs;
 
     // Extract changed fields if present
     const changedFields =
       entry.changesBefore && entry.changesAfter
         ? Object.keys(entry.changesAfter).filter(
-            (key) =>
-              JSON.stringify(entry.changesBefore![key]) !==
-              JSON.stringify(entry.changesAfter![key])
+            (key) => {
+              const beforeValue = entry.changesBefore?.[key];
+              const afterValue = entry.changesAfter?.[key];
+              return JSON.stringify(beforeValue) !== JSON.stringify(afterValue);
+            }
           )
         : undefined;
 
@@ -613,7 +655,7 @@ export const storeAuditLog = internalMutation({
       device: entry.device,
       location: entry.location,
       complianceFlags: entry.complianceFlags,
-      retentionYears: entry.retentionYears,
+      retentionYears: retentionYears,
       expiresAt,
       errorMessage: entry.errorMessage,
       errorCode: entry.errorCode,

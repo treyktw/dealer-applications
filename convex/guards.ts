@@ -204,7 +204,9 @@ export async function assertDealershipAccess(
     // Support both web and desktop authentication
     if (token) {
       // Desktop app authentication
-      const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token });
+      const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { 
+        accessToken: token,
+      });
       if (!sessionData?.user) {
         throw new ConvexError("Invalid or expired session");
       }

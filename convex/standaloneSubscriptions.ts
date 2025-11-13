@@ -4,7 +4,7 @@
  */
 
 import { v } from "convex/values";
-import { internalMutation, internalQuery, query, mutation, action } from "./_generated/server";
+import { internalMutation, internalQuery, query, action } from "./_generated/server";
 import { getStripeClient } from "./lib/stripe/client";
 import { PRICING_CONFIG } from "./lib/pricing";
 import { internal } from "./_generated/api";

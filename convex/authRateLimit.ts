@@ -4,7 +4,7 @@
  */
 
 import { v } from "convex/values";
-import { mutation, query, internalMutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import {
   checkRateLimit,
   recordAttempt,
@@ -14,6 +14,7 @@ import {
   AUTH_RATE_LIMITS,
   type RateLimitResult,
 } from "./lib/rateLimit/authRateLimit";
+import type { Id } from "./_generated/dataModel";
 
 /**
  * Check if an auth operation is rate limited
@@ -251,8 +252,8 @@ export const clearExpiredAuthRateLimits = mutation({
     const expiredIds = getExpiredRateLimitRecords(recordsWithIds);
 
     let deletedCount = 0;
-    for (const id of expiredIds) {
-      await ctx.db.delete(id as any);
+    for (const id of expiredIds as Id<"auth_rate_limits">[]) {
+      await ctx.db.delete(id);
       deletedCount++;
     }
 

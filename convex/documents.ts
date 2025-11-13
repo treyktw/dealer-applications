@@ -152,7 +152,9 @@ export const getCustomDocumentsForDeal = query({
     let user: Doc<"users"> | null = null;
     if (args.token) {
       // Desktop app authentication
-      const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token: args.token });
+      const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { 
+        accessToken: args.token,
+      });
       if (!sessionData?.user) {
         throw new Error("Invalid or expired session");
       }
@@ -540,7 +542,9 @@ export const generateCustomDocumentViewUrl = action({
     // Support both web and desktop auth
     let userDealershipId: Id<"dealerships"> | undefined;
     if (args.token) {
-      const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token: args.token });
+      const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { 
+        accessToken: args.token,
+      });
       if (!sessionData?.user) throw new Error("Invalid or expired session");
       
       const { id } = sessionData.user as { id?: string; email?: string };
@@ -622,7 +626,9 @@ export const getDocumentWithMetadata = query({
     // Support both web and desktop auth
     let user: Doc<"users"> | null = null;
     if (args.token) {
-      const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token: args.token });
+      const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { 
+        accessToken: args.token,
+      });
       if (!sessionData?.user) throw new Error("Invalid or expired session");
       
       const { id } = sessionData.user as { id?: string };
@@ -689,7 +695,9 @@ export const getDocumentPreviewUrl = action({
     let user: Doc<"users"> | null = null;
     if (args.token) {
       // Desktop app authentication
-      const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token: args.token });
+      const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { 
+        accessToken: args.token,
+      });
       if (!sessionData?.user) {
         throw new Error("Invalid or expired session");
       }
@@ -815,7 +823,9 @@ export const sendDealDocumentsEmail = action({
     // Authenticate
     let userDealershipId: Id<"dealerships"> | undefined;
     if (args.token) {
-      const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token: args.token });
+      const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { 
+        accessToken: args.token,
+      });
       if (!sessionData?.user) throw new Error("Invalid or expired session");
       const { id, email } = sessionData.user as { id?: string; email?: string };
       if (id) {

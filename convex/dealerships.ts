@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
+import type { QueryCtx, MutationCtx } from "./_generated/server";
 import { api } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 
@@ -11,7 +12,7 @@ async function requireAuth(ctx: QueryCtx | MutationCtx, token?: string): Promise
   if (token) {
     try {
       const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { 
-        token 
+        accessToken: token,
       });
       if (!sessionData) {
         throw new Error("Invalid or expired session");
@@ -133,7 +134,7 @@ export const updateDealership = mutation({
     }
 
     // Remove dealershipId and token from the update data
-    const { dealershipId, token, ...updateData } = args;
+    const { dealershipId, token: _token, ...updateData } = args;
 
     // Update dealership
     await ctx.db.patch(dealershipId, {
@@ -171,7 +172,7 @@ export const updateDealershipSettings = mutation({
     }
 
     // Remove dealershipId and token from the update data
-    const { dealershipId, token, ...updateData } = args;
+    const { dealershipId, token: _token, ...updateData } = args;
 
     // Update dealership settings
     await ctx.db.patch(dealershipId, {
@@ -212,7 +213,7 @@ export const getCurrentDealership = query({
     if (args.token) {
       try {
         const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { 
-          token: args.token 
+          accessToken: args.token,
         });
         if (!sessionData) {
           return null;
@@ -271,12 +272,14 @@ export const getDealershipById = query({
     token: v.optional(v.string()), // Add this parameter
   },
   handler: async (ctx, args) => {
-    // Support both web and wardesktop authentication
-    let user;
+    // Support both web and desktop authentication
+    let user: Doc<"users"> | null = null;
     if (args.token) {
       // Desktop app authentication
       console.log('🔐 Authenticating via desktop token');
-      const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { token: args.token });
+      const sessionData = await ctx.runQuery(api.desktopAuth.validateSession, { 
+        accessToken: args.token,
+      });
       if (!sessionData?.user) {
         throw new Error("Invalid or expired session");
       }
