@@ -459,19 +459,30 @@ export function LicenseAuthProvider({ children }: { children: React.ReactNode })
     }
   }, [machineId]);
 
-  // Check license status (refresh)
+  // Check license status (refresh) - optimized to prevent cascading refetches
   const checkLicenseStatus = useCallback(async () => {
-    queryClient.invalidateQueries({ queryKey: ["standalone-session"] });
-    queryClient.invalidateQueries({ queryKey: ["user-license-check"] });
+    // Only refetch if queries are stale, don't force immediate refetch
+    await Promise.all([
+      queryClient.refetchQueries({ 
+        queryKey: ["standalone-session"],
+        type: 'active', // Only refetch active queries
+      }),
+      queryClient.refetchQueries({ 
+        queryKey: ["user-license-check"],
+        type: 'active',
+      }),
+    ]);
   }, [queryClient]);
 
-  // Periodic session check (every 5 minutes)
+  // Periodic session check (every 10 minutes - reduced frequency)
   useEffect(() => {
     if (!authData?.session?.isActive) return;
 
     const interval = setInterval(() => {
-      checkLicenseStatus();
-    }, 5 * 60 * 1000);
+      checkLicenseStatus().catch((err) => {
+        console.error("❌ [LICENSE-AUTH] Error checking license status:", err);
+      });
+    }, 10 * 60 * 1000); // Changed from 5 minutes to 10 minutes
 
     return () => clearInterval(interval);
   }, [authData?.session?.isActive, checkLicenseStatus]);

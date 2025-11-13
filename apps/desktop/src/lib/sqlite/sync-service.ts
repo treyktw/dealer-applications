@@ -55,6 +55,11 @@ export interface SyncResult {
  * Get last sync timestamp from settings
  */
 async function getLastSyncAt(): Promise<number> {
+  // Don't call invoke in browser dev mode
+  if (typeof window !== "undefined" && !("__TAURI__" in window)) {
+    return 0;
+  }
+  
   try {
     const lastSync = await invoke<string | null>("db_get_setting", {
       key: "last_sync_at",
@@ -69,6 +74,11 @@ async function getLastSyncAt(): Promise<number> {
  * Set last sync timestamp in settings
  */
 async function setLastSyncAt(timestamp: number): Promise<void> {
+  // Don't call invoke in browser dev mode
+  if (typeof window !== "undefined" && !("__TAURI__" in window)) {
+    return;
+  }
+  
   await invoke("db_set_setting", {
     key: "last_sync_at",
     value: timestamp.toString(),
@@ -525,6 +535,18 @@ async function downloadChanges(
  * Perform full sync (upload + download)
  */
 export async function performSync(userId: string): Promise<SyncResult> {
+  // Don't sync in browser dev mode - only in Tauri
+  if (typeof window !== "undefined" && !("__TAURI__" in window)) {
+    console.log("⚠️ [SYNC] Not in Tauri environment, skipping sync");
+    return {
+      success: true,
+      syncedAt: Date.now(),
+      uploaded: { clients: 0, vehicles: 0, deals: 0, documents: 0 },
+      downloaded: { clients: 0, vehicles: 0, deals: 0, documents: 0 },
+      errors: [],
+    };
+  }
+  
   const errors: string[] = [];
   const syncedAt = Date.now();
   const lastSyncAt = await getLastSyncAt();

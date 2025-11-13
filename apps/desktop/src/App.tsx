@@ -38,9 +38,14 @@ const queryClient = new QueryClient({
       queryKeyHashFn: convexQueryClient.hashFn(),
       queryFn: convexQueryClient.queryFn(),
       retry: 1,
-      staleTime: 5000,
+      staleTime: 30 * 1000, // 30 seconds - reduce refetch frequency
+      gcTime: 5 * 60 * 1000, // 5 minutes - garbage collect unused queries
+      refetchOnWindowFocus: false, // Prevent refetch on window focus
+      refetchOnReconnect: true, // Only refetch on reconnect
     },
   },
+  // Limit cache size to prevent memory issues
+  queryCache: undefined, // Use default cache but with gcTime above
 });
 convexQueryClient.connect(queryClient);
 
@@ -298,8 +303,8 @@ function App() {
     // Listen for storage events (from other tabs/windows)
     window.addEventListener("storage", handleStorageChange);
     
-    // Poll for changes (for same-tab changes)
-    const interval = setInterval(checkModeChange, 500);
+    // Poll for changes (for same-tab changes) - reduced frequency to prevent memory issues
+    const interval = setInterval(checkModeChange, 2000); // Changed from 500ms to 2s
 
     return () => {
       window.removeEventListener("storage", handleStorageChange);

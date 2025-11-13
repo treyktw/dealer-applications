@@ -82,20 +82,36 @@ function DocumentsPage() {
     },
   });
 
-  // Load existing documents
+  // Load existing documents - with timeout and error handling
   const { data: documents = [], isLoading: isLoadingDocs, refetch: refetchDocuments } = useQuery({
     queryKey: ["standalone-documents", dealId],
     queryFn: async () => {
       try {
-        return await getDocumentsByDeal(dealId);
+        // Add timeout wrapper
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("getDocumentsByDeal timeout")), 5000);
+        });
+        
+        const result = await Promise.race([
+          getDocumentsByDeal(dealId),
+          timeoutPromise,
+        ]);
+        
+        return result;
       } catch (error) {
         console.error("❌ [DOCUMENTS] Error loading documents:", error);
-        toast.error("Failed to load documents", {
-          description: error instanceof Error ? error.message : "Unknown error",
-        });
+        // Don't show toast on timeout to avoid spam
+        if (!(error instanceof Error && error.message.includes("timeout"))) {
+          toast.error("Failed to load documents", {
+            description: error instanceof Error ? error.message : "Unknown error",
+          });
+        }
         return [];
       }
     },
+    staleTime: 60 * 1000, // 1 minute - reduce refetch frequency
+    refetchOnWindowFocus: false,
+    retry: false, // Don't retry to prevent infinite loops
   });
 
   useEffect(() => {

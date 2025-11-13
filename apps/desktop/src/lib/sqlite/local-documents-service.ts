@@ -183,13 +183,99 @@ export async function createDocument(
 
 /**
  * Get a document by ID
+ * Returns undefined on error to prevent crashes
+ * Wrapped in multiple layers of error handling to catch Rust panics
  */
 export async function getDocument(
   id: string
 ): Promise<LocalDocument | undefined> {
-  return await invoke<LocalDocument | null>("db_get_document", { id }).then(
-    (result) => result || undefined
-  );
+  // Early validation - use try-catch for validation to prevent crashes
+  let trimmedId: string;
+  try {
+    // Check if id exists
+    if (id == null) { // Use == to catch both null and undefined
+      return undefined;
+    }
+    
+    // Safely convert to string
+    trimmedId = String(id);
+    
+    // Safely trim
+    if (trimmedId.trim) {
+      trimmedId = trimmedId.trim();
+    }
+    
+    // Check if empty
+    if (!trimmedId || trimmedId.length === 0) {
+      return undefined;
+    }
+  } catch (validationError) {
+    console.warn("⚠️ [GET-DOCUMENT] Validation error:", validationError);
+    return undefined;
+  }
+
+  // Wrap in Promise.resolve to ensure it's always a promise
+  try {
+    // Double-wrap to catch any synchronous errors
+    const result = await Promise.resolve().then(async () => {
+      try {
+        // Check if invoke is available
+        if (typeof invoke !== "function") {
+          console.warn("⚠️ [GET-DOCUMENT] invoke function is not available");
+          return undefined;
+        }
+        
+        // Check if we're in Tauri environment
+        if (typeof window !== "undefined" && !("__TAURI__" in window)) {
+          console.warn("⚠️ [GET-DOCUMENT] Not in Tauri environment");
+          return undefined;
+        }
+        
+        // Use requestIdleCallback or setTimeout to prevent blocking the UI thread
+        await new Promise(resolve => {
+          if (typeof requestIdleCallback !== "undefined") {
+            requestIdleCallback(() => resolve(undefined), { timeout: 100 });
+          } else {
+            setTimeout(() => resolve(undefined), 0);
+          }
+        });
+        
+        const invokeResult = await invoke<LocalDocument | null>("db_get_document", { 
+          id: trimmedId 
+        });
+        
+        // Validate result
+        if (invokeResult === null || invokeResult === undefined) {
+          return undefined;
+        }
+        
+        // Ensure result has required fields
+        if (typeof invokeResult !== "object") {
+          console.warn("⚠️ [GET-DOCUMENT] Invalid result type:", typeof invokeResult);
+          return undefined;
+        }
+        
+        return invokeResult as LocalDocument;
+      } catch (invokeError) {
+        // Re-throw to outer catch
+        throw invokeError;
+      }
+    });
+    
+    return result || undefined;
+  } catch (error) {
+    // Catch all errors including Rust panics, network errors, etc.
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    console.error("❌ [GET-DOCUMENT] Error fetching document", trimmedId, ":", errorMessage);
+    if (errorStack) {
+      console.error("❌ [GET-DOCUMENT] Stack trace:", errorStack);
+    }
+    
+    // Return undefined instead of throwing to prevent crashes
+    return undefined;
+  }
 }
 
 /**
@@ -215,21 +301,123 @@ export async function getDocumentBlob(
 
 /**
  * Get all documents for a deal
+ * Returns empty array on error to prevent crashes
+ * Wrapped in multiple layers of error handling to catch Rust panics
  */
 export async function getDocumentsByDeal(
   dealId: string
 ): Promise<LocalDocument[]> {
+  // Early validation - use try-catch for validation to prevent crashes
+  let trimmedDealId: string;
   try {
-    console.log("📄 [GET-DOCUMENTS] Fetching documents for deal:", dealId);
-    // Tauri converts camelCase to snake_case, so use dealId here
-    const documents = await invoke<LocalDocument[]>("db_get_documents_by_deal", {
-      dealId: dealId,
+    // Check if dealId exists
+    if (dealId == null) { // Use == to catch both null and undefined
+      return [];
+    }
+    
+    // Safely convert to string
+    trimmedDealId = String(dealId);
+    
+    // Safely trim
+    if (trimmedDealId.trim) {
+      trimmedDealId = trimmedDealId.trim();
+    }
+    
+    // Check if empty
+    if (!trimmedDealId || trimmedDealId.length === 0) {
+      return [];
+    }
+  } catch (validationError) {
+    console.warn("⚠️ [GET-DOCUMENTS] Validation error:", validationError);
+    return [];
+  }
+
+  // Wrap in Promise.resolve to ensure it's always a promise
+  try {
+    console.log("📄 [GET-DOCUMENTS] Fetching documents for deal:", trimmedDealId);
+    
+    // Double-wrap to catch any synchronous errors
+    const result = await Promise.resolve().then(async () => {
+      // Check if invoke is available
+      if (typeof invoke !== "function") {
+        console.warn("⚠️ [GET-DOCUMENTS] invoke function is not available");
+        return [];
+      }
+      
+      // Check if we're in Tauri environment
+      if (typeof window !== "undefined" && !("__TAURI__" in window)) {
+        console.warn("⚠️ [GET-DOCUMENTS] Not in Tauri environment");
+        return [];
+      }
+      
+      // Use requestIdleCallback or setTimeout to prevent blocking the UI thread
+      await new Promise(resolve => {
+        if (typeof requestIdleCallback !== "undefined") {
+          requestIdleCallback(() => resolve(undefined), { timeout: 100 });
+        } else {
+          setTimeout(() => resolve(undefined), 0);
+        }
+      });
+      
+      // Tauri converts camelCase to snake_case, so use dealId here
+      const invokePromise = invoke<LocalDocument[]>("db_get_documents_by_deal", {
+        dealId: trimmedDealId,
+      });
+      
+      // Add timeout to prevent hanging (with cleanup)
+      let timeoutId: NodeJS.Timeout | null = null;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error("getDocumentsByDeal timeout after 10 seconds")), 10000);
+      });
+      
+      try {
+        const documents = await Promise.race([invokePromise, timeoutPromise]);
+        
+        // Clear timeout if promise resolved successfully
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        
+        // Validate response
+        if (!Array.isArray(documents)) {
+          console.warn("⚠️ [GET-DOCUMENTS] Invalid response format, expected array:", typeof documents);
+          return [];
+        }
+        
+        // Validate each document in the array
+        const validDocuments = documents.filter((doc) => {
+          if (!doc || typeof doc !== "object") {
+            console.warn("⚠️ [GET-DOCUMENTS] Invalid document in array:", doc);
+            return false;
+          }
+          return true;
+        });
+        
+        console.log("✅ [GET-DOCUMENTS] Retrieved", validDocuments.length, "documents");
+        return validDocuments as LocalDocument[];
+      } catch (raceError) {
+        // Clear timeout on error
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        throw raceError;
+      }
     });
-    console.log("✅ [GET-DOCUMENTS] Retrieved", documents?.length || 0, "documents");
-    return documents || [];
+    
+    return result || [];
   } catch (error) {
-    console.error("❌ [GET-DOCUMENTS] Error fetching documents:", error);
-    throw error;
+    // Catch all errors including Rust panics, network errors, etc.
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    console.error("❌ [GET-DOCUMENTS] Error fetching documents for deal", trimmedDealId, ":", errorMessage);
+    if (errorStack) {
+      console.error("❌ [GET-DOCUMENTS] Stack trace:", errorStack);
+    }
+    
+    // Don't crash the app - return empty array instead
+    // Callers can check if array is empty to determine if there was an error
+    return [];
   }
 }
 

@@ -160,8 +160,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     },
     enabled: !!storedToken && !tokenLoading,
-    staleTime: 5 * 60 * 1000, // 5 minutes (was too long before)
+    staleTime: 10 * 60 * 1000, // 10 minutes - reduce refetch frequency
+    gcTime: 15 * 60 * 1000, // 15 minutes - garbage collect after 15 min of inactivity
     retry: false,
+    refetchOnWindowFocus: false, // Prevent refetch on window focus
     notifyOnChangeProps: ["data", "isLoading"], // Ensure reactivity
   });
 

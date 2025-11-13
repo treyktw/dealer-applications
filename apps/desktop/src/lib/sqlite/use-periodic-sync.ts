@@ -7,14 +7,28 @@ import { useEffect, useRef } from "react";
 import { useUnifiedAuth } from "@/components/auth/useUnifiedAuth";
 import { performSync } from "./sync-service";
 
-const SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const SYNC_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes - reduced frequency to prevent memory issues
+const SYNC_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes - max time for a sync operation
 
 export function usePeriodicSync() {
   const auth = useUnifiedAuth();
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isSyncingRef = useRef(false);
+  const syncEnabledRef = useRef(true); // Sync enabled
 
   useEffect(() => {
+    // Check if sync is disabled
+    if (!syncEnabledRef.current) {
+      console.log("⚠️ [PERIODIC-SYNC] Sync is disabled");
+      return;
+    }
+    
+    // Check if we're in Tauri environment - don't sync in browser dev mode
+    if (typeof window !== "undefined" && !("__TAURI__" in window)) {
+      console.log("⚠️ [PERIODIC-SYNC] Not in Tauri environment, skipping sync");
+      return;
+    }
+    
     // Only sync if user is authenticated
     if (!auth.user?.id) {
       return;
@@ -26,7 +40,13 @@ export function usePeriodicSync() {
     const initialTimeout = setTimeout(() => {
       if (!isSyncingRef.current) {
         isSyncingRef.current = true;
-        performSync(userId)
+        // Add timeout to prevent hanging syncs
+        const syncPromise = performSync(userId);
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("Sync timeout")), SYNC_TIMEOUT_MS);
+        });
+        
+        Promise.race([syncPromise, timeoutPromise])
           .then((result) => {
             if (result.success) {
               console.log("✅ [PERIODIC-SYNC] Initial sync completed:", result);
@@ -47,7 +67,13 @@ export function usePeriodicSync() {
     intervalRef.current = setInterval(() => {
       if (!isSyncingRef.current) {
         isSyncingRef.current = true;
-        performSync(userId)
+        // Add timeout to prevent hanging syncs
+        const syncPromise = performSync(userId);
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("Sync timeout")), SYNC_TIMEOUT_MS);
+        });
+        
+        Promise.race([syncPromise, timeoutPromise])
           .then((result) => {
             if (result.success) {
               console.log("✅ [PERIODIC-SYNC] Sync completed:", result);
@@ -57,6 +83,7 @@ export function usePeriodicSync() {
           })
           .catch((error) => {
             console.error("❌ [PERIODIC-SYNC] Sync error:", error);
+            // Don't let sync errors crash the app
           })
           .finally(() => {
             isSyncingRef.current = false;

@@ -92,8 +92,8 @@ function StandaloneSettingsPage() {
     }
 
     loadSyncStatus();
-    // Refresh sync status every minute
-    const interval = setInterval(loadSyncStatus, 60000);
+    // Refresh sync status every 2 minutes (reduced frequency to prevent memory issues)
+    const interval = setInterval(loadSyncStatus, 2 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
