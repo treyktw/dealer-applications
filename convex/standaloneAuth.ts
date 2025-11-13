@@ -6,11 +6,30 @@
 
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import bcrypt from "bcryptjs";
 
-// Password hashing (you'll need to add bcryptjs to dependencies)
-// For now, using a simple hash - MUST upgrade to bcrypt in production
+/**
+ * Hash password using bcrypt with 12 rounds (industry standard for security)
+ * Protects against rainbow table and brute force attacks
+ */
 async function hashPassword(password: string): Promise<string> {
-  // TODO: Replace with bcrypt
+  const saltRounds = 12;
+  return await bcrypt.hash(password, saltRounds);
+}
+
+/**
+ * Verify password against bcrypt hash
+ * Returns true if password matches the hash
+ */
+async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  return await bcrypt.compare(password, hash);
+}
+
+/**
+ * Legacy SHA-256 password hashing for migration
+ * Used to detect and upgrade old password hashes
+ */
+async function hashPasswordSHA256(password: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(password);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
@@ -18,9 +37,12 @@ async function hashPassword(password: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  const passwordHash = await hashPassword(password);
-  return passwordHash === hash;
+/**
+ * Check if a hash is using the old SHA-256 format
+ * SHA-256 hashes are 64 characters hex, bcrypt hashes start with $2a$ or $2b$
+ */
+function isLegacySHA256Hash(hash: string): boolean {
+  return hash.length === 64 && !/^\$2[ab]\$/.test(hash);
 }
 
 /**
@@ -132,6 +154,8 @@ export const login = mutation({
     machineId: v.string(),
   },
   handler: async (ctx, args) => {
+    const now = Date.now();
+
     // Find user
     const user = await ctx.db
       .query("standalone_users")
@@ -142,14 +166,35 @@ export const login = mutation({
       throw new Error("Incorrect email");
     }
 
-    // Verify password
-    const isValid = await verifyPassword(args.password, user.passwordHash);
+    // Verify password (support both bcrypt and legacy SHA-256 for migration)
+    let isValid = false;
+    let needsMigration = false;
+
+    if (isLegacySHA256Hash(user.passwordHash)) {
+      // Legacy SHA-256 hash - verify using old method
+      const sha256Hash = await hashPasswordSHA256(args.password);
+      isValid = sha256Hash === user.passwordHash;
+      needsMigration = isValid; // If valid, we need to upgrade to bcrypt
+    } else {
+      // Modern bcrypt hash
+      isValid = await verifyPassword(args.password, user.passwordHash);
+    }
+
     if (!isValid) {
       throw new Error("Incorrect password");
     }
 
+    // Migrate password to bcrypt if using legacy SHA-256
+    if (needsMigration) {
+      const newHash = await hashPassword(args.password);
+      await ctx.db.patch(user._id, {
+        passwordHash: newHash,
+        updatedAt: now,
+      });
+      console.log(`✅ Migrated password hash for user ${user.email} from SHA-256 to bcrypt`);
+    }
+
     // Check subscription status
-    const now = Date.now();
     let subscriptionValid = false;
 
     if (user.subscriptionStatus === "active") {
