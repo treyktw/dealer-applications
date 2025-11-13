@@ -2040,4 +2040,24 @@ export default defineSchema({
   })
     .index("by_vin", ["vin"])
     .index("by_expires", ["expiresAt"]),
+
+  /**
+   * Authentication Rate Limits
+   * Tracks and enforces rate limits on authentication endpoints
+   * Protects against brute force attacks
+   */
+  auth_rate_limits: defineTable({
+    identifier: v.string(), // email or IP address
+    endpoint: v.string(), // "login", "register", "passwordReset", "emailVerification"
+    attemptCount: v.number(),
+    windowStartedAt: v.number(),
+    blockedUntil: v.optional(v.number()),
+    lastAttemptAt: v.number(),
+    lastSuccess: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_identifier_endpoint", ["identifier", "endpoint"])
+    .index("by_endpoint", ["endpoint"])
+    .index("by_blocked", ["blockedUntil"]),
 });
