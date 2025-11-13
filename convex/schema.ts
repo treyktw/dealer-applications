@@ -2222,4 +2222,77 @@ export default defineSchema({
     .index("by_user_timestamp", ["userId", "timestamp"])
     .index("by_action", ["action"])
     .index("by_timestamp", ["timestamp"]),
+
+  /**
+   * Comprehensive Audit Logs
+   * Centralized audit trail for all system actions
+   * Compliance: HIPAA, GDPR, SOX, PCI DSS
+   */
+  audit_logs: defineTable({
+    // Core fields
+    category: v.string(), // "authentication", "user.create", "data.pii.read", etc.
+    action: v.string(), // "create", "read", "update", "delete", etc.
+    status: v.string(), // "success", "failure", "partial", "denied"
+    severity: v.string(), // "debug", "info", "notice", "warning", "error", "critical", "alert", "emergency"
+
+    // User & Session
+    userId: v.string(),
+    userEmail: v.optional(v.string()),
+    userName: v.optional(v.string()),
+    dealershipId: v.optional(v.string()),
+    sessionId: v.optional(v.string()),
+
+    // Resource
+    resourceType: v.optional(v.string()), // "vehicle", "deal", "client", etc.
+    resourceId: v.optional(v.string()),
+    resourceName: v.optional(v.string()),
+
+    // Context
+    description: v.string(),
+    details: v.optional(v.any()), // Additional structured data (JSON)
+
+    // Changes (for UPDATE actions)
+    changesBefore: v.optional(v.any()),
+    changesAfter: v.optional(v.any()),
+    changedFields: v.optional(v.array(v.string())),
+
+    // Network & Device
+    ipAddress: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
+    device: v.optional(v.string()),
+    location: v.optional(
+      v.object({
+        city: v.optional(v.string()),
+        country: v.optional(v.string()),
+      })
+    ),
+
+    // Compliance
+    complianceFlags: v.optional(v.array(v.string())), // ["HIPAA", "GDPR", "SOX", "PCI"]
+    retentionYears: v.number(), // How long to retain (default: 7 years)
+    expiresAt: v.optional(v.number()), // Calculated expiration date
+
+    // Error info (if status is FAILURE)
+    errorMessage: v.optional(v.string()),
+    errorCode: v.optional(v.string()),
+    stackTrace: v.optional(v.string()),
+
+    // Timestamp
+    timestamp: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_timestamp", ["userId", "timestamp"])
+    .index("by_dealership", ["dealershipId"])
+    .index("by_dealership_timestamp", ["dealershipId", "timestamp"])
+    .index("by_category", ["category"])
+    .index("by_category_timestamp", ["category", "timestamp"])
+    .index("by_action", ["action"])
+    .index("by_status", ["status"])
+    .index("by_severity", ["severity"])
+    .index("by_resource", ["resourceType", "resourceId"])
+    .index("by_timestamp", ["timestamp"])
+    .index("by_expires", ["expiresAt"])
+    .index("by_compliance", ["complianceFlags"])
+    .index("by_session", ["sessionId"]),
 });
